@@ -1,0 +1,7 @@
+services:
+  code-index:
+    build: .
+    network_mode: host
+    volumes:
+      - /home/docker/AI-Code:/home/docker/AI-Code:ro
+    restart: unless-stopped
