@@ -114,6 +114,7 @@ class Indexer:
             self.db.add(node)
             await self.db.flush()
             self.db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=node.id, edge_type="CONTAINS"))
+            fn["_node_id"] = node.id
 
         imports = self._extract_imports(content, language)
         for imp in imports:
@@ -124,6 +125,21 @@ class Indexer:
                 edge_type="IMPORTS",
                 metadata_={"import_name": imp},
             ))
+
+        func_node_ids = {fn["name"]: fn["_node_id"] for fn in functions if "_node_id" in fn}
+        if len(func_node_ids) > 1:
+            calls = self._extract_function_calls(content, language)
+            for call_name in calls:
+                if call_name in func_node_ids:
+                    target_id = func_node_ids[call_name]
+                    for caller_name, caller_id in func_node_ids.items():
+                        if caller_name != call_name:
+                            self.db.add(Edge(
+                                project_id=project_id,
+                                source_id=caller_id,
+                                target_id=target_id,
+                                edge_type="CALLS",
+                            ))
 
         await self.db.commit()
         return 1 + len(classes) + len(functions)
