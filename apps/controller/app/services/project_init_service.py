@@ -113,6 +113,53 @@ async def init_project(
         except Exception as e:
             step("import_via_project_importer", err=e)
 
+    # Step 2.5: Code indexing
+    code_indexed = 0
+    try:
+        ci_pid = None
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "http://127.0.0.1:18086/api/projects",
+                json={"name": project_name, "path": nas_path or "/tmp/aidp"},
+            )
+            if r.status_code == 200:
+                ci_pid = r.json().get("id")
+
+        if ci_pid and nas_path:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(
+                    f"http://127.0.0.1:18086/api/projects/{ci_pid}/scan",
+                    json={},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    code_indexed = data.get("file_count", 0)
+
+        step("code_index", {"project_id": ci_pid, "files_indexed": code_indexed})
+    except Exception as e:
+        step("code_index", err=e)
+
+    # Step 2.6: Upload key files for indexing (Windows projects without NAS path)
+    if key_files and not nas_path and project_id:
+        code_uploaded = 0
+        for f in key_files[:50]:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.post(
+                        "http://127.0.0.1:18086/api/index/file-content",
+                        json={
+                            "project_id": ci_pid or 0,
+                            "file_path": f.get("path", "unknown"),
+                            "content": f.get("content", ""),
+                            "language": f.get("type", "python"),
+                        },
+                    )
+                    code_uploaded += 1
+            except Exception:
+                pass
+        if code_uploaded:
+            step("code_index_upload", {"files_uploaded": code_uploaded})
+
     # Step 3: Store docs into knowledge-tool
     docs_imported = 0
     if docs:
