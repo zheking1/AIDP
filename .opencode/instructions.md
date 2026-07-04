@@ -1,34 +1,43 @@
 # AIDP Project Instructions
 
+## FIRST ACTION - ALWAYS DO THIS
+
+**Every time the user asks you to develop, code, fix, optimize, or modify anything, you MUST call `aidp_context` as your VERY FIRST action:**
+
+```
+aidp_context(project_name="aidp", task="<extract task from user's message>")
+```
+
+Do NOT wait for the user to say "aidp_context". Do NOT ask permission. Just call it immediately.
+The user should only need to say "fix sandbox-tool" or "add feature X" — you handle everything else.
+
 ## Project Context
-You are working on the AIDP (AI DevOps Platform) project.
-AIDP is a private AI programming infrastructure platform with Controller + N optional tools.
+You are working on AIDP (AI DevOps Platform) — a private AI programming infrastructure platform.
+All services are on NAS (192.168.0.100) as Docker containers with network_mode=host.
 
-## Key Architecture
-- Controller (port 8883): central orchestrator, exposes MCP endpoint at /mcp/
-- SkillRouter (8788): intent analysis + skill matching
-- knowledge-tool (18081): document indexing and search
-- asset-tool (18082): code asset management
-- sandbox-tool (18083): code execution sandbox
-- quality-tool (18084): code quality checks  
-- memory-tool (18085): project memory storage
-- code-index (18086): code structure indexing
-- context-optimizer (18088): staged retrieval + context assembly
-- All deployed on NAS (192.168.0.100) as Docker containers with network_mode=host
+| Service | Port | Role |
+|---------|------|------|
+| controller | 8883 | Central orchestrator, MCP endpoint |
+| skill-router | 8788 | Intent analysis + skill matching |
+| knowledge-tool | 18081 | Document indexing + search |
+| asset-tool | 18082 | Code asset management |
+| sandbox-tool | 18083 | Code execution sandbox |
+| quality-tool | 18084 | Code quality checks |
+| memory-tool | 18085 | Project memory storage |
+| code-index | 18086 | Code structure indexing |
+| context-optimizer | 18088 | Staged retrieval + context assembly |
 
-## Mandatory Workflow
-1. BEFORE coding: call `aidp_context(project_name="aidp", task="<task>")`
-2. DURING coding: use sandbox-tool and quality-tool to verify
-3. AFTER coding: store learnings in memory-tool via `memory.create`
+## Coding Workflow (automatic)
 
-## Tool Protocol
-Every tool implements: GET /health, GET /tool/manifest, GET /tool/capabilities, POST /tool/invoke
-Standard invoke format: {trace_id, capability, context, input} → {trace_id, tool, capability, success, output, error, elapsed_ms}
+1. `aidp_context(project_name="aidp", task="<task>")` — FIRST, always
+2. Develop the code
+3. Verify: `invoke_tool_mcp("sandbox-tool", "sandbox.execute", ...)` + `invoke_tool_mcp("quality-tool", "quality.check", ...)`
+4. Archive: `invoke_tool_mcp("memory-tool", "memory.create", {project:"aidp", category:"...", title:"...", content:"..."})`
 
 ## Deployment
-All services on NAS (192.168.0.100). Deploy via: package source → SCP to NAS → docker build --no-cache → docker restart
-Use deploy-nas.ps1 or manual: ssh root@192.168.0.100 (key: ~/.ssh/nas_temp)
+All changes must be deployed to NAS after coding:
+1. `tar czf` source → `scp` to NAS → `docker build --no-cache` → `docker restart`
+2. SSH: `ssh -i ~/.ssh/nas_temp root@192.168.0.100`
 
 ## Security
-All passwords/keys in environment variables. Never hardcode credentials.
-Use .env file for local development (copy from .env.example).
+All passwords/keys in environment variables. Never hardcode. Use .env.example as reference.
