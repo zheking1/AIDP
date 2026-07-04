@@ -88,7 +88,7 @@ async def init_project(
             project = Project(
                 name=project_name,
                 description=description or f"{project_name} - initialized via aidp init",
-                project_type=tech_stack or "unknown",
+                project_type=(tech_stack or "unknown")[:64],
                 owner_id=str(user_id) if user_id else "0",
             )
             session.add(project)

@@ -60,8 +60,8 @@ async def init_database():
             CREATE TABLE IF NOT EXISTS app_projects (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(256) NOT NULL,
-                description TEXT,
-                project_type VARCHAR(64),
+                description VARCHAR(1024),
+                project_type VARCHAR(256),
                 owner_id VARCHAR(128),
                 created_at TIMESTAMP DEFAULT NOW()
             )

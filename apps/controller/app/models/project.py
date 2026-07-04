@@ -8,8 +8,8 @@ class Project(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(256), nullable=False)
-    description = Column(String(512))
-    project_type = Column(String(64))
+    description = Column(String(1024))
+    project_type = Column(String(256))
     owner_id = Column(String(128))
     created_at = Column(DateTime, server_default=func.now())
 
