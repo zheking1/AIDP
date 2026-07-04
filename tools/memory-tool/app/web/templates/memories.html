@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}记忆列表{% endblock %}
+{% block content %}
+<div x-data="memoryList()" x-init="init()">
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Project ID</label>
+                <input x-model="filters.project_id" type="text" class="border rounded px-2 py-1 text-sm w-32">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">类型</label>
+                <select x-model="filters.memory_type" class="border rounded px-2 py-1 text-sm">
+                    <option value="">全部</option>
+                    <option value="decision">决策</option>
+                    <option value="pattern">模式</option>
+                    <option value="bug">Bug</option>
+                    <option value="workflow">工作流</option>
+                    <option value="fact">事实</option>
+                </select>
+            </div>
+            <button @click="load()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">查询</button>
+            <a href="/memories/new" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ 新建</a>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 bg-gray-50">
+                <tr><th class="px-4 py-2">标题</th><th class="px-4 py-2">类型</th><th class="px-4 py-2">重要性</th><th class="px-4 py-2">标签</th><th class="px-4 py-2">操作</th></tr>
+            </thead>
+            <tbody>
+                <template x-for="item in items" :key="item.id">
+                    <tr class="border-t hover:bg-gray-50">
+                        <td class="px-4 py-2"><a :href="'/memories/' + item.id" class="text-blue-600 hover:underline" x-text="item.title"></a></td>
+                        <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700" x-text="item.memory_type"></span></td>
+                        <td class="px-4 py-2 text-yellow-500" x-text="'★'.repeat(item.importance || 0)"></td>
+                        <td class="px-4 py-2 text-xs text-gray-500" x-text="(item.tags || []).join(', ')"></td>
+                        <td class="px-4 py-2">
+                            <a :href="'/memories/' + item.id" class="text-blue-600 hover:underline mr-2">查看</a>
+                            <button @click="deleteItem(item.id)" class="text-red-600 hover:underline">删除</button>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="items.length === 0"><td colspan="5" class="px-4 py-8 text-center text-gray-400">暂无记忆</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function memoryList() {
+    return {
+        items: [],
+        filters: { project_id: '', memory_type: '' },
+        async init() { await this.load(); },
+        async load() {
+            const p = new URLSearchParams();
+            if (this.filters.project_id) p.set('project_id', this.filters.project_id);
+            const resp = await fetch('/api/memory?' + p);
+            const data = await resp.json();
+            let items = data.items || [];
+            if (this.filters.memory_type) items = items.filter(i => i.memory_type === this.filters.memory_type);
+            this.items = items;
+        },
+        async deleteItem(id) {
+            if (!confirm('确认删除?')) return;
+            await fetch('/api/memory/' + id, { method: 'DELETE' });
+            await this.load();
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Models') }}{% endblock %}
+{% block content %}
+<div x-data="modelManager()">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">{{ _('LLM Models') }}</h2>
+    <button @click="openCreate()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('+ Add Model') }}</button>
+  </div>
+  <div class="space-y-4">
+    {% for m in models %}
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="font-bold">{{ m.name }}</h3>
+          <p class="text-sm text-gray-400">{{ m.model_name }} <span class="text-xs bg-gray-700 px-2 py-0.5 rounded ml-2">{{ _(m.role) if m.role in ('Intent Analyzer', 'Embedding', 'Review') else m.role }}</span></p>
+          <button @click="openEdit({{ loop.index0 }})" class="text-xs text-indigo-400 hover:underline mt-1 inline-block">{{ _('Edit') }}</button>
+          <form method="POST" action="/models/{{ m.id }}/delete" class="inline" onsubmit="return confirm('{{ _('Delete this model?') }}')">
+            <button type="submit" class="text-xs text-red-400 hover:underline ml-2">{{ _('Delete') }}</button>
+          </form>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-0.5 rounded {% if m.is_healthy %}bg-green-900 text-green-300{% else %}bg-red-900 text-red-300{% endif %}">
+            {{ _('Healthy') if m.is_healthy else _('Unhealthy') }}
+          </span>
+          {% if m.is_default %}<span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded">{{ _('default') }}</span>{% endif %}
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">{{ m.endpoint }}</p>
+    </div>
+    {% else %}
+    <div class="text-center text-gray-500 py-8">
+      <p>{{ _('No LLM models configured.') }}</p>
+      <button @click="openCreate()" class="text-indigo-400 hover:underline mt-2 inline-block">{{ _('Add your first model') }} →</button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Model Modal -->
+  <div x-show="showModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showModal = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4" x-text="editingId ? '{{ _('Edit Model') }}' : '{{ _('Add Model') }}'"></h3>
+      <form :action="editingId ? '/models/' + editingId + '/edit' : '/models/create'" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+          <input type="text" name="name" x-model="f.name" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Endpoint URL') }}</label>
+          <input type="text" name="endpoint" x-model="f.endpoint" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="https://api.openai.com/v1">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('API Key') }}</label>
+          <input type="text" name="api_key" x-model="f.api_key" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="sk-xxx">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Model Name') }}</label>
+          <input type="text" name="model_name" x-model="f.model_name" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="gpt-4o">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Role') }}</label>
+          <select name="role" x-model="f.role" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+            <option value="intent_analyzer">{{ _('Intent Analyzer') }}</option>
+            <option value="embedding">{{ _('Embedding') }}</option>
+            <option value="review">{{ _('Review') }}</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _('Temperature') }}</label>
+            <input type="number" name="temperature" x-model="f.temperature" step="0.1" min="0" max="2" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _('Max Tokens') }}</label>
+            <input type="number" name="max_tokens" x-model="f.max_tokens" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Timeout (seconds)') }}</label>
+          <input type="number" name="timeout_secs" x-model="f.timeout_secs" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-400">
+            <input type="checkbox" name="is_default" value="true" x-model="f.is_default" class="rounded bg-gray-700 border-gray-600">
+            {{ _('Set as default') }}
+          </label>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+var __models = {{ models | tojson }};
+function modelManager() {
+  return {
+    showModal: false,
+    editingId: null,
+    f: { name: '', endpoint: '', api_key: '', model_name: '', role: 'intent_analyzer', temperature: 0.7, max_tokens: 2048, timeout_secs: 30, is_default: false },
+    openCreate() {
+      this.editingId = null;
+      this.f = { name: '', endpoint: '', api_key: '', model_name: '', role: 'intent_analyzer', temperature: 0.7, max_tokens: 2048, timeout_secs: 30, is_default: false };
+      this.showModal = true;
+    },
+    openEdit(idx) {
+      var m = __models[idx];
+      this.editingId = m.id;
+      this.f = {
+        name: m.name || '',
+        endpoint: m.endpoint || '',
+        api_key: m.api_key || '',
+        model_name: m.model_name || '',
+        role: m.role || 'intent_analyzer',
+        temperature: m.temperature || 0.7,
+        max_tokens: m.max_tokens || 2048,
+        timeout_secs: m.timeout_secs || 30,
+        is_default: m.is_default || false
+      };
+      this.showModal = true;
+    }
+  }
+}
+</script>
+{% endblock %}

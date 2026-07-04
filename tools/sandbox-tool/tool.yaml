@@ -1,0 +1,74 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: sandbox-tool
+  displayName: Sandbox Tool
+  version: 0.1.0
+  description: Code execution sandbox for Python/Bash.
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/sandbox-tool:0.1.0
+    port: 18083
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18083
+    healthUrl: http://127.0.0.1:18083/health
+
+dependencies:
+  required:
+    - postgresql
+
+configSchema:
+  type: object
+  properties:
+    databaseUrl:
+      type: string
+    executionTimeout:
+      type: integer
+      default: 30
+    executionMaxOutput:
+      type: integer
+      default: 10240
+
+capabilities:
+  - name: sandbox.execute
+    description: Execute code in a sandboxed environment.
+    endpoint: POST /api/execute
+    timeoutMs: 35000
+    permission: sandbox:execute
+    inputSchema:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        language:
+          type: string
+          enum: [python, bash, sh]
+          default: python
+        stdin:
+          type: string
+    outputSchema:
+      type: object
+      properties:
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exitCode:
+          type: integer
+        timedOut:
+          type: boolean
+
+  - name: sandbox.history
+    description: Get execution history.
+    endpoint: GET /api/execute/history
+    timeoutMs: 3000
+    permission: sandbox:read
+
+health:
+  endpoint: GET /health

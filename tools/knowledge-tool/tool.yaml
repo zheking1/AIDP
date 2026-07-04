@@ -1,0 +1,71 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: knowledge-tool
+  displayName: Knowledge Tool
+  version: 0.1.0
+  description: Document ingestion, indexing and retrieval.
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/knowledge-tool:0.1.0
+    port: 18081
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18081
+    healthUrl: http://127.0.0.1:18081/health
+
+dependencies:
+  required:
+    - postgresql
+  optional:
+    - pgvector
+
+configSchema:
+  type: object
+  properties:
+    databaseUrl:
+      type: string
+    storageProvider:
+      type: string
+      enum: [local, minio, s3]
+      default: local
+    embeddingProvider:
+      type: string
+      enum: [mock, openai]
+      default: mock
+
+capabilities:
+  - name: knowledge.search
+    description: Search indexed document chunks.
+    endpoint: POST /api/knowledge/search
+    timeoutMs: 3000
+    permission: knowledge:search
+    inputSchema:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        top_k:
+          type: integer
+          default: 8
+    outputSchema:
+      type: object
+      properties:
+        items:
+          type: array
+        degraded:
+          type: boolean
+
+  - name: document.index
+    description: Create index job for a document.
+    endpoint: POST /api/documents/{id}/index
+    timeoutMs: 10000
+    permission: knowledge:index
+
+health:
+  endpoint: GET /health

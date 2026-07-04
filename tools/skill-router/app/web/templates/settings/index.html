@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Settings') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('System Settings') }}</h2>
+
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-2xl">
+  <form method="POST" class="space-y-6">
+    <div>
+      <label class="flex items-center gap-2 text-sm text-gray-400">
+        <input type="checkbox" name="allow_registration" {% if settings.get('allow_registration') %}checked{% endif %} class="rounded bg-gray-700 border-gray-600">
+        {{ _('Allow Registration') }}
+      </label>
+      <p class="text-xs text-gray-500 mt-1">{{ _('Allow new users to register accounts') }}</p>
+    </div>
+    
+    <div class="flex justify-end">
+      <button type="submit" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save Changes') }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

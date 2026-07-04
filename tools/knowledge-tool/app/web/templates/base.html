@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Knowledge Tool{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .code-editor { font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; tab-size: 2; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Top Nav -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <a href="/" class="text-xl font-bold text-blue-600">📚 Knowledge Tool</a>
+                <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">v0.1.0</span>
+            </div>
+            <div class="flex items-center space-x-4 text-sm">
+                <a href="/" class="text-gray-600 hover:text-blue-600">仪表盘</a>
+                <a href="/documents" class="text-gray-600 hover:text-blue-600">文档</a>
+                <a href="/search" class="text-gray-600 hover:text-blue-600">搜索测试</a>
+                <span id="health-status" class="text-green-600">●</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Toast -->
+    <div x-data="toast()" x-cloak
+         x-show="show"
+         x-transition
+         class="fixed bottom-4 right-4 px-4 py-2 rounded shadow-lg text-white"
+         :class="type === 'success' ? 'bg-green-600' : 'bg-red-600'">
+        <span x-text="message"></span>
+    </div>
+
+    <script>
+    function toast() {
+        return {
+            show: false,
+            message: '',
+            type: 'success',
+            showMsg(msg, t) {
+                this.message = msg;
+                this.type = t || 'success';
+                this.show = true;
+                setTimeout(() => this.show = false, 3000);
+            }
+        };
+    }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

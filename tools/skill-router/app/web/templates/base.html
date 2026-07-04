@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SkillRouter{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100" x-data="{ sidebarOpen: true }">
+  <div class="flex h-screen">
+    <aside class="w-56 bg-gray-800 border-r border-gray-700 flex-shrink-0 overflow-y-auto" x-show="sidebarOpen">
+      <div class="p-4 border-b border-gray-700">
+        <h1 class="text-lg font-bold text-indigo-400">{{ _('SkillRouter') }}</h1>
+        <p class="text-xs text-gray-500">{{ _('MCP Skill Manager') }}</p>
+      </div>
+      <nav class="p-2 space-y-1">
+        <a href="/projects" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">📁 {{ _('Projects') }}</a>
+        <a href="/skills" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">📜 {{ _('Skills') }}</a>
+        <a href="/skills/import" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">📥 {{ _('Import Skill') }}</a>
+        <a href="/rules" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">⚖️ {{ _('Rules') }}</a>
+        <a href="/evolutions" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">🔄 {{ _('Evolutions') }}</a>
+        <hr class="border-gray-700 my-2">
+        <a href="/models" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">🤖 {{ _('Models') }}</a>
+        <a href="/resolve" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">🔍 {{ _('Test Bench') }}</a>
+        <a href="/cache" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">⚡ {{ _('Cache') }}</a>
+        <a href="/stats" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">📊 {{ _('Stats') }}</a>
+        <a href="/logs" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">📋 {{ _('Logs') }}</a>
+        <hr class="border-gray-700 my-2">
+        {% if request.session.get('user', {}).get('role') == 'admin' or request.session.get('user', {}).get('username') == 'admin' %}
+        <a href="/users" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">👥 {{ _('Users') }}</a>
+        <a href="/permissions" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">🔒 {{ _('Permissions') }}</a>
+        <a href="/settings" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">⚙️ {{ _('Settings') }}</a>
+        {% endif %}
+        <a href="/api-keys" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">🔑 {{ _('API Keys') }}</a>
+        <a href="/profile" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm">👤 {{ _('Profile') }}</a>
+        <a href="/logout" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700 text-sm text-red-400">🚪 {{ _('Logout') }}</a>
+      </nav>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto">
+      <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button @click="sidebarOpen = !sidebarOpen" class="text-gray-400 hover:text-white text-xl">☰</button>
+          <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+          <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+        </div>
+        <div class="text-sm text-gray-400" x-data="{open:false}">
+          <button @click="open=!open" class="flex items-center gap-1 hover:text-white">
+            👤 {{ request.session.get('user', {}).get('username', 'admin') }}
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div x-show="open" @click.outside="open=false" x-transition class="absolute right-4 mt-1 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1 z-50" style="display:none">
+            <a href="/profile" class="block px-4 py-2 text-sm hover:bg-gray-700">{{ _('Profile') }}</a>
+            <a href="/api-keys" class="block px-4 py-2 text-sm hover:bg-gray-700">{{ _('API Keys') }}</a>
+            {% if request.session.get('user', {}).get('role') == 'admin' or request.session.get('user', {}).get('username') == 'admin' %}
+            <a href="/users" class="block px-4 py-2 text-sm hover:bg-gray-700">{{ _('Users') }}</a>
+            <a href="/settings" class="block px-4 py-2 text-sm hover:bg-gray-700">{{ _('Settings') }}</a>
+            {% endif %}
+            <hr class="border-gray-700">
+            <a href="/logout" class="block px-4 py-2 text-sm text-red-400 hover:bg-gray-700">{{ _('Logout') }}</a>
+          </div>
+        </div>
+      </header>
+      <div class="p-6">
+        {% if error %}
+        <div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="bg-green-900/50 border border-green-700 text-green-300 px-4 py-3 rounded mb-4">{{ success }}</div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</body>
+</html>

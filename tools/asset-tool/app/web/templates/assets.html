@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}资产列表{% endblock %}
+{% block content %}
+<div x-data="assetList()" x-init="init()">
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Workspace</label>
+                <input x-model="filters.workspace_id" type="text" class="border rounded px-2 py-1 text-sm w-32">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">类型</label>
+                <select x-model="filters.asset_type" class="border rounded px-2 py-1 text-sm">
+                    <option value="">全部</option>
+                    <option value="snippet">代码片段</option>
+                    <option value="config">配置</option>
+                    <option value="pattern">模式</option>
+                </select>
+            </div>
+            <button @click="load()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">查询</button>
+            <a href="/assets/new" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ 新建</a>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 bg-gray-50">
+                <tr><th class="px-4 py-2">标题</th><th class="px-4 py-2">类型</th><th class="px-4 py-2">语言</th><th class="px-4 py-2">标签</th><th class="px-4 py-2">操作</th></tr>
+            </thead>
+            <tbody>
+                <template x-for="item in items" :key="item.id">
+                    <tr class="border-t hover:bg-gray-50">
+                        <td class="px-4 py-2"><a :href="'/assets/' + item.id" class="text-blue-600 hover:underline" x-text="item.title"></a></td>
+                        <td class="px-4 py-2" x-text="item.asset_type"></td>
+                        <td class="px-4 py-2" x-text="item.language || '-'"></td>
+                        <td class="px-4 py-2 text-xs text-gray-500" x-text="(item.tags || []).join(', ')"></td>
+                        <td class="px-4 py-2">
+                            <a :href="'/assets/' + item.id" class="text-blue-600 hover:underline mr-2">查看</a>
+                            <button @click="deleteItem(item.id)" class="text-red-600 hover:underline">删除</button>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="items.length === 0"><td colspan="5" class="px-4 py-8 text-center text-gray-400">暂无资产</td></tr>
+            </tbody>
+        </table>
+        <div class="px-4 py-2 border-t flex justify-between items-center text-sm text-gray-500">
+            <span>共 <span x-text="total"></span> 条</span>
+            <div class="space-x-2">
+                <button @click="page > 1 && (page--, load())" :disabled="page <= 1" class="px-2 py-1 border rounded disabled:opacity-50">上一页</button>
+                <span x-text="page + ' / ' + Math.max(1, Math.ceil(total / pageSize))"></span>
+                <button @click="page * pageSize < total && (page++, load())" :disabled="page * pageSize >= total" class="px-2 py-1 border rounded disabled:opacity-50">下一页</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function assetList() {
+    return {
+        items: [], total: 0, page: 1, pageSize: 20,
+        filters: { workspace_id: '', asset_type: '' },
+        async init() { await this.load(); },
+        async load() {
+            const p = new URLSearchParams({ page: this.page, page_size: this.pageSize });
+            if (this.filters.workspace_id) p.set('workspace_id', this.filters.workspace_id);
+            if (this.filters.asset_type) p.set('asset_type', this.filters.asset_type);
+            const resp = await fetch('/api/assets?' + p);
+            const data = await resp.json();
+            this.items = data.items || [];
+            this.total = data.total || 0;
+        },
+        async deleteItem(id) {
+            if (!confirm('确认删除?')) return;
+            await fetch('/api/assets/' + id, { method: 'DELETE' });
+            await this.load();
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Test Bench') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('Routing Test Bench') }}</h2>
+<div class="grid grid-cols-2 gap-6">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <form method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Task Description') }}</label>
+        <textarea name="task" rows="6" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 font-mono text-sm" placeholder="{{ _('Write an ERP order query API...') }}"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Mode') }}</label>
+        <select name="mode" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+          <option value="auto">{{ _('Auto') }}</option>
+          <option value="embedding_only">{{ _('Embedding Only') }}</option>
+          <option value="llm_only">{{ _('LLM Only') }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Hint Tags (comma separated)') }}</label>
+        <input type="text" name="hint_tags" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="{{ _('erp, order, api') }}">
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Resolve') }}</button>
+    </form>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 overflow-y-auto max-h-[70vh]">
+    <h3 class="text-sm font-bold text-gray-400 mb-3">{{ _('Result') }}</h3>
+    {% if result %}
+    <div class="space-y-3">
+      {% if result.intent_analysis %}
+      <div class="bg-gray-700 rounded p-3">
+        <p class="text-xs text-gray-400">{{ _('Intent:') }} <span class="text-white">{{ result.intent_analysis.intent }}</span></p>
+        <p class="text-xs text-gray-400">{{ _('Domain:') }} <span class="text-white">{{ result.intent_analysis.domain }}</span></p>
+        <p class="text-xs text-gray-400">{{ _('Complexity:') }} <span class="text-white">{{ result.intent_analysis.complexity }}</span></p>
+      </div>
+      {% endif %}
+      <div class="text-xs text-gray-500 flex gap-4">
+        <span>{{ _('Cache') }}: {{ _('HIT') if result.cache_hit else _('MISS') }}</span>
+        <span>{{ _('Latency') }}: {{ result.latency_ms }}ms</span>
+        {% if result.degrade_info.degraded %}
+        <span class="text-yellow-400">⚠️ {{ _('Degraded') }}: {{ result.degrade_info.reason }}</span>
+        {% endif %}
+      </div>
+      <div>
+        <p class="text-xs text-gray-400 mb-1">{{ _('Matched Skills (%(count)d)') | format(count=result.skills|length) }}:</p>
+        {% for s in result.skills %}
+        <div class="bg-gray-700 rounded p-2 mb-1">
+          <div class="flex justify-between"><span class="text-indigo-400">{{ s.name }}</span><span class="text-xs">{{ _('score') }}: {{ s.score }}</span></div>
+          <p class="text-xs text-gray-400">{{ s.content[:200] }}{% if s.content|length > 200 %}...{% endif %}</p>
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-xs">{{ _('No skills matched.') }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        <p class="text-xs text-gray-400 mb-1">{{ _('Matched Rules (%(count)d)') | format(count=result.rules|length) }}:</p>
+        {% for r in result.rules %}
+        <div class="bg-gray-700 rounded p-2 mb-1">
+          <div class="flex justify-between"><span class="text-yellow-400">{{ r.name }}</span><span class="text-xs">{{ _('score') }}: {{ r.score }}</span></div>
+          <p class="text-xs text-gray-400">{{ r.content[:200] }}{% if r.content|length > 200 %}...{% endif %}</p>
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-xs">{{ _('No rules matched.') }}</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-xs">{{ _('Enter a task and click Resolve.') }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}文档详情{% endblock %}
+{% block content %}
+<div x-data="docDetail()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-3">
+            <a href="/documents" class="text-gray-500 hover:text-blue-600">← 返回</a>
+            <h1 class="text-xl font-bold" x-text="doc.title || '加载中...'"></h1>
+            <span class="px-2 py-0.5 rounded text-xs"
+                  :class="doc.index_status === 'indexed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+                  x-text="doc.index_status"></span>
+        </div>
+        <div class="space-x-2">
+            <button @click="reindex()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">重新索引</button>
+            <button @click="deleteDoc()" class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">删除</button>
+        </div>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h2 class="font-semibold mb-2">文档信息</h2>
+            <dl class="text-sm space-y-1">
+                <div class="flex"><dt class="w-24 text-gray-500">类型:</dt><dd x-text="doc.doc_type"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">可见性:</dt><dd x-text="doc.visibility"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">版本:</dt><dd x-text="doc.version"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">Workspace:</dt><dd x-text="doc.workspace_id"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">创建时间:</dt><dd x-text="new Date(doc.created_at).toLocaleString()"></dd></div>
+            </dl>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h2 class="font-semibold mb-2">索引信息</h2>
+            <dl class="text-sm space-y-1">
+                <div class="flex"><dt class="w-24 text-gray-500">状态:</dt><dd x-text="doc.index_status"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">块数:</dt><dd x-text="chunks.length || '未索引'"></dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Content Preview -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4" x-show="content">
+        <h2 class="font-semibold mb-2">内容预览</h2>
+        <pre class="bg-gray-50 p-3 rounded text-sm overflow-auto max-h-96" x-text="content"></pre>
+    </div>
+
+    <!-- Chunks -->
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="chunks.length > 0">
+        <h2 class="font-semibold mb-2">文档块 (<span x-text="chunks.length"></span>)</h2>
+        <div class="space-y-2">
+            <template x-for="chunk in chunks" :key="chunk.id">
+                <div class="border rounded p-3 text-sm">
+                    <div class="flex justify-between text-gray-500 text-xs mb-1">
+                        <span>Block #<span x-text="chunk.chunk_index"></span></span>
+                        <span x-text="chunk.token_count + ' tokens'"></span>
+                    </div>
+                    <pre class="text-xs bg-gray-50 p-2 rounded max-h-32 overflow-auto" x-text="chunk.content.substring(0, 500)"></pre>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function docDetail() {
+    return {
+        doc: {}, content: '', chunks: [],
+        async init() {
+            const id = window.location.pathname.split('/').pop();
+            const resp = await fetch('/api/documents/' + id);
+            this.doc = await resp.json();
+            this.content = this.doc.content || '';
+        },
+        async reindex() {
+            const id = window.location.pathname.split('/').pop();
+            await fetch('/api/documents/' + id + '/index', { method: 'POST' });
+            alert('索引任务已提交');
+            await this.init();
+        },
+        async deleteDoc() {
+            if (!confirm('确认删除?')) return;
+            const id = window.location.pathname.split('/').pop();
+            await fetch('/api/documents/' + id, { method: 'DELETE' });
+            window.location.href = '/documents';
+        }
+    };
+}
+</script>
+{% endblock %}

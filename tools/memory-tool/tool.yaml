@@ -1,0 +1,94 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: memory-tool
+  displayName: Memory Tool
+  version: 0.1.0
+  description: Project memory management with search and context packages.
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/memory-tool:0.1.0
+    port: 18085
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18085
+    healthUrl: http://127.0.0.1:18085/health
+
+dependencies:
+  required:
+    - postgresql
+
+configSchema:
+  type: object
+  properties:
+    databaseUrl:
+      type: string
+    defaultLimit:
+      type: integer
+      default: 50
+
+capabilities:
+  - name: memory.create
+    description: Create a memory entry.
+    endpoint: POST /api/memory
+    timeoutMs: 3000
+    permission: memory:write
+    inputSchema:
+      type: object
+      required: [project, category, title, content]
+      properties:
+        project:
+          type: string
+        category:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        tags:
+          type: string
+        pinned:
+          type: boolean
+
+  - name: memory.search
+    description: Search memory entries.
+    endpoint: GET /api/memory/search
+    timeoutMs: 3000
+    permission: memory:read
+    inputSchema:
+      type: object
+      required: [project]
+      properties:
+        project:
+          type: string
+        query:
+          type: string
+        category:
+          type: string
+        limit:
+          type: integer
+
+  - name: memory.context
+    description: Get context package for a project and query.
+    endpoint: GET /api/memory/context
+    timeoutMs: 3000
+    permission: memory:read
+
+  - name: memory.update
+    description: Update a memory entry.
+    endpoint: PUT /api/memory/{id}
+    timeoutMs: 3000
+    permission: memory:write
+
+  - name: memory.delete
+    description: Delete a memory entry.
+    endpoint: DELETE /api/memory/{id}
+    timeoutMs: 3000
+    permission: memory:delete
+
+health:
+  endpoint: GET /health

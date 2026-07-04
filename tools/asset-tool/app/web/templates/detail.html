@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}资产详情{% endblock %}
+{% block content %}
+<div x-data="assetDetail()" x-init="init()">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-3">
+            <a href="/assets" class="text-gray-500 hover:text-blue-600">← 返回</a>
+            <h1 class="text-xl font-bold" x-text="asset.title || '加载中...'"></h1>
+        </div>
+        <div class="space-x-2">
+            <a :href="'/assets/' + assetId + '/edit'" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">编辑</a>
+            <button @click="deleteAsset()" class="bg-red-500 text-white px-3 py-1 rounded text-sm">删除</button>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h2 class="font-semibold mb-2">资产信息</h2>
+            <dl class="text-sm space-y-1">
+                <div class="flex"><dt class="w-24 text-gray-500">类型:</dt><dd x-text="asset.asset_type"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">语言:</dt><dd x-text="asset.language || '-'"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">可见性:</dt><dd x-text="asset.visibility"></dd></div>
+                <div class="flex"><dt class="w-24 text-gray-500">标签:</dt><dd x-text="(asset.tags || []).join(', ')"></dd></div>
+            </dl>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h2 class="font-semibold mb-2">描述</h2>
+            <p class="text-sm text-gray-600" x-text="asset.description || '无描述'"></p>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+        <h2 class="font-semibold mb-2">内容</h2>
+        <pre class="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-auto max-h-96" x-text="asset.content"></pre>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function assetDetail() {
+    return {
+        asset: {},
+        assetId: window.location.pathname.split('/').pop(),
+        async init() {
+            const resp = await fetch('/api/assets/' + this.assetId);
+            this.asset = await resp.json();
+        },
+        async deleteAsset() {
+            if (!confirm('确认删除?')) return;
+            await fetch('/api/assets/' + this.assetId, { method: 'DELETE' });
+            window.location.href = '/assets';
+        }
+    };
+}
+</script>
+{% endblock %}

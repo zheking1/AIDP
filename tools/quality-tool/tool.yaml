@@ -1,0 +1,98 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: quality-tool
+  displayName: Quality Tool
+  version: 0.1.0
+  description: "Code quality checks: linting and security scanning."
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/quality-tool:0.1.0
+    port: 18084
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18084
+    healthUrl: http://127.0.0.1:18084/health
+
+dependencies:
+  required:
+    - postgresql
+
+configSchema:
+  type: object
+  properties:
+    databaseUrl:
+      type: string
+    lintMaxLineLength:
+      type: integer
+      default: 120
+    securityChecks:
+      type: object
+      properties:
+        hardcodedSecrets:
+          type: boolean
+          default: true
+        sqlInjection:
+          type: boolean
+          default: true
+        dangerousFunctions:
+          type: boolean
+          default: true
+
+capabilities:
+  - name: quality.lint
+    description: Run lint checks on code.
+    endpoint: POST /api/check
+    timeoutMs: 5000
+    permission: quality:lint
+    inputSchema:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        filename:
+          type: string
+        language:
+          type: string
+    outputSchema:
+      type: object
+      properties:
+        issues:
+          type: array
+        issueCount:
+          type: integer
+
+  - name: quality.security
+    description: Run security scan on code.
+    endpoint: POST /api/check
+    timeoutMs: 5000
+    permission: quality:security
+    inputSchema:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        filename:
+          type: string
+    outputSchema:
+      type: object
+      properties:
+        issues:
+          type: array
+        issueCount:
+          type: integer
+
+  - name: quality.check
+    description: Run all quality checks (lint + security).
+    endpoint: POST /api/check
+    timeoutMs: 5000
+    permission: quality:check
+
+health:
+  endpoint: GET /health

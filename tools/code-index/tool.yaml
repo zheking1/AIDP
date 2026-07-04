@@ -1,0 +1,11 @@
+name: code-index
+version: 0.1.0
+endpoint: http://127.0.0.1:18086
+description: Code Index Tool - AST parsing, symbol search, call tracing, impact analysis
+capabilities:
+  - code.explore
+  - search
+  - scan
+  - calls
+  - dependents
+  - structure

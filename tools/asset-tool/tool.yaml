@@ -1,0 +1,57 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: asset-tool
+  displayName: Asset Tool
+  version: 0.1.0
+  description: Code asset and template management.
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/asset-tool:0.1.0
+    port: 18082
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18082
+    healthUrl: http://127.0.0.1:18082/health
+
+dependencies:
+  required:
+    - postgresql
+
+capabilities:
+  - name: asset.search
+    description: Search code assets.
+    endpoint: POST /api/assets/search
+    timeoutMs: 3000
+    permission: asset:search
+    inputSchema:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        asset_type:
+          type: string
+        top_k:
+          type: integer
+          default: 8
+    outputSchema:
+      type: object
+      properties:
+        items:
+          type: array
+        total:
+          type: integer
+
+  - name: asset.render
+    description: Render asset template.
+    endpoint: POST /api/assets/render
+    timeoutMs: 1000
+    permission: asset:read
+
+health:
+  endpoint: GET /health

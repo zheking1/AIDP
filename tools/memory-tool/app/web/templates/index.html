@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Memory Tool - 仪表盘{% endblock %}
+{% block content %}
+<div x-data="dashboard()" x-init="init()">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">记忆总数</div>
+            <div class="text-2xl font-bold text-gray-800" x-text="stats.total">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">决策</div>
+            <div class="text-2xl font-bold text-blue-600" x-text="stats.decision">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">模式</div>
+            <div class="text-2xl font-bold text-green-600" x-text="stats.pattern">-</div>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-3">快捷操作</h2>
+        <div class="flex space-x-3">
+            <a href="/memories/new" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">创建记忆</a>
+            <a href="/memories" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">管理记忆</a>
+            <a href="/context" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">上下文查询</a>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+        <h2 class="text-lg font-semibold mb-3">最近记忆</h2>
+        <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 border-b">
+                <tr><th class="pb-2">标题</th><th class="pb-2">类型</th><th class="pb-2">重要性</th><th class="pb-2">创建时间</th></tr>
+            </thead>
+            <tbody>
+                <template x-for="item in recent" :key="item.id">
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2"><a :href="'/memories/' + item.id" class="text-blue-600 hover:underline" x-text="item.title"></a></td>
+                        <td class="py-2"><span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700" x-text="item.memory_type"></span></td>
+                        <td class="py-2 text-yellow-500" x-text="'★'.repeat(item.importance || 0)"></td>
+                        <td class="py-2 text-gray-500" x-text="new Date(item.created_at).toLocaleString()"></td>
+                    </tr>
+                </template>
+                <tr x-show="recent.length === 0"><td colspan="4" class="py-4 text-center text-gray-400">暂无记忆</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        stats: { total: 0, decision: 0, pattern: 0 },
+        recent: [],
+        async init() {
+            const resp = await fetch('/api/memory?limit=5');
+            const data = await resp.json();
+            this.recent = data.items || [];
+            this.stats.total = data.total || 0;
+            this.stats.decision = this.recent.filter(i => i.memory_type === 'decision').length;
+            this.stats.pattern = this.recent.filter(i => i.memory_type === 'pattern').length;
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,10 @@
+name: doc-index
+version: 0.1.0
+endpoint: http://127.0.0.1:18087
+description: Doc Index Tool - Wiki generation, document-code linking, drift detection
+capabilities:
+  - doc-parse
+  - doc-search
+  - code-link
+  - drift-detect
+  - wiki-generate

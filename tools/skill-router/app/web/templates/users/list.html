@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Users') }}{% endblock %}
+{% block content %}
+<script>
+  window.__users_data = {{ users | tojson }};
+</script>
+<div x-data="userManager()">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">{{ _('Users') }}</h2>
+    <button @click="openCreate()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('+ New User') }}</button>
+  </div>
+  <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-700 text-gray-300">
+        <tr>
+          <th class="text-left px-4 py-3">{{ _('Username') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Nickname') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Remark') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Role') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Status') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Created') }}</th>
+          <th class="text-left px-4 py-3">{{ _('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for u in users %}
+        <tr class="hover:bg-gray-750">
+          <td class="px-4 py-3 font-medium">{{ u.username }}</td>
+          <td class="px-4 py-3 text-gray-400">{{ u.nickname or '' }}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate" title="{{ u.remark or '' }}">{{ u.remark or '' }}</td>
+          <td class="px-4 py-3">
+            <span class="text-xs px-2 py-0.5 rounded {% if u.role == 'admin' %}bg-purple-900 text-purple-300{% else %}bg-gray-700 text-gray-300{% endif %}">{{ u.role }}</span>
+          </td>
+          <td class="px-4 py-3">
+            {% if u.username != 'admin' %}
+            <span class="text-xs px-2 py-0.5 rounded {% if u.is_active != false %}bg-green-900 text-green-300{% else %}bg-red-900 text-red-300{% endif %}">
+              {{ _('Active') if u.is_active != false else _('Disabled') }}
+            </span>
+            {% else %}
+            <span class="text-xs px-2 py-0.5 rounded bg-green-900 text-green-300">{{ _('Active') }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-gray-400">{{ u.created_at[:10] if u.created_at else '' }}</td>
+          <td class="px-4 py-3 space-x-2">
+            <button @click="openEdit({{ loop.index0 }})" class="text-indigo-400 hover:underline text-xs">{{ _('Edit') }}</button>
+            {% if u.username != 'admin' %}
+            <form method="POST" action="/users/{{ u.id }}/toggle-active" class="inline" onsubmit="return confirm('{{ _('Toggle this user active status?') }}')">
+              <button type="submit" class="text-xs text-yellow-400 hover:underline">{{ _('Disable') if u.is_active != false else _('Enable') }}</button>
+            </form>
+            <form method="POST" action="/users/{{ u.id }}/delete" class="inline" onsubmit="return confirm('{{ _('Delete this user?') }}')">
+              <button type="submit" class="text-xs text-red-400 hover:underline">{{ _('Delete') }}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not users %}
+    <div class="text-center text-gray-500 py-8">{{ _('No users yet.') }}</div>
+    {% endif %}
+  </div>
+
+  <!-- User Modal -->
+  <div x-show="showModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showModal = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4" x-text="editingId ? '{{ _('Edit User') }}' : '{{ _('Create User') }}'"></h3>
+      <form :action="editingId ? '/users/' + editingId + '/edit' : '/users/create'" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Username') }}</label>
+          <input type="text" name="username" x-model="f.username" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Nickname') }}</label>
+          <input type="text" name="nickname" x-model="f.nickname" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Remark') }}</label>
+          <textarea name="remark" x-model="f.remark" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1" x-text="editingId ? '{{ _('New Password (blank to keep)') }}' : '{{ _('Password') }}'"></label>
+          <input type="password" name="password" x-model="f.password" :required="!editingId" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Role') }}</label>
+          <select name="role" x-model="f.role" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+            <option value="admin">{{ _('Admin') }}</option>
+            <option value="user">{{ _('User') }}</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function userManager() {
+  return {
+    showModal: false,
+    editingId: null,
+    f: { username: '', nickname: '', remark: '', password: '', role: 'user' },
+    openCreate() {
+      this.editingId = null;
+      this.f = { username: '', nickname: '', remark: '', password: '', role: 'user' };
+      this.showModal = true;
+    },
+    openEdit(idx) {
+      const u = window.__users_data[idx];
+      if (!u) return;
+      this.editingId = u.id;
+      this.f = { username: u.username || '', nickname: u.nickname || '', remark: u.remark || '', password: '', role: u.role || 'user' };
+      this.showModal = true;
+    }
+  }
+}
+</script>
+{% endblock %}

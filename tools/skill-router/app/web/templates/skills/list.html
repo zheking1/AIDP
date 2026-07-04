@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Skills') }}{% endblock %}
+{% block content %}
+<div x-data="skillManager()" x-init="init()">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">{{ _('Skills') }}</h2>
+    <div class="flex gap-2">
+      <button @click="showCreateGroup = true" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm">{{ _('New Group') }}</button>
+      <a href="/skills/create" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('+ New Skill') }}</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
+    <!-- Left: Group Tree -->
+    <div class="lg:col-span-1 bg-gray-800 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-gray-700">
+        <h3 class="font-bold text-sm">{{ _('Groups') }}</h3>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2">
+        <template x-for="g in roots" :key="g.id">
+          <div>
+            <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-700"
+                 :class="{ 'bg-indigo-900/30': g.id === selectedGroupId }"
+                 @click="selectGroup(g.id)">
+              <button @click.stop="toggleExpand(g)" class="p-1 hover:bg-gray-700 rounded">
+                <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{ 'rotate-90': g.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+              <span class="text-sm truncate flex-1" x-text="g.name"></span>
+              <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded" x-text="getSkillCount(g.id)"></span>
+              <button @click.stop="openEditGroup(g)" class="p-1 text-gray-500 hover:text-indigo-400 rounded" title="Edit">✎</button>
+              <button @click.stop="deleteGroup(g.id)" class="p-1 text-gray-500 hover:text-red-400 rounded" title="Delete">✕</button>
+            </div>
+            <template x-if="g.expanded && g.children && g.children.length > 0">
+              <div class="ml-6 border-l border-gray-700 pl-2">
+                <template x-for="child in g.children" :key="child.id">
+                  <div>
+                    <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-700"
+                         :class="{ 'bg-indigo-900/30': child.id === selectedGroupId }"
+                         @click="selectGroup(child.id)">
+                      <button @click.stop="toggleExpand(child)" class="p-1 hover:bg-gray-700 rounded">
+                        <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{ 'rotate-90': child.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                      </button>
+                      <span class="text-sm truncate flex-1" x-text="child.name"></span>
+                      <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded" x-text="getSkillCount(child.id)"></span>
+                      <button @click.stop="openEditGroup(child)" class="p-1 text-gray-500 hover:text-indigo-400 rounded" title="Edit">✎</button>
+                      <button @click.stop="deleteGroup(child.id)" class="p-1 text-gray-500 hover:text-red-400 rounded" title="Delete">✕</button>
+                    </div>
+                    <template x-if="child.expanded && child.children && child.children.length > 0">
+                      <div class="ml-6 border-l border-gray-700 pl-2">
+                        <template x-for="gc in child.children" :key="gc.id">
+                          <div>
+                            <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-700"
+                                 :class="{ 'bg-indigo-900/30': gc.id === selectedGroupId }"
+                                 @click="selectGroup(gc.id)">
+                              <span class="text-sm truncate flex-1" x-text="gc.name"></span>
+                              <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded" x-text="getSkillCount(gc.id)"></span>
+                              <button @click.stop="openEditGroup(gc)" class="p-1 text-gray-500 hover:text-indigo-400 rounded" title="Edit">✎</button>
+                              <button @click.stop="deleteGroup(gc.id)" class="p-1 text-gray-500 hover:text-red-400 rounded" title="Delete">✕</button>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+        <div x-show="roots.length === 0" class="text-center text-gray-500 py-8 text-sm">
+          {{ _('No groups yet. Create one to organize skills.') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div x-show="showCreateGroup" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showCreateGroup = false" style="display:none">
+      <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+        <h3 class="text-lg font-bold mb-4">{{ _('New Group') }}</h3>
+        <form @submit.prevent="createGroup" class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _('Group Name') }}</label>
+            <input type="text" x-model="newGroupName" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="{{ _('Enter group name') }}">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _('Parent Group (optional)') }}</label>
+            <select x-model="newGroupParentId" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+              <option value="">{{ _('None (Root Level)') }}</option>
+              <template x-for="g in roots" :key="g.id">
+                <option :value="g.id" x-text="g.name"></option>
+              </template>
+            </select>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="showCreateGroup = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+            <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Create') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Group Modal -->
+    <div x-show="showEditGroup" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showEditGroup = false" style="display:none">
+      <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+        <h3 class="text-lg font-bold mb-4">{{ _('Edit Group') }}</h3>
+        <form @submit.prevent="updateGroup" class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _('Group Name') }}</label>
+            <input type="text" x-model="editGroupName" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+          </div>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="showEditGroup = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+            <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Right: Skills List -->
+    <div class="lg:col-span-3 bg-gray-800 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-gray-700 flex justify-between items-center">
+        <h3 class="font-bold text-sm">{{ _('Skills') }} <span class="text-gray-500 text-xs" x-text="filteredSkills.length"></span></h3>
+        <div class="flex gap-2">
+          <input type="text" x-model="searchQuery" placeholder="{{ _('Search skills...') }}" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm w-64">
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-3">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-700 text-gray-300 sticky top-0">
+            <tr>
+              <th class="text-left px-4 py-3">{{ _('Name') }}</th>
+              <th class="text-left px-4 py-3">{{ _('Group') }}</th>
+              <th class="text-left px-4 py-3">{{ _('Tags') }}</th>
+              <th class="text-left px-4 py-3">{{ _('Version') }}</th>
+              <th class="text-left px-4 py-3">{{ _('Status') }}</th>
+              <th class="text-left px-4 py-3">{{ _('Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-700">
+          <template x-for="s in filteredSkills" :key="s.id">
+            <tr class="hover:bg-gray-750">
+              <td class="px-4 py-3"><a :href="'/skills/' + s.id" class="text-indigo-400 hover:underline" x-text="s.name"></a></td>
+              <td class="px-4 py-3">
+                <template x-if="s.group_name">
+                  <span class="bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded text-xs" x-text="s.group_name"></span>
+                </template>
+                <template x-if="!s.group_name">
+                  <span class="text-gray-500 text-xs">{{ _('Ungrouped') }}</span>
+                </template>
+              </td>
+              <td class="px-4 py-3">
+                <template x-for="t in (s.tags || [])" :key="t">
+                  <span class="bg-gray-700 text-xs px-2 py-0.5 rounded mr-1" x-text="t"></span>
+                </template>
+              </td>
+              <td class="px-4 py-3" x-text="'v' + s.version"></td>
+              <td class="px-4 py-3">
+                <template x-if="s.review_status === 'approved'">
+                  <span class="text-xs px-2 py-0.5 rounded bg-green-900 text-green-300">{{ _('Approved') }}</span>
+                </template>
+                <template x-if="s.review_status === 'rejected'">
+                  <span class="text-xs px-2 py-0.5 rounded bg-red-900 text-red-300">{{ _('Rejected') }}</span>
+                </template>
+                <template x-if="s.review_status !== 'approved' && s.review_status !== 'rejected'">
+                  <span class="text-xs px-2 py-0.5 rounded bg-yellow-900 text-yellow-300">{{ _('Pending') }}</span>
+                </template>
+              </td>
+              <td class="px-4 py-3 space-x-2">
+                <a :href="'/skills/' + s.id + '/edit'" class="text-indigo-400 hover:underline text-xs">{{ _('Edit') }}</a>
+                <a :href="'/skills/' + s.id + '/review'" class="text-yellow-400 hover:underline text-xs">{{ _('Review') }}</a>
+                <form method="POST" :action="'/skills/' + s.id + '/delete'" class="inline" onsubmit="return confirm('{{ _('Delete this skill?') }}')">
+                  <button type="submit" class="text-xs text-red-400 hover:underline">{{ _('Delete') }}</button>
+                </form>
+              </td>
+            </tr>
+          </template>
+          <template x-if="filteredSkills.length === 0">
+            <tr><td colspan="6" class="px-4 py-6 text-center text-gray-500">{{ _('No skills found.') }}</td></tr>
+          </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function skillManager() {
+  return {
+    groups: {{ groups | tojson }},
+    groupsMap: {},
+    roots: [],
+    skills: {{ skills | tojson }},
+    selectedGroupId: null,
+    searchQuery: '',
+    showCreateGroup: false,
+    showEditGroup: false,
+    editGroupId: null,
+    editGroupName: '',
+    newGroupName: '',
+    newGroupParentId: '',
+
+    init() {
+      this.buildTree();
+    },
+
+    buildTree() {
+      this.groupsMap = {};
+      this.roots = [];
+      this.groups.forEach(g => this.groupsMap[g.id] = { ...g, children: [], skillCount: 0, expanded: false });
+      this.groups.forEach(g => {
+        if (g.parent_id && this.groupsMap[g.parent_id]) {
+          this.groupsMap[g.parent_id].children.push(this.groupsMap[g.id]);
+        } else {
+          this.roots.push(this.groupsMap[g.id]);
+        }
+      });
+      this.skills.forEach(s => {
+        if (s.group_id && this.groupsMap[s.group_id]) {
+          this.groupsMap[s.group_id].skillCount = (this.groupsMap[s.group_id].skillCount || 0) + 1;
+        }
+      });
+    },
+
+    get filteredSkills() {
+      let list = this.skills;
+      if (this.selectedGroupId) {
+        const ids = this.getGroupAndChildren(this.selectedGroupId);
+        list = list.filter(s => ids.includes(s.group_id));
+      }
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        list = list.filter(s => s.name.toLowerCase().includes(q) || (s.tags||[]).some(t => t.toLowerCase().includes(q)));
+      }
+      return list;
+    },
+
+    getGroupAndChildren(id) {
+      const ids = [id];
+      const g = this.groupsMap[id];
+      if (g) g.children.forEach(c => ids.push(...this.getGroupAndChildren(c.id)));
+      return ids;
+    },
+
+    getSkillCount(gid) {
+      return this.groupsMap[gid]?.skillCount || 0;
+    },
+
+    toggleExpand(g) {
+      g.expanded = !g.expanded;
+    },
+
+    selectGroup(id) {
+      this.selectedGroupId = id === this.selectedGroupId ? null : id;
+    },
+
+    async createGroup() {
+      if (!this.newGroupName) return;
+      const r = await fetch('/api/skill-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.newGroupName, parent_id: this.newGroupParentId || null, sort_order: 0 })
+      });
+      const data = await r.json();
+      if (data.ok) {
+        this.showCreateGroup = false;
+        this.newGroupName = '';
+        this.newGroupParentId = '';
+        window.location.reload();
+      } else {
+        var msg = data.error || '';
+        if (msg === 'Group name already exists') msg = '{{ _("Group name already exists") }}';
+        alert(msg);
+      }
+    },
+
+    openEditGroup(g) {
+      this.editGroupId = g.id;
+      this.editGroupName = g.name;
+      this.showEditGroup = true;
+    },
+
+    async updateGroup() {
+      if (!this.editGroupName) return;
+      const r = await fetch('/api/skill-groups/' + this.editGroupId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.editGroupName })
+      });
+      const data = await r.json();
+      if (data.ok) {
+        this.showEditGroup = false;
+        window.location.reload();
+      }
+    },
+
+    async deleteGroup(gid) {
+      if (!confirm('{{ _("Delete this group? Skills will be ungrouped.") }}')) return;
+      const r = await fetch('/api/skill-groups/' + gid, { method: 'DELETE' });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert(data.error || '{{ _("Failed to delete group") }}');
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

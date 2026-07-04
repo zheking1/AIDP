@@ -1,0 +1,10 @@
+name: evolution-engine
+version: 0.1.0
+endpoint: http://127.0.0.1:18089
+description: Evolution Engine for AI Agent self-improvement via event-driven pattern analysis
+capabilities:
+  - event-collect
+  - pattern-analyze
+  - evolution-route
+  - tool-update
+  - stats

@@ -1,0 +1,7 @@
+services:
+  controller:
+    build: .
+    network_mode: host
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/novel_os
+    restart: unless-stopped

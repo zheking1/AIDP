@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Memory Tool{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <a href="/" class="text-xl font-bold text-blue-600">🧠 Memory Tool</a>
+                <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">v0.1.0</span>
+            </div>
+            <div class="flex items-center space-x-4 text-sm">
+                <a href="/" class="text-gray-600 hover:text-blue-600">仪表盘</a>
+                <a href="/memories" class="text-gray-600 hover:text-blue-600">记忆</a>
+                <a href="/context" class="text-gray-600 hover:text-blue-600">上下文</a>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

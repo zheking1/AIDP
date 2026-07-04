@@ -1,0 +1,14 @@
+from fastapi import APIRouter
+
+from app.config import settings
+
+router = APIRouter()
+
+
+@router.get("/health")
+async def health():
+    return {
+        "status": "UP",
+        "tool": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+    }

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}搜索测试{% endblock %}
+{% block content %}
+<div x-data="searchTest()">
+    <h1 class="text-xl font-bold mb-4">搜索测试</h1>
+
+    <!-- Search Form -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <form @submit.prevent="search()">
+            <div class="flex gap-3 items-end">
+                <div class="flex-1">
+                    <label class="block text-xs text-gray-500 mb-1">搜索关键词</label>
+                    <input x-model="query" type="text" required
+                           class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="输入搜索内容...">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Workspace</label>
+                    <input x-model="workspace_id" type="text"
+                           class="border rounded px-2 py-2 text-sm w-32">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Top K</label>
+                    <select x-model="top_k" class="border rounded px-2 py-2 text-sm">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+                <button type="submit" :disabled="loading"
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">
+                    搜索
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results -->
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="results.length > 0">
+        <h2 class="font-semibold mb-2">搜索结果 (<span x-text="results.length"></span>)</h2>
+        <div class="space-y-3">
+            <template x-for="(item, idx) in results" :key="idx">
+                <div class="border rounded p-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="font-medium" x-text="item.title"></span>
+                            <span class="text-xs text-gray-500 ml-2" x-text="'Score: ' + item.score.toFixed(3)"></span>
+                        </div>
+                        <span class="text-xs text-gray-400" x-text="'Chunk #' + item.chunk_id.split(':').pop()"></span>
+                    </div>
+                    <pre class="text-xs bg-gray-50 p-2 rounded max-h-40 overflow-auto" x-text="item.content"></pre>
+                    <div class="mt-2 flex space-x-4 text-xs text-gray-500">
+                        <span x-show="item.heading_path && item.heading_path.length" x-text="'§ ' + item.heading_path.join(' > ')"></span>
+                        <span x-show="item.source_start_line" x-text="'L' + item.source_start_line + '-' + item.source_end_line"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <div x-show="searched && results.length === 0" class="text-center text-gray-400 py-8">
+        未找到匹配结果
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function searchTest() {
+    return {
+        query: '', workspace_id: '', top_k: 10,
+        results: [], loading: false, searched: false,
+        async search() {
+            this.loading = true;
+            this.searched = true;
+            try {
+                const body = {
+                    query: this.query,
+                    top_k: parseInt(this.top_k)
+                };
+                if (this.workspace_id) body.workspace_id = this.workspace_id;
+                const resp = await fetch('/api/knowledge/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                this.results = data.items || [];
+            } catch (e) {
+                alert('搜索失败: ' + e.message);
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

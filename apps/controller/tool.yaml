@@ -1,0 +1,51 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: aidp-controller
+  displayName: AIDP Controller
+  version: 0.1.0
+  description: AIDP tool controller - manages tool registration, health checks, and invocation.
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/controller:0.1.0
+    port: 8883
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8883
+    healthUrl: http://127.0.0.1:8883/health
+
+dependencies:
+  required:
+    - postgresql
+
+capabilities:
+  - name: controller.list_tools
+    description: List all registered tools.
+    endpoint: GET /api/tools
+    timeoutMs: 3000
+    permission: controller:read
+
+  - name: controller.invoke
+    description: Invoke a tool through the controller.
+    endpoint: POST /api/tools/{tool}/invoke
+    timeoutMs: 35000
+    permission: controller:invoke
+
+  - name: controller.health
+    description: Check tool health.
+    endpoint: POST /api/tools/{tool}/health
+    timeoutMs: 10000
+    permission: controller:read
+
+  - name: controller.sync
+    description: Sync tool capabilities.
+    endpoint: POST /api/tools/{tool}/sync
+    timeoutMs: 10000
+    permission: controller:write
+
+health:
+  endpoint: GET /health

@@ -1,0 +1,5 @@
+{
+    "webhook_url": "",
+    "webhook_type": "generic",
+    "description": "Set webhook_url to your webhook endpoint (e.g., Slack, DingTalk, WeChat Work)"
+}

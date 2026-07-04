@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects - AIDP Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-6">
+                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
+                    <a href="/" class="text-gray-600 hover:text-gray-900">Dashboard</a>
+                    <a href="/projects" class="text-indigo-600 font-medium">Projects</a>
+                    <a href="/configs" class="text-gray-600 hover:text-gray-900">Configs</a>
+                    <a href="/reviews" class="text-gray-600 hover:text-gray-900">Reviews</a>
+                    <a href="/logs" class="text-gray-600 hover:text-gray-900">Logs</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-600" id="username"></span>
+                    <form action="/api/auth/logout" method="POST"><button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button></form>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-semibold text-gray-900">Projects</h1>
+                <button onclick="toggleCreateForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create Project</button>
+            </div>
+            <div id="createForm" class="hidden mb-6 bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-medium mb-4">Create New Project</h2>
+                <form id="projectForm" class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">Name</label><input type="text" id="projectName" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Description</label><textarea id="projectDesc" rows="3" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Type</label><input type="text" id="projectType" placeholder="e.g., java, python, vue" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
+                    <div id="projectError" class="text-red-500 text-sm hidden"></div>
+                    <div class="flex space-x-2"><button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create</button><button type="button" onclick="toggleCreateForm()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button></div>
+                </form>
+            </div>
+            <div id="projectList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('username').textContent = '{{ username }}';
+        async function loadProjects() {
+            try {
+                const r = await fetch('/api/projects/');
+                const d = await r.json();
+                const el = document.getElementById('projectList');
+                if (!d.projects || d.projects.length === 0) { el.innerHTML = '<div class="col-span-full text-center py-8 text-gray-500">No projects found</div>'; return; }
+                el.innerHTML = d.projects.map(p => `
+                    <div class="bg-white p-4 rounded-lg shadow hover:shadow-md transition">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">${p.name}</h3>
+                                <p class="text-gray-500 text-sm mt-1">${p.description || 'No description'}</p>
+                                <span class="inline-block mt-2 text-xs px-2 py-1 bg-indigo-100 text-indigo-800 rounded">${p.type || 'general'}</span>
+                            </div>
+                            <a href="/projects/${p.id}" class="text-indigo-600 hover:text-indigo-900 text-sm">View →</a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { document.getElementById('projectList').innerHTML = '<div class="text-center py-8 text-red-500">Failed to load projects</div>'; }
+        }
+        function toggleCreateForm() { document.getElementById('createForm').classList.toggle('hidden'); }
+        document.getElementById('projectForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const err = document.getElementById('projectError');
+            err.classList.add('hidden');
+            try {
+                const r = await fetch('/api/projects/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('projectName').value, description: document.getElementById('projectDesc').value, type: document.getElementById('projectType').value }) });
+                const d = await r.json();
+                if (r.ok) { toggleCreateForm(); document.getElementById('projectForm').reset(); loadProjects(); }
+                else { err.textContent = d.detail || 'Failed'; err.classList.remove('hidden'); }
+            } catch (e) { err.textContent = 'Network error'; err.classList.remove('hidden'); }
+        });
+        loadProjects();
+    </script>
+</body>
+</html>

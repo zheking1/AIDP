@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if skill %}{{ _('Edit: %(name)s') | format(name=skill.name) }}{% else %}{{ _('Create Skill') }}{% endif %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div class="flex justify-end gap-2 p-4">
+    <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+    <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+  </div>
+  {% set default_exec = '{"executable":false,"runtime":"python3","entry":"","cmd_template":"","timeout_secs":60,"auto_update":true,"cleanup":true,"params":{"mapping":"arg","schema":{"type":"object","properties":{},"required":[]}}}' %}
+  <div class="p-6" x-data='{
+    skillId: {{ skill.id | tojson if skill else "null" }},
+    activeTab: "basic",
+    files: {{ skill.files | tojson if skill and skill.files else "[]" }},
+    _execDefaults: {{ default_exec }},
+    get execConfig() {
+      return this._execConfig;
+    },
+    set execConfig(v) {
+      this._execConfig = v;
+    },
+    _execConfig: (function() {
+      var stored = {{ skill.exec_config | tojson if skill and skill.exec_config else "null" }};
+      var def = {{ default_exec }};
+      if (!stored) return def;
+      var merged = JSON.parse(JSON.stringify(def));
+      for (var k in stored) { merged[k] = stored[k]; }
+      if (!merged.params) merged.params = def.params;
+      if (!merged.params.schema) merged.params.schema = def.params.schema;
+      if (!merged.params.schema.properties) merged.params.schema.properties = {};
+      return merged;
+    })(),
+    addFile() { this.files.push({path: "", content: "", language: "text", is_entry: this.files.length === 0, sort_order: this.files.length}); },
+    removeFile(i) { const removed = this.files.splice(i, 1); if (removed[0] && removed[0].is_entry && this.files.length > 0) this.files[0].is_entry = true; },
+    addParam() { if (!this.execConfig.params.schema.properties) this.execConfig.params.schema.properties = {}; this.$nextTick(() => { this._newParamName = ""; }); },
+    async saveSkill() {
+      const form = document.getElementById("skill-form");
+      const fd = new FormData(form);
+      let id = this.skillId;
+      if (id) {
+        await fetch("/skills/" + id + "/edit", { method: "POST", body: fd });
+      } else {
+        const payload = {
+          name: fd.get("name"),
+          tags: fd.get("tags") ? fd.get("tags").split(",").map(t => t.trim()).filter(Boolean) : [],
+          description: fd.get("description") || "",
+          content: fd.get("content") || "",
+          files: this.files,
+          exec_config: this.execConfig
+        };
+        const resp = await fetch("/api/skills/create", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        if (result.id) {
+          id = result.id;
+        }
+      }
+      if (id && this.files.length > 0) {
+        await fetch("/api/skills/" + id + "/files", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({files: this.files})
+        });
+      }
+      if (id && this.execConfig && this.execConfig.executable) {
+        await fetch("/api/skills/" + id + "/exec-config", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(this.execConfig)
+        });
+      }
+      window.location.href = "/skills/" + id;
+    }
+  }'>
+    <a href="/skills" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+    <h2 class="text-xl font-bold mt-4 mb-4">{% if skill %}{{ _('Edit: %(name)s') | format(name=skill.name) }}{% else %}{{ _('Create Skill') }}{% endif %}</h2>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-4 border-b border-gray-700">
+      <button @click="activeTab='basic'" class="px-4 py-2 text-sm rounded-t" :class="activeTab=='basic' ? 'bg-gray-800 text-indigo-400 border border-gray-700 border-b-transparent' : 'text-gray-500 hover:text-white'">{{ _('Basic') }}</button>
+      <button @click="activeTab='files'" class="px-4 py-2 text-sm rounded-t" :class="activeTab=='files' ? 'bg-gray-800 text-indigo-400 border border-gray-700 border-b-transparent' : 'text-gray-500 hover:text-white'">{{ _('Files') }} <span x-text="files.length ? '('+files.length+')' : ''"></span></button>
+      <button @click="activeTab='exec'" class="px-4 py-2 text-sm rounded-t" :class="activeTab=='exec' ? 'bg-gray-800 text-indigo-400 border border-gray-700 border-b-transparent' : 'text-gray-500 hover:text-white'">{{ _('Execution') }}</button>
+    </div>
+
+    <form id="skill-form" @submit.prevent="saveSkill" class="max-w-4xl">
+      <!-- Basic Tab -->
+      <div x-show="activeTab === 'basic'" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+          <input type="text" name="name" value="{{ skill.name if skill else '' }}" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Tags (comma separated)') }}</label>
+          <input type="text" name="tags" value="{{ skill.tags|join(', ') if skill and skill.tags else '' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" placeholder="{{ _('java, spring, backend') }}">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Group') }}</label>
+          <select name="group_id" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+            <option value="">{{ _('Ungrouped') }}</option>
+            {% for g in groups %}
+            <option value="{{ g.id }}" {% if skill and skill.group_id|string == g.id|string %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Scope') }}</label>
+          <select name="scope" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+            <option value="private" {% if skill and skill.scope == 'private' %}selected{% endif %}>{{ _('Private') }}</option>
+            <option value="public" {% if skill and skill.scope == 'public' %}selected{% endif %}>{{ _('Public') }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm text-gray-400">
+            <input type="checkbox" name="sensitive" {% if skill and skill.sensitive %}checked{% endif %} class="rounded bg-gray-800 border-gray-700">
+            {{ _('Sensitive Skill') }}
+          </label>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Instruction') }}</label>
+          <textarea name="instruction" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">{{ skill.instruction if skill and skill.instruction else '' }}</textarea>
+          <p class="text-xs text-gray-500 mt-1">{{ _('Injected only when this skill is matched') }}</p>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Examples (one per line, for better matching)') }}</label>
+          <textarea name="examples" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm" placeholder="{{ _('Write a Python script to parse CSV') }}&#10;Convert Excel to JSON format">{{ '\n'.join(skill.examples) if skill and skill.examples else '' }}</textarea>
+          <p class="text-xs text-gray-500 mt-1">{{ _('Examples help the system better understand when to use this skill') }}</p>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Allowed Roles (comma separated, empty = all)') }}</label>
+          <input type="text" name="allowed_roles" value="{{ skill.allowed_roles|join(', ') if skill and skill.allowed_roles else '' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" placeholder="{{ _('admin, user') }}">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Description') }}</label>
+          <input type="text" name="description" value="{{ skill.description if skill else '' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Content (Markdown)') }}</label>
+          <textarea name="content" rows="15" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">{{ skill.content if skill else '' }}</textarea>
+        </div>
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+      </div>
+
+      <!-- Files Tab -->
+      <div x-show="activeTab === 'files'" class="space-y-4">
+        <p class="text-sm text-gray-500">{{ _('Add script files that this skill contains. Mark one as entry point for execution.') }}</p>
+        <template x-for="(f, i) in files" :key="i">
+          <div class="bg-gray-800 border border-gray-700 rounded-lg p-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <input type="text" x-model="f.path" placeholder="{{ _('path/to/file.py') }}" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm font-mono">
+              <select x-model="f.language" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+                <option value="python">{{ _('Python') }}</option>
+                <option value="bash">{{ _('Bash') }}</option>
+                <option value="node">{{ _('Node') }}</option>
+                <option value="sql">{{ _('SQL') }}</option>
+                <option value="yaml">{{ _('YAML') }}</option>
+                <option value="text">{{ _('Text') }}</option>
+              </select>
+              <label class="text-xs text-gray-400 flex items-center gap-1">
+                <input type="checkbox" x-model="f.is_entry" @change="files.forEach((ff,ii) => ii !== i ? ff.is_entry = false : null)">
+                {{ _('Entry') }}
+              </label>
+              <button type="button" @click="removeFile(i)" class="text-red-400 hover:text-red-300 text-sm">✕</button>
+            </div>
+            <textarea x-model="f.content" rows="6" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs font-mono" placeholder="{{ _('script content...') }}"></textarea>
+          </div>
+        </template>
+        <button type="button" @click="addFile()" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm">+ {{ _('Add File') }}</button>
+        <div class="pt-2">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+        </div>
+      </div>
+
+      <!-- Exec Tab -->
+      <div x-show="activeTab === 'exec'" class="space-y-4">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" x-model="execConfig.executable" id="executable" class="w-4 h-4">
+          <label for="executable" class="text-sm">{{ _('This skill is executable') }}</label>
+        </div>
+        <template x-if="execConfig.executable">
+          <div class="space-y-4 pl-4 border-l-2 border-indigo-600">
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">{{ _('Runtime') }}</label>
+                <select x-model="execConfig.runtime" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                  <option value="python3">{{ _('Python 3') }}</option>
+                  <option value="bash">{{ _('Bash') }}</option>
+                  <option value="node">{{ _('Node.js') }}</option>
+                  <option value="docker">{{ _('Docker') }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">{{ _('Entry') }}</label>
+                <input type="text" x-model="execConfig.entry" placeholder="{{ _('main.py') }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">{{ _('Timeout (s)') }}</label>
+                <input type="number" x-model="execConfig.timeout_secs" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">{{ _('Command Template') }}</label>
+              <input type="text" x-model="execConfig.cmd_template" placeholder="{{ _('python3 {workdir}/{entry} --db {db}') }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">
+              <p class="text-xs text-gray-500 mt-1">{{ _('Use {workdir}, {entry} and {param_name} as placeholders') }}</p>
+            </div>
+            <div class="flex items-center gap-6">
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="execConfig.auto_update"> {{ _('Auto Update') }}</label>
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="execConfig.cleanup"> {{ _('Cleanup After Run') }}</label>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">{{ _('Param Mapping') }}</label>
+              <select x-model="execConfig.params.mapping" class="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+                <option value="arg">{{ _('arg (CLI flags)') }}</option>
+                <option value="env">{{ _('env (environment variables)') }}</option>
+                <option value="stdin">{{ _('stdin (JSON pipe)') }}</option>
+                <option value="file">{{ _('file (write + pass path)') }}</option>
+              </select>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-sm text-gray-400">{{ _('Parameters') }}</label>
+                <button @click="addParam()" type="button" class="text-xs text-indigo-400 hover:underline">+ {{ _('Add Param') }}</button>
+              </div>
+              <template x-if="execConfig.params.schema.properties">
+                <div class="space-y-2">
+                  <template x-for="(pinfo, pname) in execConfig.params.schema.properties" :key="pname">
+                    <div class="flex items-center gap-2 text-sm">
+                       <input type="text" :value="pname" @input="(e) => { const old = pname; execConfig.params.schema.properties[e.target.value] = pinfo; delete execConfig.params.schema.properties[old]; }" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 w-32 font-mono" placeholder="{{ _('name') }}">
+                       <input type="text" :value="pinfo.description" @input="pinfo.description = $event.target.value" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 flex-1" placeholder="{{ _('description') }}">
+                      <select :value="pinfo.type || 'string'" @change="pinfo.type = $event.target.value" class="bg-gray-700 border border-gray-600 rounded px-2 py-1">
+                        <option value="string">string</option>
+                        <option value="integer">int</option>
+                        <option value="boolean">bool</option>
+                      </select>
+                       <label class="text-xs text-gray-400"><input type="checkbox" @change="if($event.target.checked) { if(!execConfig.params.schema.required.includes(pname)) execConfig.params.schema.required.push(pname) } else { execConfig.params.schema.required = execConfig.params.schema.required.filter(r => r !== pname) }" :checked="execConfig.params.schema.required && execConfig.params.schema.required.includes(pname)"> {{ _('required') }}</label>
+                      <button @click="delete execConfig.params.schema.properties[pname]" class="text-red-400 hover:text-red-300">✕</button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <div class="pt-2">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

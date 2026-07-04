@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Profile') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('Profile') }}</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Username') }}</p>
+    <p class="text-lg font-bold">{{ u.username }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Role') }}</p>
+    <p class="text-lg font-bold">{{ u.role }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Joined') }}</p>
+    <p class="text-lg font-bold">{{ u.created_at[:10] if u.created_at else '-' }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Skills') }}</p>
+    <p class="text-lg font-bold">{{ skill_count }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Active API Keys') }}</p>
+    <p class="text-lg font-bold">{{ key_count }}</p>
+  </div>
+</div>
+{% endblock %}

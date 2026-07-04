@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.env
+data/
+*.egg-info/
+dist/
+.venv/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+
+# Deploy artifacts
+*-update.tar.gz
+*-final.tar.gz
+*-fix.tar.gz
+*-p2.tar.gz
+controller-update.tar.gz
+
+# SSH keys
+*.pem
+nas_temp
+*.ppk
+
+# OS
+.DS_Store
+Thumbs.db

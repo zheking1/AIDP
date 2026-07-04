@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}上下文查询{% endblock %}
+{% block content %}
+<div x-data="contextQuery()">
+    <h1 class="text-xl font-bold mb-4">上下文查询</h1>
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <form @submit.prevent="query()">
+            <div class="flex gap-3 items-end">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Project ID</label>
+                    <input x-model="project_id" type="text" required class="border rounded px-2 py-2 text-sm w-40">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs text-gray-500 mb-1">查询</label>
+                    <input x-model="query_text" type="text" required class="w-full border rounded px-3 py-2 text-sm" placeholder="输入查询内容...">
+                </div>
+                <button type="submit" :disabled="loading" class="bg-blue-500 text-white px-4 py-2 rounded text-sm">查询</button>
+            </div>
+        </form>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="results.length > 0">
+        <h2 class="font-semibold mb-2">相关记忆 (<span x-text="results.length"></span>)</h2>
+        <div class="space-y-3">
+            <template x-for="(item, idx) in results" :key="idx">
+                <div class="border rounded p-3">
+                    <div class="flex justify-between mb-1">
+                        <a :href="'/memories/' + item.id" class="font-medium text-blue-600 hover:underline" x-text="item.title"></a>
+                        <span class="text-xs text-gray-500" x-text="item.memory_type"></span>
+                    </div>
+                    <pre class="text-xs bg-gray-50 p-2 rounded max-h-32 overflow-auto" x-text="item.content.substring(0, 300)"></pre>
+                </div>
+            </template>
+        </div>
+    </div>
+    <div x-show="searched && results.length === 0" class="text-center text-gray-400 py-8">未找到相关记忆</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function contextQuery() {
+    return {
+        project_id: '', query_text: '', results: [], loading: false, searched: false,
+        async query() {
+            this.loading = true;
+            this.searched = true;
+            try {
+                const resp = await fetch('/api/memory/context?project_id=' + encodeURIComponent(this.project_id) + '&query=' + encodeURIComponent(this.query_text));
+                const data = await resp.json();
+                this.results = data.memories || data.items || [];
+            } catch (e) {
+                this.results = [];
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

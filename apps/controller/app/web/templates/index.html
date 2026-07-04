@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-cloak>
+    <!-- Tool Grid -->
+    <h2 class="text-lg font-semibold text-gray-300 mb-4">Tools</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+        <template x-for="tool in tools" :key="tool.id">
+            <a :href="tool.endpoint" target="_blank"
+               :class="statusBg(tool.status)"
+               class="rounded-lg border p-4 hover:scale-105 transition cursor-pointer block">
+                <div class="text-xs text-gray-500" x-text="tool.name"></div>
+                <div class="text-sm font-medium mt-1 text-white" x-text="tool.displayName || tool.name"></div>
+                <div class="text-xs mt-2" :class="statusColor(tool.status)" x-text="tool.status"></div>
+                <div class="text-xs text-gray-600 mt-1" x-text="'capabilities: ' + (tool.capabilities ? tool.capabilities.length : 0)"></div>
+            </a>
+        </template>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-xs text-gray-500">Total Tools</div>
+            <div class="text-2xl font-bold text-indigo-400" x-text="tools.length"></div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-xs text-gray-500">Healthy</div>
+            <div class="text-2xl font-bold text-green-400" x-text="tools.filter(t => t.status === 'healthy').length"></div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-xs text-gray-500">Recent Invocations</div>
+            <div class="text-2xl font-bold text-blue-400" x-text="invocations.length"></div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-xs text-gray-500">API Docs</div>
+            <div class="text-lg font-bold text-cyan-400 mt-1">
+                <a href="/docs" target="_blank" class="hover:underline">Swagger UI →</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Invocations -->
+    <h2 class="text-lg font-semibold text-gray-300 mb-4">Recent Invocations</h2>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-700 text-sm">
+            <thead class="bg-gray-800">
+                <tr>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500 uppercase">Time</th>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500 uppercase">Tool</th>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500 uppercase">Capability</th>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500 uppercase">Status</th>
+                    <th class="px-4 py-2 text-left text-xs text-gray-500 uppercase">Duration</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                <template x-for="inv in invocations" :key="inv.id">
+                    <tr class="hover:bg-gray-700/50">
+                        <td class="px-4 py-2 text-gray-400 text-xs" x-text="new Date(inv.created_at).toLocaleTimeString()"></td>
+                        <td class="px-4 py-2 text-gray-200 text-xs" x-text="inv.tool_name"></td>
+                        <td class="px-4 py-2 text-gray-400 text-xs" x-text="inv.capability || '-'"></td>
+                        <td class="px-4 py-2 text-xs">
+                            <span :class="inv.status === 'success' ? 'text-green-400' : 'text-red-400'" x-text="inv.status"></span>
+                        </td>
+                        <td class="px-4 py-2 text-gray-500 text-xs" x-text="(inv.duration_ms || 0) + 'ms'"></td>
+                    </tr>
+                </template>
+                <tr x-show="invocations.length === 0 && !loading">
+                    <td colspan="5" class="px-4 py-8 text-center text-gray-600">No invocations yet</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12 text-gray-500 text-lg">
+        <div class="animate-pulse">Loading dashboard...</div>
+    </div>
+</div>
+{% endblock %}

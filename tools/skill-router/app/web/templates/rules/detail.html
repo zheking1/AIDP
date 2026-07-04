@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Rules') }}: {{ rule.name }}{% endblock %}
+{% block content %}
+<div class="mb-4 flex justify-between items-center">
+  <h2 class="text-xl font-bold">{{ rule.name }}</h2>
+  <a href="/rules/{{ rule.id }}/edit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('Edit') }}</a>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Priority') }}</p>
+    <p class="text-lg font-bold">{{ rule.priority }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Tags') }}</p>
+    <p>{% for t in rule.tags or [] %}<span class="bg-gray-700 text-xs px-2 py-0.5 rounded mr-1">{{ t }}</span>{% endfor %}</p>
+  </div>
+</div>
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+  <h3 class="text-sm text-gray-500 mb-2">{{ _('Content') }}</h3>
+  <pre class="text-sm whitespace-pre-wrap font-mono">{{ rule.content }}</pre>
+</div>
+{% endblock %}

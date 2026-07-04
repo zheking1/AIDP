@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reviews - AIDP Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
+                    <a href="/" class="ml-6 text-gray-600 hover:text-gray-900">Home</a>
+                    <a href="/projects" class="ml-6 text-indigo-600 hover:text-indigo-900">Projects</a>
+                    <a href="/configs" class="ml-6 text-gray-600 hover:text-gray-900">Configs</a>
+                    <a href="/reviews" class="ml-6 text-indigo-600 hover:text-indigo-900">Reviews</a>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-600">{{ username }}</span>
+                    <form action="/api/auth/logout" method="POST" class="ml-4">
+                        <button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Review Queue</h1>
+
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex space-x-4 mb-4">
+                    <button onclick="loadReviews('pending')" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Pending</button>
+                    <button onclick="loadReviews('approved')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Approved</button>
+                    <button onclick="loadReviews('rejected')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Rejected</button>
+                </div>
+
+                <div id="reviewsList" class="space-y-4">
+                    <div class="text-center py-8">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="mt-2 text-gray-500">Loading reviews...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStatus = 'pending';
+
+        async function loadReviews(status) {
+            currentStatus = status;
+            try {
+                const response = await fetch(`/api/reviews/?status=${status}`);
+                const data = await response.json();
+                const listEl = document.getElementById('reviewsList');
+                
+                if (!data.reviews || data.reviews.length === 0) {
+                    listEl.innerHTML = '<div class="text-center py-8 text-gray-500">No reviews found</div>';
+                    return;
+                }
+                
+                listEl.innerHTML = data.reviews.map(r => `
+                    <div class="border rounded-lg p-4 ${r.status === 'pending' ? 'border-yellow-300 bg-yellow-50' : r.status === 'approved' ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-medium">Document ID: ${r.document_id}</h3>
+                                <p class="text-sm text-gray-600">Action: ${r.action}</p>
+                                <p class="text-sm text-gray-600">Submitted by: ${r.user_id}</p>
+                                <p class="text-sm text-gray-600">Created: ${r.created_at}</p>
+                                ${r.content ? `<p class="text-sm text-gray-600 mt-2">${r.content.substring(0, 100)}...</p>` : ''}
+                                ${r.review_comment ? `<p class="text-sm text-gray-600 mt-2">Comment: ${r.review_comment}</p>` : ''}
+                            </div>
+                            ${r.status === 'pending' ? `
+                                <div class="space-x-2">
+                                    <button onclick="approveReview(${r.id})" class="bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700">Approve</button>
+                                    <button onclick="rejectReview(${r.id})" class="bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700">Reject</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                document.getElementById('reviewsList').innerHTML = '<div class="text-center py-8 text-red-500">Failed to load reviews</div>';
+            }
+        }
+
+        async function approveReview(reviewId) {
+            try {
+                const response = await fetch(`/api/reviews/${reviewId}/approve`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({comment: "Approved"})
+                });
+                
+                if (response.ok) {
+                    loadReviews(currentStatus);
+                }
+            } catch (err) {
+                alert('Failed to approve review');
+            }
+        }
+
+        async function rejectReview(reviewId) {
+            const reason = prompt('Enter rejection reason:');
+            if (!reason) return;
+            
+            try {
+                const response = await fetch(`/api/reviews/${reviewId}/reject`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({reason})
+                });
+                
+                if (response.ok) {
+                    loadReviews(currentStatus);
+                }
+            } catch (err) {
+                alert('Failed to reject review');
+            }
+        }
+
+        loadReviews('pending');
+    </script>
+</body>
+</html>

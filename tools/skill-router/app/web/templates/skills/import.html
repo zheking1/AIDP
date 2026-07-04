@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Import Skill') }}{% endblock %}
+{% block content %}
+<div x-data="importApp()" class="max-w-4xl">
+  <h1 class="text-xl font-bold mb-4">{{ _('Import Skill') }}</h1>
+
+  <!-- Tabs -->
+  <div class="flex gap-2 mb-4">
+    <button @click="tab='url'" :class="tab==='url' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'" class="px-4 py-2 rounded text-sm">{{ _('GitHub URL') }}</button>
+    <button @click="tab='search'" :class="tab==='search' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'" class="px-4 py-2 rounded text-sm">{{ _('Search GitHub') }}</button>
+    <button @click="tab='clawhub'" :class="tab==='clawhub' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'" class="px-4 py-2 rounded text-sm">{{ _('ClawHub') }}</button>
+  </div>
+
+  <!-- Tab: GitHub URL -->
+  <div x-show="tab==='url'" class="bg-gray-800 rounded-lg shadow p-6">
+    <div class="flex gap-2">
+      <input x-model="githubUrl" type="text" placeholder="https://github.com/owner/repo/tree/main/skills/skill-name"
+             class="flex-1 bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder-gray-400" @keydown.enter="previewUrl()">
+      <button @click="previewUrl()" :disabled="loading" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+        <span x-show="!loading">{{ _('Preview') }}</span>
+        <span x-show="loading">...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab: Search GitHub -->
+  <div x-show="tab==='search'" class="bg-gray-800 rounded-lg shadow p-6">
+    <div class="flex gap-2 mb-4">
+      <input x-model="searchQuery" type="text" placeholder="{{ _('Search skills on GitHub...') }}"
+             class="flex-1 bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder-gray-400" @keydown.enter="searchGithub()">
+      <button @click="searchGithub()" :disabled="loading" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+        <span x-show="!loading">{{ _('Search') }}</span>
+        <span x-show="loading">...</span>
+      </button>
+    </div>
+    <div x-show="searchResults.length > 0" class="space-y-2">
+      <template x-for="(r, i) in searchResults" :key="i">
+        <div class="border border-gray-600 rounded p-3 hover:bg-gray-700 cursor-pointer" @click="selectSearchResult(r)">
+          <div class="font-medium text-sm text-gray-100" x-text="r.full_name"></div>
+          <div class="text-xs text-gray-400" x-text="r.description"></div>
+          <div class="text-xs text-gray-500 mt-1">⭐ <span x-text="r.stars"></span></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Tab: ClawHub -->
+  <div x-show="tab==='clawhub'" class="bg-gray-800 rounded-lg shadow p-6">
+    <div class="flex gap-2 mb-4">
+      <input x-model="clawhubQuery" type="text" placeholder="{{ _('Paste ClawHub URL...') }}"
+             class="flex-1 bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder-gray-400" @keydown.enter="importClawhub()">
+      <button @click="importClawhub()" :disabled="loading" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+        <span x-show="!loading">{{ _('Import') }}</span>
+        <span x-show="loading">...</span>
+      </button>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">{{ _('Paste a ClawHub URL like https://clawhub.ai/owner/skills/skill-name. Will try to find the GitHub source automatically.') }}</p>
+  </div>
+
+  <!-- Error -->
+  <div x-show="error" class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded mt-4" x-text="error"></div>
+
+  <!-- Preview Modal -->
+  <div x-show="preview" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display:none">
+    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+      <h2 class="text-lg font-bold mb-4 text-gray-100">{{ _('Import Skill') }}</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-gray-400">{{ _('Name') }}</label>
+          <div class="font-medium text-gray-100" x-text="preview?.name"></div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">{{ _('Description') }}</label>
+          <div class="text-sm text-gray-300" x-text="preview?.description"></div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">{{ _('Files') }}</label>
+          <div class="text-sm text-gray-300" x-text="(preview?.files?.length || 0) + ' files'"></div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">{{ _('Group') }}</label>
+          <select x-model="importGroupId" class="bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2 text-sm w-full focus:outline-none focus:border-indigo-500">
+            <option value="">{{ _('No group') }}</option>
+            {% for g in groups %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">{{ _('Content Preview') }}</label>
+          <pre class="bg-gray-900 border border-gray-600 rounded p-3 text-xs text-gray-300 max-h-40 overflow-y-auto" x-text="preview?.content?.substring(0, 1000)"></pre>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button @click="preview=null" class="px-4 py-2 rounded text-sm border border-gray-600 text-gray-300 hover:bg-gray-700">{{ _('Cancel') }}</button>
+        <button @click="doImport()" :disabled="importing" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50">
+          <span x-show="!importing">{{ _('Import') }}</span>
+          <span x-show="importing">...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success -->
+  <div x-show="imported" x-transition class="bg-green-900/50 border border-green-700 text-green-300 px-4 py-3 rounded mt-4">
+    {{ _('Skill imported successfully!') }}
+    <a href="/skills" class="underline ml-2">{{ _('View Skills') }}</a>
+  </div>
+</div>
+
+<script>
+function importApp() {
+  return {
+    tab: 'url',
+    githubUrl: '',
+    searchQuery: '',
+    clawhubQuery: '',
+    searchResults: [],
+    clawhubResults: [],
+    preview: null,
+    error: '',
+    loading: false,
+    importing: false,
+    imported: false,
+    importGroupId: '',
+
+    async previewUrl() {
+      if (!this.githubUrl.trim()) return;
+      this.loading = true;
+      this.error = '';
+      this.preview = null;
+      try {
+        const resp = await fetch('/api/skills/import/preview', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: this.githubUrl})
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed');
+        if (data.available_skills) {
+          this.error = 'Multiple skills found. Please specify a path in the URL.';
+          return;
+        }
+        this.preview = data;
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async searchGithub() {
+      if (!this.searchQuery.trim()) return;
+      this.loading = true;
+      this.error = '';
+      this.searchResults = [];
+      try {
+        const resp = await fetch('/api/skills/import/search', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: this.searchQuery, source: 'github'})
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed');
+        this.searchResults = data.results || [];
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    selectSearchResult(r) {
+      this.githubUrl = r.url;
+      this.tab = 'url';
+      this.previewUrl();
+    },
+
+    async searchClawhub() {
+      // Redirect to importClawhub
+      await this.importClawhub();
+    },
+
+    async importClawhub() {
+      if (!this.clawhubQuery.trim()) return;
+      this.loading = true;
+      this.error = '';
+      this.preview = null;
+      try {
+        const resp = await fetch('/api/skills/import/preview', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: this.clawhubQuery})
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed');
+        this.preview = data;
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async doImport() {
+      this.importing = true;
+      this.error = '';
+      try {
+        const resp = await fetch('/api/skills/import', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: this.githubUrl, group_id: this.importGroupId || null})
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed');
+        this.imported = true;
+        this.preview = null;
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.importing = false;
+      }
+    }
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onboarding - AIDP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center">
+<div class="max-w-3xl w-full mx-4">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-indigo-400">Welcome to AIDP</h1>
+        <p class="text-gray-500 mt-2">AI DevOps Platform - 导入你的项目，开始 AI 编程</p>
+    </div>
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-8" id="wizard">
+        <!-- Step 1: Project Info -->
+        <div id="step1">
+            <div class="flex items-center gap-2 mb-6">
+                <span class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">1</span>
+                <span class="text-lg font-medium">项目信息</span>
+            </div>
+            <div class="space-y-4">
+                <div><label class="block text-sm text-gray-400 mb-1">项目名称</label><input id="projName" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="my-project"></div>
+                <div><label class="block text-sm text-gray-400 mb-1">项目路径（NAS）</label><input id="projPath" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="/home/docker/AI-Code/projects/my-project"></div>
+                <div id="step1Err" class="text-red-400 text-sm hidden"></div>
+                <button onclick="goStep2()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded px-4 py-3 font-medium">下一步：扫描分析</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Scan Results -->
+        <div id="step2" class="hidden">
+            <div class="flex items-center gap-2 mb-6">
+                <span class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">2</span>
+                <span class="text-lg font-medium">扫描分析</span>
+            </div>
+            <div id="scanLoading" class="text-center py-8">
+                <div class="animate-pulse text-gray-500">Scanning project...</div>
+            </div>
+            <div id="scanResult" class="hidden space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">语言</span><div class="text-white font-medium" id="resLang">-</div></div>
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">框架</span><div class="text-white font-medium" id="resFw">-</div></div>
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">源码文件</span><div class="text-green-400 font-medium" id="resCode">-</div></div>
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">文档</span><div class="text-blue-400 font-medium" id="resDocs">-</div></div>
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">配置文件</span><div class="text-yellow-400 font-medium" id="resCfgs">-</div></div>
+                    <div class="bg-gray-700 rounded p-3"><span class="text-gray-400 text-xs">脚本</span><div class="text-purple-400 font-medium" id="resScripts">-</div></div>
+                </div>
+                <div class="flex gap-3 mt-4">
+                    <button onclick="goStep1back()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white rounded px-4 py-3">返回修改</button>
+                    <button onclick="goStep3()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded px-4 py-3 font-medium">确认导入</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Import Progress -->
+        <div id="step3" class="hidden">
+            <div class="flex items-center gap-2 mb-6">
+                <span class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">3</span>
+                <span class="text-lg font-medium">导入中</span>
+            </div>
+            <div class="space-y-3">
+                <div class="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div id="progressBar" class="bg-indigo-500 h-3 rounded-full transition-all" style="width:0%"></div>
+                </div>
+                <div id="importSteps" class="text-sm text-gray-400 space-y-1"></div>
+            </div>
+        </div>
+
+        <!-- Step 4: Done -->
+        <div id="step4" class="hidden">
+            <div class="text-center py-6">
+                <div class="text-5xl mb-4">🎉</div>
+                <h2 class="text-2xl font-bold text-white mb-2">导入完成！</h2>
+                <div id="summary" class="text-sm text-gray-400 space-y-1 mb-6"></div>
+                <a href="/" class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white rounded px-8 py-3 font-medium">开始使用 AIDP</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function goStep2() {
+    const name = document.getElementById('projName').value.trim();
+    const path = document.getElementById('projPath').value.trim();
+    if (!name || !path) { document.getElementById('step1Err').textContent = '请填写项目名称和路径'; document.getElementById('step1Err').classList.remove('hidden'); return; }
+    document.getElementById('step1Err').classList.add('hidden');
+    document.getElementById('step1').classList.add('hidden');
+    document.getElementById('step2').classList.remove('hidden');
+    document.getElementById('scanLoading').classList.remove('hidden');
+    document.getElementById('scanResult').classList.add('hidden');
+
+    try {
+        const r = await fetch(`http://192.168.0.100:18090/api/onboarding/scan?path=${encodeURIComponent(path)}`);
+        const d = await r.json();
+        document.getElementById('resLang').textContent = d.language;
+        document.getElementById('resFw').textContent = d.framework;
+        document.getElementById('resCode').textContent = d.code_files;
+        document.getElementById('resDocs').textContent = d.doc_files;
+        document.getElementById('resCfgs').textContent = d.config_files;
+        document.getElementById('resScripts').textContent = d.script_files;
+        document.getElementById('scanLoading').classList.add('hidden');
+        document.getElementById('scanResult').classList.remove('hidden');
+    } catch(e) {
+        document.getElementById('scanLoading').innerHTML = '<span class="text-red-400">Scan failed. Is the path correct?</span>';
+    }
+}
+
+function goStep1back() { document.getElementById('step2').classList.add('hidden'); document.getElementById('step1').classList.remove('hidden'); }
+
+async function goStep3() {
+    document.getElementById('step2').classList.add('hidden');
+    document.getElementById('step3').classList.remove('hidden');
+    const name = document.getElementById('projName').value.trim();
+    const path = document.getElementById('projPath').value.trim();
+
+    try {
+        const r = await fetch('http://192.168.0.100:18090/api/onboarding/import', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, path, type: document.getElementById('resLang').textContent})
+        });
+        const d = await r.json();
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('importSteps').innerHTML = d.steps.map(s => `<div>✓ ${s.step}</div>`).join('');
+
+        setTimeout(() => {
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById('step4').classList.remove('hidden');
+            const s = d.summary;
+            document.getElementById('summary').innerHTML = `
+                <p>项目: ${s.project_name}</p>
+                <p>语言: ${s.language} | 框架: ${s.framework}</p>
+                <p>源码: ${s.code_files} | 文档: ${s.doc_files} | 配置: ${s.config_files}</p>`;
+        }, 1000);
+    } catch(e) {
+        document.getElementById('importSteps').innerHTML = '<span class="text-red-400">Import failed</span>';
+    }
+}
+</script>
+</body>
+</html>

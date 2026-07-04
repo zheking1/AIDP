@@ -1,0 +1,9 @@
+name: context-optimizer
+version: 0.1.0
+endpoint: http://127.0.0.1:18088
+description: Context Optimizer for AI Agent token budget management
+capabilities:
+  - analyze
+  - budget
+  - refine
+  - track

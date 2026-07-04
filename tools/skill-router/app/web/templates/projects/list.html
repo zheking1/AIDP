@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Projects') }}{% endblock %}
+{% block content %}
+<div x-data="projectManager()">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">{{ _('Projects') }}</h2>
+    <button @click="openCreate()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('+ New Project') }}</button>
+  </div>
+  <div class="grid gap-4 md:grid-cols-2">
+    {% for p in projects %}
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div class="flex justify-between items-start">
+        <div>
+          <a href="/projects/{{ p.id }}" class="text-lg font-bold text-indigo-400 hover:underline">{{ p.name }}</a>
+          {% if p.config and p.config.get('is_default') %}<span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded ml-2">{{ _('default') }}</span>{% endif %}
+          <p class="text-sm text-gray-400 mt-1">{{ p.description or '' }}</p>
+          <button @click="openEdit({{ loop.index0 }})" class="text-xs text-indigo-400 hover:underline mt-2 inline-block">{{ _('Edit') }}</button>
+          {% if not p.config or not p.config.get('is_default') %}
+          <form method="POST" action="/projects/{{ p.id }}/delete" class="inline" onsubmit="return confirm('{{ _('Delete this project? Skills and rules will be unlinked.') }}')">
+            <button type="submit" class="text-xs text-red-400 hover:underline mt-2 ml-2">{{ _('Delete') }}</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-center text-gray-500 py-8 col-span-2">
+      <p>{{ _('No projects yet.') }}</p>
+      <button @click="openCreate()" class="text-indigo-400 hover:underline mt-2 inline-block">{{ _('Create your first project') }} →</button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Project Modal -->
+  <div x-show="showModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showModal = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4" x-text="editingId ? '{{ _('Edit Project') }}' : '{{ _('Create Project') }}'"></h3>
+      <form :action="editingId ? '/projects/' + editingId + '/edit' : '/projects/create'" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+          <input type="text" name="name" x-model="f.name" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Description') }}</label>
+          <input type="text" name="description" x-model="f.description" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Instruction (system prompt for this project)') }}</label>
+          <textarea name="instruction" x-model="f.instruction" rows="5" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+var __projects = {{ projects | tojson }};
+function projectManager() {
+  return {
+    showModal: false,
+    editingId: null,
+    f: { name: '', description: '', instruction: '' },
+    openCreate() {
+      this.editingId = null;
+      this.f = { name: '', description: '', instruction: '' };
+      this.showModal = true;
+    },
+    openEdit(idx) {
+      var p = __projects[idx];
+      this.editingId = p.id;
+      this.f = { name: p.name || '', description: p.description || '', instruction: p.instruction || '' };
+      this.showModal = true;
+    }
+  }
+}
+</script>
+{% endblock %}

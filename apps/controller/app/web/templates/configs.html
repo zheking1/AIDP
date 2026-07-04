@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configs - AIDP Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
+                    <a href="/" class="ml-6 text-gray-600 hover:text-gray-900">Home</a>
+                    <a href="/projects" class="ml-6 text-indigo-600 hover:text-indigo-900">Projects</a>
+                    <a href="/configs" class="ml-6 text-indigo-600 hover:text-indigo-900">Configs</a>
+                    <a href="/reviews" class="ml-6 text-gray-600 hover:text-gray-900">Reviews</a>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-600">{{ username }}</span>
+                    <form action="/api/auth/logout" method="POST" class="ml-4">
+                        <button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Project Configs</h1>
+
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h2 class="text-lg font-medium mb-4">Add Configuration</h2>
+                <form id="configForm" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Env Type</label>
+                            <select id="envType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <option value="dev">Dev</option>
+                                <option value="test">Test</option>
+                                <option value="prod">Prod</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Config Key</label>
+                            <input type="text" id="configKey" placeholder="e.g., database_url" required
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Config Value</label>
+                        <input type="text" id="configValue" placeholder="e.g., jdbc:mysql://localhost:3306/db" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div id="configError" class="text-red-500 text-sm hidden"></div>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">
+                        Add Config
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-medium mb-4">Existing Configs</h2>
+                <div id="configsList" class="space-y-2">
+                    <div class="text-center py-4 text-gray-500">Loading configs...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadConfigs() {
+            try {
+                const response = await fetch('/api/projects/1/configs/');
+                const data = await response.json();
+                const listEl = document.getElementById('configsList');
+                
+                if (!data.configs || data.configs.length === 0) {
+                    listEl.innerHTML = '<div class="text-center py-4 text-gray-500">No configs found</div>';
+                    return;
+                }
+                
+                listEl.innerHTML = data.configs.map(c => `
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <div>
+                            <span class="font-medium">${c.config_key}</span>
+                            <span class="ml-2 text-sm text-gray-500">[${c.env_type}]</span>
+                        </div>
+                        <code class="text-sm text-gray-600">${c.config_value}</code>
+                    </div>
+                `).join('');
+            } catch (err) {
+                document.getElementById('configsList').innerHTML = '<div class="text-center py-4 text-red-500">Failed to load configs</div>';
+            }
+        }
+
+        document.getElementById('configForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errorDiv = document.getElementById('configError');
+            errorDiv.classList.add('hidden');
+            
+            const envType = document.getElementById('envType').value;
+            const configKey = document.getElementById('configKey').value;
+            const configValue = document.getElementById('configValue').value;
+            
+            try {
+                const response = await fetch('/api/projects/1/configs/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({env_type: envType, config_key: configKey, config_value: configValue})
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('configForm').reset();
+                    loadConfigs();
+                } else {
+                    errorDiv.textContent = data.detail || 'Failed to add config';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Network error';
+                errorDiv.classList.remove('hidden');
+            }
+        });
+
+        loadConfigs();
+    </script>
+</body>
+</html>
