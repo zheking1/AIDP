@@ -247,7 +247,7 @@ async def _step(result, name, fn, *args):
 
 async def _create_project(name, ptype):
     async with httpx.AsyncClient() as c:
-        await c.post(f"{CONTROLLER}/api/auth/login", json={"username":"admin","password":"admin123"})
+        await c.post(f"{CONTROLLER}/api/auth/login", json={"username": os.environ.get("ADMIN_USERNAME", "admin"), "password": os.environ.get("ADMIN_PASSWORD", "admin123")})
         r = await c.post(f"{CONTROLLER}/api/projects/", json={"name": name, "description": "Imported project", "type": ptype})
         r.raise_for_status()
         return r.json()["id"]

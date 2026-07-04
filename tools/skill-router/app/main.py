@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -38,7 +39,7 @@ app = FastAPI(
     lifespan=combined_lifespan,
 )
 
-app.add_middleware(SessionMiddleware, secret_key="skillrouter-secret-key-change-in-production", max_age=86400)
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SKILLROUTER_SESSION_KEY", "change-me"), max_age=86400)
 
 app.include_router(auth_router, prefix="")
 app.include_router(web_router, prefix="")

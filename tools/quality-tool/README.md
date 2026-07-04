@@ -12,7 +12,7 @@ Code quality checks for AIDP. Linting and security scanning.
 ## Environment
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://novel_os:jygame_postgres_01@host.docker.internal:5432/novel_os
+DATABASE_URL=postgresql+asyncpg://novel_os:CHANGE_ME@host.docker.internal:5432/novel_os
 LINT_MAX_LINE_LENGTH=120
 ```
 

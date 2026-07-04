@@ -9,10 +9,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 18082
 
-    DATABASE_URL: str = "postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/novel_os"
+    DATABASE_URL: str = ""
     DATABASE_ECHO: bool = False
 
-    SECRET_KEY: str = "asset-tool-secret-change-in-production"
+    SECRET_KEY: str = ""
 
     SEARCH_DEFAULT_TOP_K: int = 8
     SEARCH_MAX_TOP_K: int = 50

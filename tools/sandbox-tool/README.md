@@ -13,7 +13,7 @@ Code execution sandbox for AIDP. Supports Python and Bash execution with timeout
 ## Environment
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://novel_os:jygame_postgres_01@host.docker.internal:5432/novel_os
+DATABASE_URL=postgresql+asyncpg://novel_os:CHANGE_ME@host.docker.internal:5432/novel_os
 EXECUTION_TIMEOUT=30
 EXECUTION_MAX_OUTPUT=10240
 ```

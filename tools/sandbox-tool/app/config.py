@@ -9,10 +9,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 18083
 
-    DATABASE_URL: str = "postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/novel_os"
+    DATABASE_URL: str = ""
     DATABASE_ECHO: bool = False
 
-    SECRET_KEY: str = "sandbox-tool-secret-change-in-production"
+    SECRET_KEY: str = ""
 
     EXECUTION_TIMEOUT: int = 30
     EXECUTION_MAX_OUTPUT: int = 10240

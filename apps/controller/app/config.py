@@ -9,10 +9,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8883
 
-    DATABASE_URL: str = "postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/novel_os"
+    DATABASE_URL: str = ""
     DATABASE_ECHO: bool = False
 
-    SECRET_KEY: str = "controller-secret-change-in-production"
+    SECRET_KEY: str = ""
 
     INVOCATION_TIMEOUT: int = 30
 

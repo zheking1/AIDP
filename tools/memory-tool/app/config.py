@@ -9,10 +9,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 18085
 
-    DATABASE_URL: str = "postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/novel_os"
+    DATABASE_URL: str = ""
     DATABASE_ECHO: bool = False
 
-    SECRET_KEY: str = "memory-tool-secret-change-in-production"
+    SECRET_KEY: str = ""
 
     MEMORY_DEFAULT_LIMIT: int = 50
     MEMORY_MAX_LIMIT: int = 200

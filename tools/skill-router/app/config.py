@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     
     # Admin配置
     admin_username: str = Field(default="admin", min_length=3, description="Admin username")
-    admin_password: str = Field(default="admin123", min_length=6, description="Admin password")
+    admin_password: str = Field(default="", min_length=6, description="Admin password")
     skill_manager_api_key: str = Field(default="", description="Default API key for skill manager")
     
     # LLM配置

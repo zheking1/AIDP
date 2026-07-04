@@ -14,6 +14,7 @@ dist/
 *-final.tar.gz
 *-fix.tar.gz
 *-p2.tar.gz
+*-secure.tar.gz
 controller-update.tar.gz
 
 # SSH keys

@@ -94,7 +94,8 @@ foreach ($tool in $tools) {
 
     # Start container
     Write-Host "   Starting container..."
-    $dbUrl = "postgresql+asyncpg://novel_os:jygame_postgres_01@host.docker.internal:5432/novel_os"
+    $dbUrl = $env:DATABASE_URL
+    if (-not $dbUrl) { $dbUrl = "postgresql+asyncpg://localhost:5432/db" }
     ssh -i $NasKey "${NasUser}@${NasHost}" "docker run -d --name $name --restart unless-stopped -p ${port}:${port} -e DATABASE_URL=`"$dbUrl`" --add-host host.docker.internal:host-gateway $imageTag"
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Docker run failed for $name"

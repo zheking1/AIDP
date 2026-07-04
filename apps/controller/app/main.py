@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -46,7 +47,7 @@ app = FastAPI(
     description="AIDP Controller - AI DevOps Platform unified API gateway. Manage tools, projects, configs, audit logs, and invoke AI coding capabilities.",
 )
 
-app.add_middleware(SessionMiddleware, secret_key="aidp-secret-change-in-prod")
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("CONTROLLER_SESSION_KEY", "change-me"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -10,8 +10,10 @@ from app.web.i18n_utils import render_template
 
 router = APIRouter()
 
+import os
+
 ADMIN_USER = "admin"
-ADMIN_PASS = "admin123"
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 
 @router.get("/login")
