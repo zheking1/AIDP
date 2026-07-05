@@ -30,9 +30,18 @@ All services are on NAS (192.168.0.100) as Docker containers with network_mode=h
 ## Coding Workflow (automatic)
 
 1. `aidp_context(project_name="aidp", task="<task>")` — FIRST, always
-2. Develop the code
+2. Develop the code (modify local files)
 3. Verify: `invoke_tool_mcp("sandbox-tool", "sandbox.execute", ...)` + `invoke_tool_mcp("quality-tool", "quality.check", ...)`
-4. Archive: `invoke_tool_mcp("memory-tool", "memory.create", {project:"aidp", category:"...", title:"...", content:"..."})`
+4. Sync knowledge: if you created/modified docs, rules, or learned something important, update AIDP:
+   - `invoke_tool_mcp("memory-tool", "memory.create", {project:"aidp", category:"...", title:"...", content:"..."})`
+   - `invoke_tool_mcp("knowledge-tool", ...)` - re-index updated documents
+
+## Important: Local files vs AIDP knowledge
+
+Local files and AIDP knowledge are TWO SEPARATE layers:
+- Modifying local files (code, docs, configs) does NOT automatically update AIDP tools
+- You MUST explicitly call AIDP tools to sync knowledge after changes
+- Treat AIDP as the "project brain" that augments development with context, not a replica of the filesystem
 
 ## Deployment
 All changes must be deployed to NAS after coding:
