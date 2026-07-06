@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AIDP{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .tab-active { border-bottom: 2px solid #6366f1; color: #6366f1; }
+        .tab-inactive { border-bottom: 2px solid transparent; color: #9ca3af; }
+        .tab-inactive:hover { color: #d1d5db; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen flex overflow-hidden" x-data="workspace()" x-init="init()">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+        <!-- Logo -->
+        <div class="h-14 flex items-center px-4 border-b border-gray-700">
+            <i class="fas fa-cube text-indigo-400 text-xl mr-3"></i>
+            <span class="font-bold text-lg">AIDP</span>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto py-4 space-y-1">
+            <!-- Dashboard -->
+            <a href="/" class="flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                <i class="fas fa-home w-5 text-center"></i>
+                <span>仪表盘</span>
+            </a>
+
+            <!-- Tools Section -->
+            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">工具</div>
+            <button @click="openTab('tools', '工具列表', 'fas fa-th-large', '/tools')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-th-large w-5 text-center"></i>
+                <span>全部工具</span>
+            </button>
+
+            <!-- Admin Section -->
+            {% if current_user.role in ['admin', 'super_admin'] %}
+            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">管理</div>
+            <button @click="openTab('users', '用户管理', 'fas fa-users', '/admin/users-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-users w-5 text-center"></i>
+                <span>用户管理</span>
+            </button>
+            <button @click="openTab('roles', '角色权限', 'fas fa-user-shield', '/admin/roles-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-user-shield w-5 text-center"></i>
+                <span>角色权限</span>
+            </button>
+            <button @click="openTab('models', '模型管理', 'fas fa-robot', '/admin/models-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-robot w-5 text-center"></i>
+                <span>模型管理</span>
+            </button>
+            <button @click="openTab('settings', '系统设置', 'fas fa-cog', '/admin/settings-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-cog w-5 text-center"></i>
+                <span>系统设置</span>
+            </button>
+            {% endif %}
+
+            <!-- Personal Section -->
+            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">个人</div>
+            <button @click="openTab('profile', '个人资料', 'fas fa-user', '/profile-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-user w-5 text-center"></i>
+                <span>个人资料</span>
+            </button>
+            <button @click="openTab('apikeys', 'API密钥', 'fas fa-key', '/api-keys-frame')" 
+                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                <i class="fas fa-key w-5 text-center"></i>
+                <span>API密钥</span>
+            </button>
+        </nav>
+
+        <!-- User Info -->
+        <div class="border-t border-gray-700 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user text-indigo-400 text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium truncate">{{ current_user.nickname or current_user.username }}</div>
+                    <div class="text-xs text-gray-500">{{ current_user.role }}</div>
+                </div>
+                <a href="/logout" class="text-gray-400 hover:text-white"><i class="fas fa-sign-out-alt"></i></a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col min-w-0">
+        <!-- Tab Bar -->
+        <div class="h-10 bg-gray-800 border-b border-gray-700 flex items-center overflow-x-auto">
+            <template x-for="tab in tabs" :key="tab.id">
+                <div @click="switchTab(tab.id)"
+                     :class="activeTab === tab.id ? 'tab-active bg-gray-700' : 'tab-inactive hover:bg-gray-700/50'"
+                     class="flex items-center gap-2 px-4 py-2 cursor-pointer text-sm border-r border-gray-700 min-w-fit">
+                    <i :class="tab.icon" class="text-xs"></i>
+                    <span x-text="tab.name"></span>
+                    <button @click.stop="closeTab(tab.id)" 
+                            x-show="tabs.length > 1"
+                            class="ml-1 text-gray-500 hover:text-red-400">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="flex-1 relative bg-gray-900">
+            <template x-for="tab in tabs" :key="tab.id">
+                <iframe :src="tab.url"
+                        x-show="activeTab === tab.id"
+                        class="w-full h-full border-0"
+                        :class="activeTab === tab.id ? '' : 'hidden'">
+                </iframe>
+            </template>
+        </div>
+    </main>
+
+    <script>
+        function workspace() {
+            return {
+                tabs: [],
+                activeTab: null,
+
+                init() {
+                    // Open dashboard by default
+                    this.openTab('dashboard', '仪表盘', 'fas fa-home', '/dashboard-frame');
+                },
+
+                openTab(id, name, icon, url) {
+                    // Check if tab already exists
+                    const existing = this.tabs.find(t => t.id === id);
+                    if (existing) {
+                        this.activeTab = id;
+                        return;
+                    }
+
+                    // Create new tab
+                    this.tabs.push({ id, name, icon, url });
+                    this.activeTab = id;
+                },
+
+                switchTab(id) {
+                    this.activeTab = id;
+                },
+
+                closeTab(id) {
+                    const index = this.tabs.findIndex(t => t.id === id);
+                    if (index === -1) return;
+
+                    this.tabs.splice(index, 1);
+
+                    // Switch to another tab if closing active tab
+                    if (this.activeTab === id && this.tabs.length > 0) {
+                        this.activeTab = this.tabs[Math.min(index, this.tabs.length - 1)].id;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

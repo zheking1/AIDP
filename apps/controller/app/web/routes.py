@@ -74,16 +74,94 @@ async def logout_page(request: Request):
 # ============================================================================
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Dashboard - Main entry point"""
+async def workspace(request: Request):
+    """Workspace with tabbed interface"""
     user = await get_current_user_from_request(request)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
     
-    return render_template(request, "pages/dashboard.html", {
+    return render_template(request, "layouts/workspace.html", {
         "current_user": user.to_dict(),
-        "active_page": "dashboard",
-        "title": "Dashboard - AIDP"
+        "title": "AIDP Workspace"
+    })
+
+
+@router.get("/dashboard-frame", response_class=HTMLResponse)
+async def dashboard_frame(request: Request):
+    """Dashboard frame content"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "pages/dashboard-frame.html", {
+        "current_user": user.to_dict()
+    })
+
+
+# Frame pages (content only, loaded in iframe)
+@router.get("/admin/users-frame", response_class=HTMLResponse)
+async def users_frame(request: Request):
+    """User management frame content"""
+    user = await get_current_user_from_request(request)
+    if not user or not PermissionService.is_admin(user):
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "admin/users-frame.html", {
+        "current_user": user.to_dict()
+    })
+
+
+@router.get("/admin/roles-frame", response_class=HTMLResponse)
+async def roles_frame(request: Request):
+    """Roles management frame content"""
+    user = await get_current_user_from_request(request)
+    if not user or not PermissionService.is_admin(user):
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "admin/roles-frame.html", {
+        "current_user": user.to_dict(),
+        "roles": [r.value for r in UserRole]
+    })
+
+
+@router.get("/admin/models-frame", response_class=HTMLResponse)
+async def models_frame(request: Request):
+    """Models management frame content"""
+    user = await get_current_user_from_request(request)
+    if not user or not PermissionService.is_admin(user):
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "admin/models-frame.html", {
+        "current_user": user.to_dict()
+    })
+
+
+@router.get("/admin/settings-frame", response_class=HTMLResponse)
+async def settings_frame(request: Request):
+    """Settings frame content"""
+    user = await get_current_user_from_request(request)
+    if not user or not PermissionService.is_admin(user):
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "admin/settings-frame.html", {
+        "current_user": user.to_dict()
+    })
+
+
+@router.get("/profile-frame", response_class=HTMLResponse)
+async def profile_frame(request: Request):
+    """Profile frame content"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "auth/profile-frame.html", {
+        "current_user": user.to_dict()
+    })
+
+
+@router.get("/api-keys-frame", response_class=HTMLResponse)
+async def api_keys_frame(request: Request):
+    """API Keys frame content"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return render_template(request, "auth/api-keys-frame.html", {
+        "current_user": user.to_dict()
     })
 
 
