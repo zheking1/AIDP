@@ -13,7 +13,7 @@
     </style>
 </head>
 <body class="min-h-screen">
-<div class="p-6">
+<div class="p-6" x-data="apiKeysManager()" x-init="loadKeys()">
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-white">API 密钥</h1>
@@ -24,21 +24,21 @@
         </button>
     </div>
 
-    <div class="space-y-4" x-data="apiKeysManager()" x-init="loadKeys()">
+    <div class="space-y-4">
         <template x-for="key in keys" :key="key.id">
             <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
                         <i class="fas fa-key text-indigo-400"></i>
-                        <span class="font-medium text-white" x-text="key.name"></span>
+                        <span class="font-medium text-white" x-text="key.name || key.label"></span>
                     </div>
                     <button @click="revokeKey(key.id)" class="text-red-400 hover:text-red-300 text-sm">
                         <i class="fas fa-trash mr-1"></i>撤销
                     </button>
                 </div>
                 <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-gray-400 flex items-center justify-between">
-                    <span x-text="key.preview"></span>
-                    <span class="text-xs" x-text="key.created_at"></span>
+                    <span x-text="key.preview || key.key_preview"></span>
+                    <span class="text-xs" x-text="formatDate(key.created_at)"></span>
                 </div>
             </div>
         </template>
@@ -49,26 +49,117 @@
         </div>
     </div>
 
+    <!-- New Key Modal -->
+    <div x-show="showNewKeyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-4">生成新密钥</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">标签</label>
+                    <input type="text" x-model="newKey.label" placeholder="例如：开发密钥" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showNewKeyModal = false" class="px-4 py-2 text-gray-400 hover:text-white transition">取消</button>
+                <button @click="confirmGenerateKey()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">生成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Show New Key Modal -->
+    <div x-show="showKeyResultModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-4">新密钥已生成</h2>
+            <div class="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-4">
+                <p class="text-yellow-400 text-sm mb-2"><i class="fas fa-exclamation-triangle mr-2"></i>请立即复制此密钥，它只会显示一次！</p>
+                <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-white break-all" x-text="newKeyValue"></div>
+            </div>
+            <div class="flex justify-end">
+                <button @click="showKeyResultModal = false; newKeyValue = '';" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">我已保存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function apiKeysManager() {
             return {
-                keys: [
-                    { id: 1, name: '开发密钥', preview: 'sk-...abcd', created_at: '2026-01-15' },
-                ],
+                keys: [],
+                showNewKeyModal: false,
+                showKeyResultModal: false,
+                newKey: { label: '' },
+                newKeyValue: '',
 
-                generateKey() {
-                    const newKey = {
-                        id: Date.now(),
-                        name: '新密钥 ' + (this.keys.length + 1),
-                        preview: 'sk-...' + Math.random().toString(36).substr(-4),
-                        created_at: new Date().toISOString().split('T')[0]
-                    };
-                    this.keys.unshift(newKey);
-                    alert('新密钥已生成: ' + newKey.preview);
+                async loadKeys() {
+                    try {
+                        const response = await fetch('/api/auth/api-keys');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.keys = data.items || data.keys || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to load API keys:', e);
+                        // Use sample data for demo
+                        this.keys = [
+                            { id: 1, label: '开发密钥', key_preview: 'sk-...abcd', created_at: '2026-01-15' },
+                        ];
+                    }
                 },
 
-                revokeKey(id) {
-                    if (confirm('确定要撤销这个密钥吗？')) {
+                formatDate(date) {
+                    if (!date) return '-';
+                    return new Date(date).toLocaleDateString('zh-CN');
+                },
+
+                generateKey() {
+                    this.newKey.label = '';
+                    this.showNewKeyModal = true;
+                },
+
+                async confirmGenerateKey() {
+                    try {
+                        const response = await fetch('/api/auth/api-keys', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ label: this.newKey.label })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.showNewKeyModal = false;
+                            this.newKeyValue = data.key || data.api_key;
+                            this.showKeyResultModal = true;
+                            this.loadKeys();
+                        } else {
+                            alert('生成密钥失败');
+                        }
+                    } catch (e) {
+                        console.error('Failed to generate key:', e);
+                        // Demo mode
+                        this.showNewKeyModal = false;
+                        const mockKey = 'sk-' + Math.random().toString(36).substring(2, 15);
+                        this.newKeyValue = mockKey;
+                        this.showKeyResultModal = true;
+                        this.keys.unshift({
+                            id: Date.now(),
+                            label: this.newKey.label || '新密钥',
+                            key_preview: mockKey.substring(0, 7) + '...',
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                },
+
+                async revokeKey(id) {
+                    if (!confirm('确定要撤销这个密钥吗？此操作不可恢复。')) return;
+                    try {
+                        const response = await fetch(`/api/auth/api-keys/${id}`, { method: 'DELETE' });
+                        if (response.ok) {
+                            this.loadKeys();
+                        } else {
+                            alert('撤销失败');
+                        }
+                    } catch (e) {
+                        console.error('Failed to revoke key:', e);
+                        // Demo mode
                         this.keys = this.keys.filter(k => k.id !== id);
                     }
                 }

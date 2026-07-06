@@ -13,7 +13,7 @@
     </style>
 </head>
 <body class="min-h-screen">
-<div class="p-6" x-data="modelsManager()">
+<div class="p-6" x-data="modelsManager()" x-init="loadModels()">
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-white">模型管理</h1>
@@ -50,7 +50,7 @@
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <button class="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition">编辑</button>
+                    <button @click="editModel(model)" class="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition">编辑</button>
                     <button @click="deleteModel(model.id)" class="px-3 py-1.5 text-red-400 hover:text-red-300 text-sm transition"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
@@ -64,18 +64,119 @@
         </div>
     </div>
 
+    <!-- Add/Edit Model Modal -->
+    <div x-show="showAddModal || showEditModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-4" x-text="showEditModal ? '编辑模型' : '添加模型'"></h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">名称</label>
+                    <input type="text" x-model="currentModel.name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">提供商</label>
+                    <input type="text" x-model="currentModel.provider" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">模型ID</label>
+                    <input type="text" x-model="currentModel.model_name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">角色</label>
+                    <select x-model="currentModel.role" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                        <option value="completion">Completion</option>
+                        <option value="chat">Chat</option>
+                        <option value="embedding">Embedding</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">状态</label>
+                    <select x-model="currentModel.status" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                        <option value="active">激活</option>
+                        <option value="inactive">停用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="closeModal()" class="px-4 py-2 text-gray-400 hover:text-white transition">取消</button>
+                <button @click="saveModel()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">保存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function modelsManager() {
             return {
-                models: [
-                    { id: 1, name: 'DeepSeek-V3', provider: 'DeepSeek', model_name: 'deepseek-chat', role: 'completion', status: 'active' },
-                    { id: 2, name: 'GPT-4', provider: 'OpenAI', model_name: 'gpt-4', role: 'completion', status: 'active' },
-                ],
+                models: [],
                 showAddModal: false,
+                showEditModal: false,
+                currentModel: { id: null, name: '', provider: '', model_name: '', role: 'completion', status: 'active' },
 
-                deleteModel(id) {
-                    if (confirm('确定要删除这个模型吗？')) {
-                        this.models = this.models.filter(m => m.id !== id);
+                async loadModels() {
+                    try {
+                        const response = await fetch('/api/models');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.models = data.items || data.models || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to load models:', e);
+                        // Use sample data for demo
+                        this.models = [
+                            { id: 1, name: 'DeepSeek-V3', provider: 'DeepSeek', model_name: 'deepseek-chat', role: 'completion', status: 'active' },
+                            { id: 2, name: 'GPT-4', provider: 'OpenAI', model_name: 'gpt-4', role: 'completion', status: 'active' },
+                        ];
+                    }
+                },
+
+                editModel(model) {
+                    this.currentModel = { ...model };
+                    this.showEditModal = true;
+                    this.showAddModal = false;
+                },
+
+                closeModal() {
+                    this.showAddModal = false;
+                    this.showEditModal = false;
+                    this.currentModel = { id: null, name: '', provider: '', model_name: '', role: 'completion', status: 'active' };
+                },
+
+                async saveModel() {
+                    try {
+                        const isEdit = this.showEditModal;
+                        const url = isEdit ? `/api/models/${this.currentModel.id}` : '/api/models';
+                        const method = isEdit ? 'PUT' : 'POST';
+                        
+                        const response = await fetch(url, {
+                            method: method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.currentModel)
+                        });
+                        
+                        if (response.ok) {
+                            this.closeModal();
+                            this.loadModels();
+                        } else {
+                            alert('保存失败');
+                        }
+                    } catch (e) {
+                        console.error('Failed to save model:', e);
+                        alert('保存失败: ' + e.message);
+                    }
+                },
+
+                async deleteModel(id) {
+                    if (!confirm('确定要删除这个模型吗？')) return;
+                    try {
+                        const response = await fetch(`/api/models/${id}`, { method: 'DELETE' });
+                        if (response.ok) {
+                            this.loadModels();
+                        } else {
+                            alert('删除失败');
+                        }
+                    } catch (e) {
+                        console.error('Failed to delete model:', e);
+                        alert('删除失败: ' + e.message);
                     }
                 }
             }
