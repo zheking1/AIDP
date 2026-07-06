@@ -1,0 +1,282 @@
+{% extends "layouts/unified_base.html" %}
+{% set active_page = 'admin' %}
+{% block title %}管理控制台{% endblock %}
+
+{% block content %}
+<div x-data="adminDashboard()" x-init="init()">
+    <!-- Admin Tabs -->
+    <div class="border-b border-gray-700 mb-6">
+        <nav class="flex gap-6">
+            <button @click="activeTab = 'users'" 
+                    :class="activeTab === 'users' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-300'"
+                    class="pb-3 border-b-2 font-medium text-sm transition flex items-center gap-2">
+                <i class="fas fa-users"></i>用户管理
+            </button>
+            <button @click="activeTab = 'roles'" 
+                    :class="activeTab === 'roles' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-300'"
+                    class="pb-3 border-b-2 font-medium text-sm transition flex items-center gap-2">
+                <i class="fas fa-user-shield"></i>角色权限
+            </button>
+            <button @click="activeTab = 'models'" 
+                    :class="activeTab === 'models' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-300'"
+                    class="pb-3 border-b-2 font-medium text-sm transition flex items-center gap-2">
+                <i class="fas fa-robot"></i>模型管理
+            </button>
+            <button @click="activeTab = 'settings'" 
+                    :class="activeTab === 'settings' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-300'"
+                    class="pb-3 border-b-2 font-medium text-sm transition flex items-center gap-2">
+                <i class="fas fa-cog"></i>系统设置
+            </button>
+        </nav>
+    </div>
+
+    <!-- Users Tab -->
+    <div x-show="activeTab === 'users'" x-cloak>
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-white">用户管理</h1>
+                <p class="text-sm text-gray-400 mt-1">管理系统用户和权限</p>
+            </div>
+            <button @click="showCreateUser = true" 
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                <i class="fas fa-plus mr-2"></i>创建用户
+            </button>
+        </div>
+
+        <!-- Users Table -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-700/50 text-gray-400">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">用户</th>
+                        <th class="px-4 py-3 font-medium">角色</th>
+                        <th class="px-4 py-3 font-medium">状态</th>
+                        <th class="px-4 py-3 font-medium">创建时间</th>
+                        <th class="px-4 py-3 font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="user in users" :key="user.id">
+                        <tr class="hover:bg-gray-700/30">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-user text-indigo-400 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-white font-medium" x-text="user.nickname || user.username"></div>
+                                        <div class="text-xs text-gray-500" x-text="user.username"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium"
+                                      :class="{
+                                          'bg-purple-500/20 text-purple-400': user.role === 'super_admin',
+                                          'bg-blue-500/20 text-blue-400': user.role === 'admin',
+                                          'bg-green-500/20 text-green-400': user.role === 'developer',
+                                          'bg-gray-500/20 text-gray-400': user.role === 'user'
+                                      }"
+                                      x-text="user.role">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium"
+                                      :class="user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                      x-text="user.status">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-400 text-sm" x-text="new Date(user.created_at).toLocaleDateString('zh-CN')"></td>
+                            <td class="px-4 py-3">
+                                <div class="flex gap-2">
+                                    <button class="text-gray-400 hover:text-white transition"><i class="fas fa-edit"></i></button>
+                                    <button class="text-gray-400 hover:text-red-400 transition"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Roles Tab -->
+    <div x-show="activeTab === 'roles'" x-cloak>
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-white">角色权限</h1>
+            <p class="text-gray-400 mt-1">管理用户角色和权限配置</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="role in roles" :key="role.code">
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-user-shield text-indigo-400"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-white" x-text="role.name"></h3>
+                            <p class="text-xs text-gray-500" x-text="role.code"></p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400 mb-4" x-text="role.description"></p>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="perm in role.permissions" :key="perm">
+                            <span class="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300" x-text="perm"></span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Models Tab -->
+    <div x-show="activeTab === 'models'" x-cloak>
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-white">模型管理</h1>
+                <p class="text-gray-400 mt-1">配置 LLM 模型和 API 密钥</p>
+            </div>
+            <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                <i class="fas fa-plus mr-2"></i>添加模型
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="model in models" :key="model.id">
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-robot text-blue-400"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-white" x-text="model.name"></h3>
+                                <p class="text-xs text-gray-500" x-text="model.provider"></p>
+                            </div>
+                        </div>
+                        <span class="w-2 h-2 rounded-full" :class="model.status === 'active' ? 'bg-green-500' : 'bg-gray-500'"></span>
+                    </div>
+                    <div class="space-y-2 text-sm text-gray-400 mb-4">
+                        <div class="flex justify-between">
+                            <span>模型</span>
+                            <span class="text-white" x-text="model.model_name"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>角色</span>
+                            <span class="text-white" x-text="model.role"></span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition">编辑</button>
+                        <button class="px-3 py-1.5 text-red-400 hover:text-red-300 text-sm transition"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div x-show="activeTab === 'settings'" x-cloak>
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-white">系统设置</h1>
+            <p class="text-gray-400 mt-1">配置全局系统参数</p>
+        </div>
+
+        <div class="max-w-2xl space-y-6">
+            <!-- Site Settings -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-semibold text-white mb-4"><i class="fas fa-globe mr-2 text-indigo-400"></i>站点信息</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">站点名称</label>
+                        <input type="text" x-model="settings.site_name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">站点描述</label>
+                        <input type="text" x-model="settings.site_description" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auth Settings -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-semibold text-white mb-4"><i class="fas fa-shield-alt mr-2 text-indigo-400"></i>认证设置</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-white">开放注册</div>
+                            <div class="text-sm text-gray-500">允许新用户自行注册</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="settings.allow_registration" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex justify-end">
+                <button @click="saveSettings()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition">
+                    <i class="fas fa-save mr-2"></i>保存设置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function adminDashboard() {
+    return {
+        activeTab: 'users',
+        users: [
+            {id: 1, username: 'admin', nickname: 'Administrator', role: 'super_admin', status: 'active', created_at: '2026-01-01'},
+            {id: 2, username: 'dev1', nickname: 'Developer 1', role: 'developer', status: 'active', created_at: '2026-01-15'},
+        ],
+        roles: [
+            {code: 'super_admin', name: '超级管理员', description: '拥有所有权限', permissions: ['全部权限']},
+            {code: 'admin', name: '管理员', description: '可管理用户和配置', permissions: ['用户管理', '配置管理']},
+            {code: 'developer', name: '开发者', description: '可使用工具', permissions: ['工具使用']},
+            {code: 'user', name: '普通用户', description: '只读访问', permissions: ['查看']},
+        ],
+        models: [
+            {id: 1, name: 'DeepSeek-V3', provider: 'DeepSeek', model_name: 'deepseek-chat', role: 'completion', status: 'active'},
+            {id: 2, name: 'GPT-4', provider: 'OpenAI', model_name: 'gpt-4', role: 'completion', status: 'active'},
+        ],
+        settings: {
+            site_name: 'AIDP',
+            site_description: 'AI DevOps Platform',
+            allow_registration: false,
+        },
+        showCreateUser: false,
+        
+        init() {
+            // Read hash from URL to set initial tab
+            const hash = window.location.hash.replace('#', '');
+            if (hash && ['users', 'roles', 'models', 'settings'].includes(hash)) {
+                this.activeTab = hash;
+            }
+            // Load data from API
+            this.loadUsers();
+        },
+        
+        async loadUsers() {
+            try {
+                const response = await fetch('/api/auth/users');
+                if (response.ok) {
+                    this.users = await response.json();
+                }
+            } catch (e) {
+                console.error('Failed to load users:', e);
+            }
+        },
+        
+        async saveSettings() {
+            // TODO: Save settings to API
+            alert('设置已保存');
+        }
+    }
+}
+</script>
+{% endblock %}
