@@ -19,6 +19,8 @@ from app.api.configs import router as configs_router
 from app.api.reviews import router as reviews_router
 from app.api.nas_storage import router as nas_storage_router
 from app.api.instructions import router as instructions_router
+from app.api.models import router as models_router
+from app.api.settings import router as settings_router
 from app.api.ws_logs import ws_handler
 from app.web.routes import router as web_router
 from app.mcp.server import mcp
@@ -63,6 +65,8 @@ app.include_router(auth_router)
 app.include_router(metrics_router)
 app.include_router(audit_router)
 app.include_router(tools_router)
+app.include_router(models_router)
+app.include_router(settings_router)
 app.include_router(projects_router)
 app.include_router(configs_router)
 app.include_router(reviews_router)
@@ -77,3 +81,7 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.mount("/mcp", _mcp_app)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=False)

@@ -226,6 +226,36 @@ async def api_change_password(request: Request, data: ChangePasswordRequest):
     return {"success": True, "message": "Password changed successfully"}
 
 
+@router.put("/profile")
+async def api_update_profile(request: Request, data: UpdateUserRequest):
+    """Update current user profile"""
+    session_token = request.cookies.get("aidp_session")
+    user = await AuthService.validate_session(session_token)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    async with async_session_factory() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(User).where(User.id == user.id))
+        current_user = result.scalar_one_or_none()
+        
+        if not current_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Update fields
+        if data.email is not None:
+            current_user.email = data.email
+        if data.nickname is not None:
+            current_user.nickname = data.nickname
+        
+        current_user.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(current_user)
+        
+        return {"success": True, "user": current_user.to_dict()}
+
+
 # ============================================================================
 # User Management API (Admin only)
 # ============================================================================
