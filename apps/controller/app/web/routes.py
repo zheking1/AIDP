@@ -155,6 +155,49 @@ async def admin_user_create_page(request: Request):
     })
 
 
+@router.get("/admin/roles", response_class=HTMLResponse)
+async def roles_page(request: Request):
+    """Roles management page"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return render_template(request, "admin/roles.html", {
+        "current_user": user.to_dict(),
+        "active_page": "roles",
+        "title": "Roles - AIDP",
+        "roles": [r.value for r in UserRole]
+    })
+
+
+@router.get("/admin/models", response_class=HTMLResponse)
+async def models_page(request: Request):
+    """Models management page"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return render_template(request, "admin/models.html", {
+        "current_user": user.to_dict(),
+        "active_page": "models",
+        "title": "Models - AIDP"
+    })
+
+
+@router.get("/admin/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """System settings page"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return render_template(request, "admin/settings.html", {
+        "current_user": user.to_dict(),
+        "active_page": "settings",
+        "title": "Settings - AIDP"
+    })
+
+
 # ============================================================================
 # Tools Management
 # ============================================================================
