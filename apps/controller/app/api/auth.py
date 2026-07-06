@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from app.services.auth_service import AuthService, PermissionService
-from app.db.auth_models import User, UserRole
+from app.db.auth_models import User, UserRole, ApiKey
+from app.db.database import async_session_factory
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
