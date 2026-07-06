@@ -89,7 +89,7 @@ async function goStep2() {
     document.getElementById('scanResult').classList.add('hidden');
 
     try {
-        const r = await fetch(`http://192.168.0.100:18090/api/onboarding/scan?path=${encodeURIComponent(path)}`);
+        const r = await fetch(`/api/onboarding/scan?path=${encodeURIComponent(path)}`);
         const d = await r.json();
         document.getElementById('resLang').textContent = d.language;
         document.getElementById('resFw').textContent = d.framework;
@@ -113,7 +113,7 @@ async function goStep3() {
     const path = document.getElementById('projPath').value.trim();
 
     try {
-        const r = await fetch('http://192.168.0.100:18090/api/onboarding/import', {
+        const r = await fetch('/api/onboarding/import', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name, path, type: document.getElementById('resLang').textContent})
         });

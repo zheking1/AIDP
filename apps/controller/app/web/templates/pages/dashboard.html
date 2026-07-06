@@ -107,6 +107,45 @@
         </div>
     </div>
 
+    <!-- Recent Invocations -->
+    <div class="mb-8" x-show="recentInvocations.length > 0">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-white">
+                <i class="fas fa-history text-indigo-400 mr-2"></i>最近调用
+            </h2>
+        </div>
+        
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-gray-700/50 text-gray-400">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">时间</th>
+                        <th class="px-4 py-3 font-medium">工具</th>
+                        <th class="px-4 py-3 font-medium">能力</th>
+                        <th class="px-4 py-3 font-medium">状态</th>
+                        <th class="px-4 py-3 font-medium">耗时</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="inv in recentInvocations" :key="inv.id">
+                        <tr class="hover:bg-gray-700/30">
+                            <td class="px-4 py-3 text-gray-400" x-text="new Date(inv.created_at).toLocaleString()"></td>
+                            <td class="px-4 py-3 text-white" x-text="inv.tool_name"></td>
+                            <td class="px-4 py-3 text-gray-300" x-text="inv.capability"></td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium"
+                                      :class="inv.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                      x-text="inv.status">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-400" x-text="inv.latency_ms + 'ms'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Quick Actions -->
     <div class="bg-gradient-to-r from-indigo-900/50 to-purple-900/50 rounded-xl p-6 border border-indigo-800/50">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -145,6 +184,7 @@ function dashboard() {
             healthy_tools: 0,
             today_calls: 0
         },
+        recentInvocations: [],
         loading: true,
 
         async init() {
@@ -168,8 +208,18 @@ function dashboard() {
         },
 
         async loadStats() {
-            // TODO: Load actual stats from API
-            this.stats.today_calls = Math.floor(Math.random() * 1000);
+            try {
+                const response = await fetch('/api/tools/dashboard/stats');
+                const data = await response.json();
+                this.stats.total_tools = data.total_tools;
+                this.stats.healthy_tools = data.healthy_tools;
+                this.stats.today_calls = data.today_calls;
+                this.recentInvocations = data.recent_invocations || [];
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+                this.stats.today_calls = 0;
+                this.recentInvocations = [];
+            }
         },
 
         getStatusColor(status) {
