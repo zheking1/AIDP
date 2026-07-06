@@ -1,0 +1,50 @@
+<!-- Models Management Content - No Layout -->
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">模型管理</h1>
+            <p class="text-gray-400 mt-1">配置 LLM 模型和 API 密钥</p>
+        </div>
+        <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>添加模型
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-blue-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white">DeepSeek-V3</h3>
+                        <p class="text-xs text-gray-500">DeepSeek</p>
+                    </div>
+                </div>
+                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+            </div>
+            <div class="space-y-2 text-sm text-gray-400 mb-4">
+                <div class="flex justify-between">
+                    <span>模型</span>
+                    <span class="text-white">deepseek-chat</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>角色</span>
+                    <span class="text-white">completion</span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button class="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition">编辑</button>
+                <button class="px-3 py-1.5 text-red-400 hover:text-red-300 text-sm transition"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 border-dashed flex items-center justify-center">
+            <button class="text-center text-gray-500 hover:text-gray-300 transition">
+                <i class="fas fa-plus text-3xl mb-2"></i>
+                <p>添加新模型</p>
+            </button>
+        </div>
+    </div>
+</div>

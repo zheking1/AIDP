@@ -1,0 +1,101 @@
+{% extends "layouts/unified_base.html" %}
+{% set active_page = 'admin' %}
+{% block title %}管理控制台{% endblock %}
+
+{% block content %}
+<div x-data="adminFrame()" x-init="init()" class="h-full flex flex-col">
+    <!-- Tab Bar -->
+    <div class="border-b border-gray-700 bg-gray-800/50">
+        <div class="flex items-center gap-1 px-4 py-2 overflow-x-auto">
+            <template x-for="tab in tabs" :key="tab.id">
+                <div @click="switchTab(tab.id)"
+                     :class="activeTab === tab.id ? 'bg-gray-700 text-white border-indigo-500' : 'bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700'"
+                     class="flex items-center gap-2 px-4 py-2 rounded-t-lg border-t-2 border-l border-r border-b-0 cursor-pointer transition min-w-fit">
+                    <i :class="tab.icon" class="text-sm"></i>
+                    <span class="text-sm font-medium" x-text="tab.name"></span>
+                    <button @click.stop="closeTab(tab.id)" 
+                            x-show="tabs.length > 1"
+                            class="ml-1 text-gray-500 hover:text-red-400 transition">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Content Area with Iframe -->
+    <div class="flex-1 relative bg-gray-900">
+        <template x-for="tab in tabs" :key="tab.id">
+            <iframe :src="tab.url"
+                    x-show="activeTab === tab.id"
+                    class="w-full h-full border-0"
+                    :class="activeTab === tab.id ? '' : 'hidden'">
+            </iframe>
+        </template>
+    </div>
+</div>
+
+<script>
+function adminFrame() {
+    return {
+        tabs: [],
+        activeTab: null,
+        tabCounter: 0,
+
+        init() {
+            // Parse URL hash to determine initial tab
+            const hash = window.location.hash.replace('#', '');
+            const menuMap = {
+                'users': { name: '用户管理', icon: 'fas fa-users', url: '/admin/users-content' },
+                'roles': { name: '角色权限', icon: 'fas fa-user-shield', url: '/admin/roles-content' },
+                'models': { name: '模型管理', icon: 'fas fa-robot', url: '/admin/models-content' },
+                'settings': { name: '系统设置', icon: 'fas fa-cog', url: '/admin/settings-content' }
+            };
+
+            if (hash && menuMap[hash]) {
+                this.openTab(hash, menuMap[hash].name, menuMap[hash].icon, menuMap[hash].url);
+            } else {
+                // Default to users
+                this.openTab('users', '用户管理', 'fas fa-users', '/admin/users-content');
+            }
+        },
+
+        openTab(id, name, icon, url) {
+            // Check if tab already exists
+            const existing = this.tabs.find(t => t.id === id);
+            if (existing) {
+                this.activeTab = id;
+                return;
+            }
+
+            // Create new tab
+            this.tabs.push({
+                id: id,
+                name: name,
+                icon: icon,
+                url: url
+            });
+            this.activeTab = id;
+        },
+
+        switchTab(id) {
+            this.activeTab = id;
+            // Update URL hash without reloading
+            window.history.replaceState(null, null, '#'+id);
+        },
+
+        closeTab(id) {
+            const index = this.tabs.findIndex(t => t.id === id);
+            if (index === -1) return;
+
+            this.tabs.splice(index, 1);
+
+            // Switch to another tab if closing active tab
+            if (this.activeTab === id && this.tabs.length > 0) {
+                this.activeTab = this.tabs[Math.min(index, this.tabs.length - 1)].id;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}
