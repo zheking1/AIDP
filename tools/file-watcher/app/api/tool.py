@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -59,7 +59,6 @@ async def get_capabilities():
 
 @router.post("/tool/invoke")
 async def invoke_tool(request: Request):
-    from fastapi import Request
     body = await request.json()
     capability = body.get("capability")
     args = body.get("arguments", {})

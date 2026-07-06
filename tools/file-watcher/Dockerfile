@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM docker.1ms.run/library/python:3.13-slim
 
 WORKDIR /app
 
@@ -9,6 +9,6 @@ COPY . .
 
 RUN mkdir -p /app/data
 
-EXPOSE 18091
+EXPOSE 18087
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18091"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18087"]

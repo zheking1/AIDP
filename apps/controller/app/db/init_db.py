@@ -17,7 +17,7 @@ async def init_database():
         
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS tool_registry (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(256) UNIQUE NOT NULL,
                 display_name VARCHAR(256),
                 description TEXT,
@@ -25,25 +25,25 @@ async def init_database():
                 endpoint VARCHAR(512) NOT NULL,
                 status VARCHAR(32) DEFAULT 'registered',
                 last_health_check TIMESTAMP,
-                capabilities TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                capabilities JSONB,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tool_registry_name ON tool_registry(name)"))
 
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS tool_invocation (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 tool_name VARCHAR(256) NOT NULL,
                 capability VARCHAR(256),
-                arguments TEXT,
-                result TEXT,
+                arguments JSONB,
+                result JSONB,
                 status VARCHAR(32),
                 duration_ms INTEGER,
                 error TEXT,
                 user_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tool_invocation_tool_name ON tool_invocation(tool_name)"))
@@ -55,7 +55,7 @@ async def init_database():
         # Users table - Enhanced version
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
-                id VARCHAR(36) PRIMARY KEY,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 username VARCHAR(64) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE,
@@ -63,10 +63,10 @@ async def init_database():
                 avatar_url TEXT,
                 role VARCHAR(32) DEFAULT 'user',
                 status VARCHAR(32) DEFAULT 'active',
-                is_verified BOOLEAN DEFAULT 0,
+                is_verified BOOLEAN DEFAULT FALSE,
                 last_login_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"))
@@ -76,15 +76,15 @@ async def init_database():
         # User Sessions table (supports multiple device login)
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_sessions (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 session_token VARCHAR(255) UNIQUE NOT NULL,
                 refresh_token VARCHAR(255),
                 ip_address VARCHAR(45),
                 user_agent TEXT,
                 expires_at TIMESTAMP NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW(),
+                last_activity_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(session_token)"))
@@ -94,15 +94,15 @@ async def init_database():
         # Login Logs table (security audit)
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS login_logs (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id VARCHAR(36) REFERENCES users(id),
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id),
                 username VARCHAR(64),
                 action VARCHAR(32) NOT NULL,
                 ip_address VARCHAR(45),
                 user_agent TEXT,
-                success BOOLEAN DEFAULT 0,
+                success BOOLEAN DEFAULT FALSE,
                 fail_reason TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_login_logs_user ON login_logs(user_id)"))
@@ -112,13 +112,13 @@ async def init_database():
         # Permissions table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS permissions (
-                id VARCHAR(36) PRIMARY KEY,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 code VARCHAR(64) UNIQUE NOT NULL,
                 name VARCHAR(128) NOT NULL,
                 description TEXT,
                 resource_type VARCHAR(32),
                 action VARCHAR(32),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_permissions_code ON permissions(code)"))
@@ -127,7 +127,7 @@ async def init_database():
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS role_permissions (
                 role VARCHAR(32) NOT NULL,
-                permission_id VARCHAR(36) REFERENCES permissions(id) ON DELETE CASCADE,
+                permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
                 PRIMARY KEY (role, permission_id)
             )
         """))
@@ -135,17 +135,17 @@ async def init_database():
         # API Keys table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS api_keys (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 label VARCHAR(128),
                 key_hash VARCHAR(255) UNIQUE NOT NULL,
                 key_preview VARCHAR(20),
-                scopes TEXT DEFAULT '["read"]',
+                scopes JSONB DEFAULT '["read"]',
                 rate_limit_req_per_min INTEGER DEFAULT 60,
                 expires_at TIMESTAMP,
                 last_used_at TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"))
@@ -154,17 +154,17 @@ async def init_database():
         # Audit Logs table (enhanced)
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS audit_logs (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id VARCHAR(36) REFERENCES users(id),
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id),
                 action VARCHAR(64) NOT NULL,
                 resource_type VARCHAR(64),
                 resource_id VARCHAR(64),
                 resource_name VARCHAR(255),
-                old_values TEXT,
-                new_values TEXT,
+                old_values JSONB,
+                new_values JSONB,
                 ip_address VARCHAR(45),
                 user_agent TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)"))
@@ -175,13 +175,13 @@ async def init_database():
         # System Settings table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS system_settings (
-                id VARCHAR(36) PRIMARY KEY,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 key VARCHAR(128) UNIQUE NOT NULL,
-                value TEXT,
+                value JSONB,
                 description TEXT,
-                is_encrypted BOOLEAN DEFAULT 0,
-                updated_by VARCHAR(36) REFERENCES users(id),
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                is_encrypted BOOLEAN DEFAULT FALSE,
+                updated_by UUID REFERENCES users(id),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_settings_key ON system_settings(key)"))
@@ -209,14 +209,13 @@ async def init_database():
             ("admin:full", "Full Admin", "Full system access", "admin", "all"),
         ]
         
-        import uuid
         for code, name, desc, resource, action in default_permissions:
-            perm_id = str(uuid.uuid4())
             await conn.execute(text("""
-                INSERT OR IGNORE INTO permissions (id, code, name, description, resource_type, action)
-                VALUES (:id, :code, :name, :desc, :resource, :action)
+                INSERT INTO permissions (code, name, description, resource_type, action)
+                VALUES (:code, :name, :desc, :resource, :action)
+                ON CONFLICT (code) DO NOTHING
             """), {
-                "id": perm_id, "code": code, "name": name, "desc": desc, 
+                "code": code, "name": name, "desc": desc, 
                 "resource": resource, "action": action
             })
 
@@ -233,19 +232,21 @@ async def init_database():
         for role, perms in role_perms.items():
             for perm_code in perms:
                 await conn.execute(text("""
-                    INSERT OR IGNORE INTO role_permissions (role, permission_id)
+                    INSERT INTO role_permissions (role, permission_id)
                     SELECT :role, id FROM permissions WHERE code = :perm_code
+                    ON CONFLICT (role, permission_id) DO NOTHING
                 """), {"role": role, "perm_code": perm_code})
 
         # Create default admin user (if not exists)
+        # Generate proper bcrypt hash for 'admin123'
         password = "admin123"
         password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         
-        admin_id = str(uuid.uuid4())
         await conn.execute(text("""
-            INSERT OR IGNORE INTO users (id, username, password_hash, email, nickname, role, status, is_verified)
-            VALUES (:id, 'admin', :password_hash, 'admin@aidp.local', 'Administrator', 'super_admin', 'active', 1)
-        """), {"id": admin_id, "password_hash": password_hash})
+            INSERT INTO users (username, password_hash, email, nickname, role, status, is_verified)
+            SELECT 'admin', :password_hash, 'admin@aidp.local', 'Administrator', 'super_admin', 'active', TRUE
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')
+        """), {"password_hash": password_hash})
 
         # Create default system settings
         default_settings = [
@@ -259,11 +260,11 @@ async def init_database():
         
         for key, value, desc, encrypted in default_settings:
             val = str(value).lower() if isinstance(value, bool) else str(value)
-            setting_id = str(uuid.uuid4())
             await conn.execute(text("""
-                INSERT OR IGNORE INTO system_settings (id, key, value, description, is_encrypted)
-                VALUES (:id, :key, :value, :desc, :encrypted)
-            """), {"id": setting_id, "key": key, "value": f'"{val}"', "desc": desc, "encrypted": encrypted})
+                INSERT INTO system_settings (key, value, description, is_encrypted)
+                VALUES (:key, CAST(:value AS JSONB), :desc, :encrypted)
+                ON CONFLICT (key) DO NOTHING
+            """), {"key": key, "value": f'"{val}"', "desc": desc, "encrypted": encrypted})
 
         logger.info("Database initialized successfully with Phase 1: Unified Authentication")
 
@@ -274,23 +275,23 @@ async def init_database():
         # App Projects table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS app_projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(256) NOT NULL,
                 description VARCHAR(1024),
                 project_type VARCHAR(256),
                 owner_id VARCHAR(128),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
 
         # App Project members table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS app_project_members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 project_id INTEGER REFERENCES app_projects(id),
                 user_id VARCHAR(128),
                 role VARCHAR(32) DEFAULT 'member',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(project_id, user_id)
             )
         """))
@@ -298,12 +299,12 @@ async def init_database():
         # App Project configs table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS app_project_configs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 project_id INTEGER REFERENCES app_projects(id),
                 env_type VARCHAR(32) NOT NULL,
                 config_key VARCHAR(256) NOT NULL,
                 config_value TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(project_id, env_type, config_key)
             )
         """))
@@ -311,30 +312,30 @@ async def init_database():
         # Review queue table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS review_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 document_id INTEGER,
-                user_id VARCHAR(36),
+                user_id UUID,
                 action VARCHAR(64) NOT NULL,
                 content TEXT,
                 status VARCHAR(32) DEFAULT 'pending',
                 review_comment TEXT,
-                reviewed_by VARCHAR(36),
+                reviewed_by UUID,
                 reviewed_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
 
         # Agent Instructions table
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS agent_instructions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 project_id INTEGER DEFAULT 0,
                 agent_type VARCHAR(100) NOT NULL DEFAULT 'main',
                 role TEXT,
-                constraints TEXT,
-                rules TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                constraints JSONB,
+                rules JSONB,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_agent_instructions_type ON agent_instructions(project_id, agent_type)"))

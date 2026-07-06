@@ -6,6 +6,7 @@ from app.db.database import engine, async_session_factory
 
 logger = logging.getLogger(__name__)
 
+# SQLite compatible SQL
 CREATE_TABLES_SQLITE = """
 CREATE TABLE IF NOT EXISTS kt_document (
     id VARCHAR(36) PRIMARY KEY,

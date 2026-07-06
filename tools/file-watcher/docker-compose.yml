@@ -3,13 +3,15 @@ version: '3.8'
 services:
   file-watcher:
     build: .
-    ports:
-      - "18091:18091"
+    image: file-watcher:latest
+    container_name: file-watcher
+    network_mode: host
     volumes:
       - ./data:/app/data
-      - /path/to/your/projects:/watched-projects:ro
+      - /home/docker/AI-Code:/watched-projects:ro
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/file_watcher.db
-      - CODE_INDEX_URL=http://host.docker.internal:18086
-      - CONTROLLER_URL=http://host.docker.internal:8883
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/file_watcher.db}
+      - CODE_INDEX_URL=http://127.0.0.1:18086
+      - CONTROLLER_URL=http://127.0.0.1:8883
+      - DEBOUNCE_SECONDS=1.0
     restart: unless-stopped
