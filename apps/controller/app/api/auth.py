@@ -4,6 +4,7 @@ Phase 1: Infrastructure
 """
 
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Request, Response, HTTPException, Depends, Form
@@ -43,6 +44,13 @@ class CreateUserRequest(BaseModel):
     email: Optional[str] = None
     nickname: Optional[str] = None
     role: str = "user"
+
+
+class UpdateUserRequest(BaseModel):
+    email: Optional[str] = None
+    nickname: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
 
 
 # ============================================================================
@@ -359,6 +367,48 @@ async def api_delete_user(request: Request, user_id: str):
         await session.commit()
         
         return {"success": True, "message": "User deleted successfully"}
+
+
+@router.put("/users/{user_id}")
+async def api_update_user(request: Request, user_id: str, data: UpdateUserRequest):
+    """Update a user (admin only)"""
+    session_token = request.cookies.get("aidp_session")
+    current_user = await AuthService.validate_session(session_token)
+    
+    if not current_user or not PermissionService.is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        target_user_id = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    async with async_session_factory() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(User).where(User.id == target_user_id))
+        target_user = result.scalar_one_or_none()
+        
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Update fields
+        if data.email is not None:
+            target_user.email = data.email
+        if data.nickname is not None:
+            target_user.nickname = data.nickname
+        if data.role is not None:
+            try:
+                target_user.role = UserRole(data.role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid role: {data.role}")
+        if data.status is not None:
+            target_user.status = data.status
+        
+        target_user.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(target_user)
+        
+        return {"success": True, "user": target_user.to_dict()}
 
 
 # ============================================================================
