@@ -4,15 +4,15 @@
 
 ## 开发阶段总览
 
-| Phase | 内容 | 优先级 | 预估周期 |
-|-------|------|--------|---------|
-| **Phase 1** | 修复现有断链（context-optimizer管线 + code-index Edge + aidp_init bug） | P0 | 完成 |
-| **Phase 2** | Agent Instructions 存储与加载（Stage 0） | P0 | 待开发 |
-| **Phase 3** | 意图分析扩展（Stage 1 — skill-router 扩展） | P0 | 待开发 |
-| **Phase 4** | 分段检索管线（Stage 2 — context-optimizer 核心） | P0 | 待开发 |
-| **Phase 5** | 上下文组装 + Subagent 指令生成（Stage 3-4） | P0 | 待开发 |
-| **Phase 6** | MCP 集成（aidp_context 重构 + aidp_instructions 新增） | P0 | 待开发 |
-| **Phase 7** | 部署与测试 | P1 | 待开发 |
+| Phase | 内容 | 优先级 | 状态 |
+|-------|------|--------|------|
+| **Phase 1** | 修复现有断链 | P0 | ✅ 完成 |
+| **Phase 2** | Agent Instructions 存储与加载 | P0 | ✅ 完成 |
+| **Phase 3** | 意图分析扩展 | P0 | ✅ 完成 |
+| **Phase 4** | 分段检索管线 | P0 | ✅ 完成 |
+| **Phase 5** | 上下文组装 + Subagent 指令生成 | P0 | ✅ 完成 |
+| **Phase 6** | MCP 集成 | P0 | ✅ 完成 |
+| **Phase 7** | 部署与测试 | P1 | ✅ 完成 |
 
 ---
 

@@ -55,10 +55,15 @@ class DebouncedIndexer:
 
 
 class FileWatcherHandler(FileSystemEventHandler):
-    def __init__(self, project: WatchedProject, indexer: DebouncedIndexer, db_factory):
+    def __init__(self, project: WatchedProject, indexer: DebouncedIndexer, db_factory, loop):
         self.project = project
         self.indexer = indexer
         self.db_factory = db_factory
+        self.loop = loop
+
+    def _schedule(self, coro):
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self.loop)
 
     def _get_relative_path(self, path: str) -> str:
         return os.path.relpath(path, self.project.local_path).replace("\\", "/")
@@ -81,7 +86,7 @@ class FileWatcherHandler(FileSystemEventHandler):
         if self._should_ignore(event.src_path) or not self._is_code_file(event.src_path):
             return
         rel_path = self._get_relative_path(event.src_path)
-        asyncio.create_task(self._queue_event("modified", rel_path))
+        self._schedule(self._queue_event("modified", rel_path))
 
     def on_created(self, event):
         if event.is_directory:
@@ -89,7 +94,7 @@ class FileWatcherHandler(FileSystemEventHandler):
         if self._should_ignore(event.src_path) or not self._is_code_file(event.src_path):
             return
         rel_path = self._get_relative_path(event.src_path)
-        asyncio.create_task(self._queue_event("created", rel_path))
+        self._schedule(self._queue_event("created", rel_path))
 
     def on_deleted(self, event):
         if event.is_directory:
@@ -97,17 +102,17 @@ class FileWatcherHandler(FileSystemEventHandler):
         if self._should_ignore(event.src_path) or not self._is_code_file(event.src_path):
             return
         rel_path = self._get_relative_path(event.src_path)
-        asyncio.create_task(self._queue_event("deleted", rel_path))
+        self._schedule(self._queue_event("deleted", rel_path))
 
     def on_moved(self, event):
         if event.is_directory:
             return
         if self._is_code_file(event.src_path):
             rel_path = self._get_relative_path(event.src_path)
-            asyncio.create_task(self._queue_event("deleted", rel_path))
+            self._schedule(self._queue_event("deleted", rel_path))
         if self._is_code_file(event.dest_path):
             rel_path = self._get_relative_path(event.dest_path)
-            asyncio.create_task(self._queue_event("created", rel_path))
+            self._schedule(self._queue_event("created", rel_path))
 
     async def _queue_event(self, event_type: str, file_path: str):
         try:
@@ -133,6 +138,7 @@ class FileWatcherService:
         self.watched: Dict[int, str] = {}
         self.db_factory = None
         self._running = False
+        self._loop = None
 
     def set_db_factory(self, db_factory):
         self.db_factory = db_factory
@@ -141,6 +147,7 @@ class FileWatcherService:
         if self._running:
             return
         self._running = True
+        self._loop = asyncio.get_running_loop()
         self.observer.start()
 
     async def stop(self):
@@ -158,7 +165,7 @@ class FileWatcherService:
             print(f"[FileWatcher] Path does not exist: {project.local_path}")
             return
 
-        handler = FileWatcherHandler(project, self.indexer, self.db_factory)
+        handler = FileWatcherHandler(project, self.indexer, self.db_factory, self._loop)
         self.observer.schedule(handler, project.local_path, recursive=True)
         self.watched[project.id] = project.local_path
         print(f"[FileWatcher] Watching: {project.local_path} -> {project.project_name}")

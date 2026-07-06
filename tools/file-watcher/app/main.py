@@ -14,14 +14,15 @@ from app.services.project_mapper import ProjectMapper
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_database()
+    await watcher_service.start()
 
     async with async_session() as db:
+        watcher_service.set_db_factory(async_session)
         mapper = ProjectMapper(db)
         projects = await mapper.list_active_projects()
         for project in projects:
             await watcher_service.add_watched_project(project)
 
-    await watcher_service.start()
     yield
     await watcher_service.stop()
 
