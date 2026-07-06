@@ -122,19 +122,23 @@ async def api_keys_page(request: Request, new_key: str = None):
 
 # ============================================================================
 # Admin Pages - User Management
-# ============================================================================
+# Admin Pages - Independent pages with unique active_page
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_index(request: Request):
+    """Admin index - redirect to users"""
+    return RedirectResponse(url="/admin/users", status_code=302)
+
 
 @router.get("/admin/users", response_class=HTMLResponse)
 async def admin_users_page(request: Request):
-    """User management page (admin only)"""
+    """User management page"""
     user = await get_current_user_from_request(request)
     if not user or not PermissionService.is_admin(user):
         return RedirectResponse(url="/login", status_code=302)
-    
     return render_template(request, "admin/users.html", {
         "current_user": user.to_dict(),
         "active_page": "users",
-        "title": "User Management - AIDP",
+        "title": "用户管理 - AIDP",
         "roles": [r.value for r in UserRole]
     })
 
@@ -145,82 +149,20 @@ async def admin_user_create_page(request: Request):
     user = await get_current_user_from_request(request)
     if not user or not PermissionService.is_admin(user):
         return RedirectResponse(url="/login", status_code=302)
-    
     return render_template(request, "admin/user_form.html", {
         "current_user": user.to_dict(),
         "active_page": "users",
-        "title": "Create User - AIDP",
+        "title": "创建用户 - AIDP",
         "roles": [r.value for r in UserRole],
         "edit_mode": False
     })
 
 
-# Admin Frame (main page with tabs)
-@router.get("/admin", response_class=HTMLResponse)
-async def admin_frame(request: Request):
-    """Admin frame page with tabbed interface"""
-    user = await get_current_user_from_request(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return render_template(request, "admin/frame.html", {
-        "current_user": user.to_dict(),
-        "active_page": "admin",
-        "title": "管理控制台 - AIDP"
-    })
-
-
-# Content pages (loaded in iframe)
-@router.get("/admin/users-content", response_class=HTMLResponse)
-async def users_content(request: Request):
-    """User management content (for iframe)"""
-    user = await get_current_user_from_request(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return render_template(request, "admin/users-content.html", {
-        "current_user": user.to_dict()
-    })
-
-
-@router.get("/admin/roles-content", response_class=HTMLResponse)
-async def roles_content(request: Request):
-    """Roles management content (for iframe)"""
-    user = await get_current_user_from_request(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return render_template(request, "admin/roles-content.html", {
-        "current_user": user.to_dict(),
-        "roles": [r.value for r in UserRole]
-    })
-
-
-@router.get("/admin/models-content", response_class=HTMLResponse)
-async def models_content(request: Request):
-    """Models management content (for iframe)"""
-    user = await get_current_user_from_request(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return render_template(request, "admin/models-content.html", {
-        "current_user": user.to_dict()
-    })
-
-
-@router.get("/admin/settings-content", response_class=HTMLResponse)
-async def settings_content(request: Request):
-    """Settings content (for iframe)"""
-    user = await get_current_user_from_request(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return render_template(request, "admin/settings-content.html", {
-        "current_user": user.to_dict()
-    })
-
-
-# Legacy standalone pages (for direct access if needed)
 @router.get("/admin/roles", response_class=HTMLResponse)
-async def roles_page(request: Request):
+async def admin_roles_page(request: Request):
     """Roles management page"""
     user = await get_current_user_from_request(request)
-    if not user:
+    if not user or not PermissionService.is_admin(user):
         return RedirectResponse(url="/login", status_code=302)
     return render_template(request, "admin/roles.html", {
         "current_user": user.to_dict(),
@@ -231,10 +173,10 @@ async def roles_page(request: Request):
 
 
 @router.get("/admin/models", response_class=HTMLResponse)
-async def models_page(request: Request):
+async def admin_models_page(request: Request):
     """Models management page"""
     user = await get_current_user_from_request(request)
-    if not user:
+    if not user or not PermissionService.is_admin(user):
         return RedirectResponse(url="/login", status_code=302)
     return render_template(request, "admin/models.html", {
         "current_user": user.to_dict(),
@@ -244,10 +186,10 @@ async def models_page(request: Request):
 
 
 @router.get("/admin/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
+async def admin_settings_page(request: Request):
     """System settings page"""
     user = await get_current_user_from_request(request)
-    if not user:
+    if not user or not PermissionService.is_admin(user):
         return RedirectResponse(url="/login", status_code=302)
     return render_template(request, "admin/settings.html", {
         "current_user": user.to_dict(),
