@@ -274,8 +274,8 @@ def rewrite_tool_html(html: str, tool_name: str, base_url: str) -> str:
         if href.startswith("http") or href.startswith("#") or href.startswith("javascript:"):
             return match.group(0)
         if href.startswith("/"):
-            return f'href="/api/proxy/{tool_name}{href}"'
-        return f'href="/api/proxy/{tool_name}/{href}"'
+            return f'href="/tools/{tool_name}/web{href}"'
+        return f'href="/tools/{tool_name}/web/{href}"'
     
     html = re.sub(r'href="([^"]*)"', rewrite_link, html)
     
@@ -284,12 +284,80 @@ def rewrite_tool_html(html: str, tool_name: str, base_url: str) -> str:
         if src.startswith("http") or src.startswith("data:") or src.startswith("//"):
             return match.group(0)
         if src.startswith("/"):
-            return f'src="/api/proxy/{tool_name}{src}"'
-        return f'src="/api/proxy/{tool_name}/{src}"'
+            return f'src="/tools/{tool_name}/web{src}"'
+        return f'src="/tools/{tool_name}/web/{src}"'
     
     html = re.sub(r'src="([^"]*)"', rewrite_src, html)
     
     return html
+
+
+# ============================================================================
+# Tool Web UI Proxy (for unified interface embedding)
+# ============================================================================
+
+@router.api_route("/tools/{tool_name}/web/{path:path}", 
+                  methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def tool_web_proxy(request: Request, tool_name: str, path: str = ""):
+    """Proxy tool Web UI through Controller for unified interface"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    tool = await get_tool(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+    
+    base_url = tool.get("endpoint", "").rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=400, detail=f"Tool {tool_name} has no endpoint")
+    
+    target_url = f"{base_url}/{path}"
+    query_string = str(request.query_params)
+    if query_string:
+        target_url += f"?{query_string}"
+    
+    headers = {}
+    for header in ["accept", "content-type", "authorization", "cookie"]:
+        if header in request.headers:
+            headers[header] = request.headers[header]
+    
+    headers["X-Forwarded-By"] = "AIDP-Controller"
+    headers["X-Forwarded-For"] = request.client.host if request.client else "unknown"
+    headers["X-User-ID"] = str(user.id)
+    headers["X-User-Role"] = user.role
+    
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            body = None
+            if request.method in ["POST", "PUT", "PATCH"]:
+                body = await request.body()
+            
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body,
+                params=request.query_params
+            )
+            
+            content_type = response.headers.get("content-type", "")
+            
+            if "text/html" in content_type:
+                html = response.text
+                html = rewrite_tool_html(html, tool_name, f"/tools/{tool_name}/web")
+                return HTMLResponse(content=html, status_code=response.status_code)
+            
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers={"content-type": content_type}
+            )
+    except httpx.RequestError as e:
+        return HTMLResponse(
+            content=f"<html><body style='background:#1f2937;color:#fff;padding:20px;'><h1>Tool Unavailable</h1><p>{tool_name} is not responding: {str(e)}</p></body></html>",
+            status_code=502
+        )
 
 
 # ============================================================================

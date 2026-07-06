@@ -165,9 +165,9 @@
 
             <!-- Web UI Tab -->
             <div x-show="activeTab === 'webui'" class="h-[600px]">
-                <iframe :src="tool.endpoint" 
-                        class="w-full h-full rounded-xl border border-gray-700 bg-white"
-                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups">
+                <iframe :src="'/tools/' + tool.name + '/web/'" 
+                        class="w-full h-full rounded-xl border border-gray-700"
+                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads">
                 </iframe>
             </div>
 
