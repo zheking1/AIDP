@@ -297,6 +297,9 @@ async def init_database():
                 id=uuid.UUID(int=2),
                 user_id=admin_id,
                 name="Default",
+                slug="default",
+                title="Default",
+                status="active",
                 description="Default project for all resources",
                 config={"is_default": True},
             )
