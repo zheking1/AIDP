@@ -9,6 +9,6 @@ COPY . .
 
 RUN mkdir -p /app/data
 
-EXPOSE 18087
+EXPOSE 18091
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18087"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18091"]
