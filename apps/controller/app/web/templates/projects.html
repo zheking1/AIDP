@@ -1,84 +1,298 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Projects - AIDP Controller</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100">
-    <nav class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-6">
-                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
-                    <a href="/" class="text-gray-600 hover:text-gray-900">Dashboard</a>
-                    <a href="/projects" class="text-indigo-600 font-medium">Projects</a>
-                    <a href="/configs" class="text-gray-600 hover:text-gray-900">Configs</a>
-                    <a href="/reviews" class="text-gray-600 hover:text-gray-900">Reviews</a>
-                    <a href="/logs" class="text-gray-600 hover:text-gray-900">Logs</a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-600" id="username"></span>
-                    <form action="/api/auth/logout" method="POST"><button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button></form>
-                </div>
-            </div>
+{% extends "unified_base.html" %}
+{% set active_page = 'projects' %}
+{% block title %}项目管理{% endblock %}
+
+{% block content %}
+<div x-cloak x-data="projectsPage()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">项目管理</h1>
+            <p class="text-gray-400 text-sm mt-1">管理所有已导入的 AIDP 项目</p>
         </div>
-    </nav>
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-semibold text-gray-900">Projects</h1>
-                <button onclick="toggleCreateForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create Project</button>
-            </div>
-            <div id="createForm" class="hidden mb-6 bg-white p-6 rounded-lg shadow">
-                <h2 class="text-lg font-medium mb-4">Create New Project</h2>
-                <form id="projectForm" class="space-y-4">
-                    <div><label class="block text-sm font-medium text-gray-700">Name</label><input type="text" id="projectName" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                    <div><label class="block text-sm font-medium text-gray-700">Description</label><textarea id="projectDesc" rows="3" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
-                    <div><label class="block text-sm font-medium text-gray-700">Type</label><input type="text" id="projectType" placeholder="e.g., java, python, vue" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                    <div id="projectError" class="text-red-500 text-sm hidden"></div>
-                    <div class="flex space-x-2"><button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create</button><button type="button" onclick="toggleCreateForm()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button></div>
-                </form>
-            </div>
-            <div id="projectList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        <button @click="showCreateModal = true"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>新建项目
+        </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-white" x-text="projects.length">0</div>
+            <div class="text-xs text-gray-500">项目总数</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-green-400" x-text="projects.filter(p => p.status === 'active').length">0</div>
+            <div class="text-xs text-gray-500">活跃项目</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-blue-400" x-text="projects.filter(p => p.status === 'archived').length">0</div>
+            <div class="text-xs text-gray-500">已归档</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-purple-400" x-text="projects.reduce((a, p) => a + (p.memberCount || 0), 0)">0</div>
+            <div class="text-xs text-gray-500">成员总数</div>
         </div>
     </div>
-    <script>
-        document.getElementById('username').textContent = '{{ username }}';
-        async function loadProjects() {
-            try {
-                const r = await fetch('/api/projects/');
-                const d = await r.json();
-                const el = document.getElementById('projectList');
-                if (!d.projects || d.projects.length === 0) { el.innerHTML = '<div class="col-span-full text-center py-8 text-gray-500">No projects found</div>'; return; }
-                el.innerHTML = d.projects.map(p => `
-                    <div class="bg-white p-4 rounded-lg shadow hover:shadow-md transition">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="text-lg font-medium text-gray-900">${p.name}</h3>
-                                <p class="text-gray-500 text-sm mt-1">${p.description || 'No description'}</p>
-                                <span class="inline-block mt-2 text-xs px-2 py-1 bg-indigo-100 text-indigo-800 rounded">${p.type || 'general'}</span>
-                            </div>
-                            <a href="/projects/${p.id}" class="text-indigo-600 hover:text-indigo-900 text-sm">View →</a>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) { document.getElementById('projectList').innerHTML = '<div class="text-center py-8 text-red-500">Failed to load projects</div>'; }
-        }
-        function toggleCreateForm() { document.getElementById('createForm').classList.toggle('hidden'); }
-        document.getElementById('projectForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const err = document.getElementById('projectError');
-            err.classList.add('hidden');
-            try {
-                const r = await fetch('/api/projects/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('projectName').value, description: document.getElementById('projectDesc').value, type: document.getElementById('projectType').value }) });
-                const d = await r.json();
-                if (r.ok) { toggleCreateForm(); document.getElementById('projectForm').reset(); loadProjects(); }
-                else { err.textContent = d.detail || 'Failed'; err.classList.remove('hidden'); }
-            } catch (e) { err.textContent = 'Network error'; err.classList.remove('hidden'); }
-        });
-        loadProjects();
-    </script>
-</body>
-</html>
+
+    <!-- Project List -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
+            <h3 class="font-semibold text-white">
+                <i class="fas fa-folder-open text-indigo-400 mr-2"></i>项目列表
+            </h3>
+            <div class="flex items-center gap-2">
+                <input type="text" x-model="searchQuery" placeholder="搜索项目..."
+                       class="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-48">
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-800/50 text-gray-400">
+                    <tr>
+                        <th class="px-5 py-3 text-left font-medium">项目名称</th>
+                        <th class="px-5 py-3 text-left font-medium">类型</th>
+                        <th class="px-5 py-3 text-left font-medium">状态</th>
+                        <th class="px-5 py-3 text-left font-medium">成员</th>
+                        <th class="px-5 py-3 text-left font-medium">创建时间</th>
+                        <th class="px-5 py-3 text-right font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="project in filteredProjects" :key="project.id">
+                        <tr class="hover:bg-gray-700/30">
+                            <td class="px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                        <i class="fas fa-folder text-indigo-400"></i>
+                                    </div>
+                                    <div>
+                                        <a :href="'/projects/' + project.id" class="text-white font-medium hover:text-indigo-400" x-text="project.name"></a>
+                                        <div class="text-xs text-gray-500 mt-0.5" x-text="project.description || '暂无描述'"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-5 py-4">
+                                <span class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300" x-text="project.type || 'general'"></span>
+                            </td>
+                            <td class="px-5 py-4">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                      :class="{
+                                          'bg-green-500/20 text-green-400': project.status === 'active',
+                                          'bg-blue-500/20 text-blue-400': project.status === 'archived',
+                                          'bg-yellow-500/20 text-yellow-400': project.status === 'pending'
+                                      }"
+                                      x-text="project.status || 'active'"></span>
+                            </td>
+                            <td class="px-5 py-4 text-gray-400" x-text="project.memberCount || 0"></td>
+                            <td class="px-5 py-4 text-gray-500 text-xs" x-text="formatDate(project.createdAt)"></td>
+                            <td class="px-5 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a :href="'/projects/' + project.id" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 transition">
+                                        查看
+                                    </a>
+                                    <button @click="archiveProject(project)" x-show="project.status === 'active'"
+                                            class="px-3 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 rounded text-xs text-yellow-400 transition">
+                                        归档
+                                    </button>
+                                    <button @click="deleteProject(project)"
+                                            class="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded text-xs text-red-400 transition">
+                                        删除
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="filteredProjects.length === 0">
+                        <td colspan="6" class="px-5 py-12 text-center text-gray-500">
+                            <i class="fas fa-folder-open text-3xl mb-3 block"></i>
+                            <p>暂无项目</p>
+                            <p class="text-xs mt-1">点击"新建项目"开始</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50"
+         @click.self="showCreateModal = false">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">新建项目</h3>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form @submit.prevent="createProject()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">项目名称 *</label>
+                    <input type="text" x-model="newProject.name" required
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">描述</label>
+                    <textarea x-model="newProject.description" rows="3"
+                              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">类型</label>
+                    <select x-model="newProject.type"
+                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="typescript">TypeScript</option>
+                        <option value="go">Go</option>
+                        <option value="rust">Rust</option>
+                        <option value="vue">Vue</option>
+                        <option value="react">React</option>
+                        <option value="general" selected>通用</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">NAS 路径</label>
+                    <input type="text" x-model="newProject.nas_path" placeholder="/home/docker/projects/my-app"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div x-show="error" class="text-red-400 text-sm" x-text="error"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" @click="showCreateModal = false"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                        取消
+                    </button>
+                    <button type="submit" :disabled="creating"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50">
+                        <span x-show="!creating">创建</span>
+                        <span x-show="creating"><i class="fas fa-spinner fa-spin mr-1"></i>创建中...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteModal" x-cloak
+         class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50"
+         @click.self="showDeleteModal = false">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-sm mx-4">
+            <div class="px-6 py-4 border-b border-gray-700">
+                <h3 class="text-lg font-semibold text-white">确认删除</h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-300">确定要删除项目 <span class="font-medium text-white" x-text="deletingProject?.name"></span> 吗？</p>
+                <p class="text-sm text-red-400 mt-2">此操作不可恢复</p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+                <button @click="showDeleteModal = false"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                    取消
+                </button>
+                <button @click="confirmDelete()"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-400">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function projectsPage() {
+        return {
+            projects: [],
+            loading: true,
+            searchQuery: '',
+            showCreateModal: false,
+            showDeleteModal: false,
+            creating: false,
+            error: '',
+            newProject: { name: '', description: '', type: 'general', nas_path: '' },
+            deletingProject: null,
+            get filteredProjects() {
+                if (!this.searchQuery) return this.projects;
+                const q = this.searchQuery.toLowerCase();
+                return this.projects.filter(p =>
+                    p.name.toLowerCase().includes(q) ||
+                    (p.description || '').toLowerCase().includes(q) ||
+                    (p.type || '').toLowerCase().includes(q)
+                );
+            },
+            async init() {
+                await this.loadProjects();
+                this.loading = false;
+            },
+            async loadProjects() {
+                try {
+                    const r = await fetch('/api/projects');
+                    const data = await r.json();
+                    this.projects = data.projects || [];
+                } catch(e) {
+                    console.error('Failed to load projects:', e);
+                }
+            },
+            async createProject() {
+                this.creating = true;
+                this.error = '';
+                try {
+                    const r = await fetch('/api/projects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newProject)
+                    });
+                    const data = await r.json();
+                    if (r.ok) {
+                        this.showCreateModal = false;
+                        this.newProject = { name: '', description: '', type: 'general', nas_path: '' };
+                        await this.loadProjects();
+                    } else {
+                        this.error = data.detail || '创建失败';
+                    }
+                } catch(e) {
+                    this.error = '网络错误';
+                } finally {
+                    this.creating = false;
+                }
+            },
+            archiveProject(project) {
+                // TODO: Implement archive API
+                alert('归档功能待实现');
+            },
+            deleteProject(project) {
+                this.deletingProject = project;
+                this.showDeleteModal = true;
+            },
+            async confirmDelete() {
+                if (!this.deletingProject) return;
+                try {
+                    const r = await fetch(`/api/projects/${this.deletingProject.id}`, { method: 'DELETE' });
+                    if (r.ok) {
+                        this.showDeleteModal = false;
+                        this.deletingProject = null;
+                        await this.loadProjects();
+                    }
+                } catch(e) {
+                    console.error('Delete failed:', e);
+                }
+            },
+            formatDate(dateStr) {
+                if (!dateStr) return '-';
+                return new Date(dateStr).toLocaleDateString('zh-CN');
+            }
+        };
+    }
+</script>
+{% endblock %}

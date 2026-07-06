@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - AIDP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: #0f172a; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl mb-4">
+                <i class="fas fa-robot text-2xl text-white"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white">创建账号</h1>
+            <p class="text-gray-400 mt-2">注册新用户</p>
+        </div>
+
+        <!-- Error Message -->
+        {% if error %}
+        <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+            <p class="text-red-400 text-sm text-center">{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Register Form -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
+            <form id="registerForm" onsubmit="return handleRegister(event)">
+                <!-- Username -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">用户名 <span class="text-red-400">*</span></label>
+                    <div class="relative">
+                        <input type="text" id="username" name="username" required minlength="3"
+                               class="w-full pl-10 pr-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                               placeholder="输入用户名">
+                        <i class="fas fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">邮箱</label>
+                    <div class="relative">
+                        <input type="email" id="email" name="email"
+                               class="w-full pl-10 pr-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                               placeholder="user@example.com">
+                        <i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- Nickname -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">昵称</label>
+                    <div class="relative">
+                        <input type="text" id="nickname" name="nickname"
+                               class="w-full pl-10 pr-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                               placeholder="显示名称">
+                        <i class="fas fa-id-card absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">密码 <span class="text-red-400">*</span></label>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required minlength="6"
+                               class="w-full pl-10 pr-10 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                               placeholder="至少 6 个字符">
+                        <i class="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <button type="button" onclick="togglePassword()" 
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                            <i id="eyeIcon" class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">确认密码 <span class="text-red-400">*</span></label>
+                    <div class="relative">
+                        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6"
+                               class="w-full pl-10 pr-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                               placeholder="再次输入密码">
+                        <i class="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div id="errorMsg" class="hidden bg-red-500/10 border border-red-500/50 rounded-lg p-3 mb-4">
+                    <p class="text-red-400 text-sm text-center" id="errorText"></p>
+                </div>
+
+                <!-- Submit -->
+                <button type="submit" id="submitBtn"
+                        class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition
+                               disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="btnText">注册</span>
+                    <i id="btnSpinner" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+            </form>
+
+            <!-- Login Link -->
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-400">
+                    已有账号？
+                    <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-medium">立即登录</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword() {
+            const pwd = document.getElementById('password');
+            const icon = document.getElementById('eyeIcon');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                pwd.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('errorText').textContent = msg;
+            document.getElementById('errorMsg').classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('errorMsg').classList.add('hidden');
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            hideError();
+
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const nickname = document.getElementById('nickname').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (username.length < 3) {
+                showError('用户名至少 3 个字符');
+                return false;
+            }
+
+            if (password.length < 6) {
+                showError('密码至少 6 个字符');
+                return false;
+            }
+
+            if (password !== confirmPassword) {
+                showError('两次密码输入不一致');
+                return false;
+            }
+
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('btnText').classList.add('hidden');
+            document.getElementById('btnSpinner').classList.remove('hidden');
+
+            try {
+                const resp = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        email: email || null,
+                        nickname: nickname || null,
+                        password
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok && data.success) {
+                    window.location.href = '/login?registered=1';
+                } else {
+                    showError(data.detail || '注册失败');
+                }
+            } catch (err) {
+                showError('网络错误，请重试');
+            } finally {
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('btnText').classList.remove('hidden');
+                document.getElementById('btnSpinner').classList.add('hidden');
+            }
+
+            return false;
+        }
+    </script>
+</body>
+</html>

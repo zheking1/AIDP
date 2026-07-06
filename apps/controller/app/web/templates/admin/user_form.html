@@ -1,0 +1,165 @@
+{% extends "layouts/unified_base.html" %}
+{% block title %}{{ '编辑用户' if edit_mode else '创建用户' }}{% endblock %}
+
+{% block content %}
+<div x-data="userFormPage()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <a href="/admin/users" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-white">{{ '编辑用户' if edit_mode else '创建用户' }}</h1>
+            <p class="text-sm text-gray-400 mt-1">{{ '修改用户信息' if edit_mode else '添加新用户到系统' }}</p>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="max-w-2xl">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
+            <form @submit.prevent="submitForm()">
+                <!-- Username -->
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">用户名 <span class="text-red-400">*</span></label>
+                    <input type="text" x-model="form.username" :disabled="editMode"
+                           class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                  placeholder-gray-400 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                           placeholder="输入用户名" required>
+                    <p x-show="errors.username" class="text-red-400 text-xs mt-1" x-text="errors.username"></p>
+                </div>
+
+                <!-- Password (only for create) -->
+                <div class="mb-5" x-show="!editMode">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">密码 <span class="text-red-400">*</span></label>
+                    <div class="relative">
+                        <input :type="showPassword ? 'text' : 'password'" x-model="form.password"
+                               class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                      placeholder-gray-400 focus:outline-none focus:border-indigo-500 pr-10"
+                               placeholder="输入密码" required minlength="6">
+                        <button type="button" @click="showPassword = !showPassword"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                            <i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">至少 6 个字符</p>
+                    <p x-show="errors.password" class="text-red-400 text-xs mt-1" x-text="errors.password"></p>
+                </div>
+
+                <!-- Email -->
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">邮箱</label>
+                    <input type="email" x-model="form.email"
+                           class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                  placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                           placeholder="user@example.com">
+                    <p x-show="errors.email" class="text-red-400 text-xs mt-1" x-text="errors.email"></p>
+                </div>
+
+                <!-- Nickname -->
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">昵称</label>
+                    <input type="text" x-model="form.nickname"
+                           class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                  placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                           placeholder="显示名称">
+                </div>
+
+                <!-- Role -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">角色 <span class="text-red-400">*</span></label>
+                    <select x-model="form.role"
+                            class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                   focus:outline-none focus:border-indigo-500">
+                        {% for role in roles %}
+                        <option value="{{ role }}">{% if role == 'super_admin' %}超级管理员{% elif role == 'admin' %}管理员{% elif role == 'developer' %}开发者{% elif role == 'user' %}普通用户{% elif role == 'readonly' %}只读用户{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Submit -->
+                <div class="flex items-center gap-4">
+                    <button type="submit" :disabled="submitting"
+                            class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg
+                                   transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i x-show="submitting" class="fas fa-spinner fa-spin mr-2"></i>
+                        <span x-text="submitting ? '保存中...' : '保存'"></span>
+                    </button>
+                    <a href="/admin/users" class="px-6 py-2.5 text-gray-300 hover:text-white text-sm transition">
+                        取消
+                    </a>
+                    <p x-show="successMessage" class="text-green-400 text-sm ml-4" x-text="successMessage"></p>
+                    <p x-show="errorMessage" class="text-red-400 text-sm ml-4" x-text="errorMessage"></p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function userFormPage() {
+    return {
+        editMode: {{ 'true' if edit_mode else 'false' }},
+        showPassword: false,
+        submitting: false,
+        successMessage: '',
+        errorMessage: '',
+        form: {
+            username: '',
+            password: '',
+            email: '',
+            nickname: '',
+            role: 'user'
+        },
+        errors: {},
+
+        async init() {
+            if (this.editMode) {
+                // TODO: Load user data for edit mode
+            }
+        },
+
+        validate() {
+            this.errors = {};
+            if (!this.form.username || this.form.username.length < 3) {
+                this.errors.username = '用户名至少 3 个字符';
+            }
+            if (!this.editMode && (!this.form.password || this.form.password.length < 6)) {
+                this.errors.password = '密码至少 6 个字符';
+            }
+            return Object.keys(this.errors).length === 0;
+        },
+
+        async submitForm() {
+            if (!this.validate()) return;
+            
+            this.submitting = true;
+            this.successMessage = '';
+            this.errorMessage = '';
+            
+            try {
+                const resp = await fetch('/api/auth/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.form)
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok && data.success) {
+                    this.successMessage = '用户创建成功';
+                    setTimeout(() => { window.location.href = '/admin/users'; }, 1000);
+                } else {
+                    this.errorMessage = data.detail || '创建失败';
+                }
+            } catch (e) {
+                this.errorMessage = '网络错误，请重试';
+            } finally {
+                this.submitting = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

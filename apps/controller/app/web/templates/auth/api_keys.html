@@ -1,0 +1,234 @@
+{% extends "layouts/unified_base.html" %}
+{% block title %}API 密钥{% endblock %}
+
+{% block content %}
+<div x-data="apiKeysPage()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">API 密钥</h1>
+            <p class="text-sm text-gray-400 mt-1">管理你的 API 访问密钥</p>
+        </div>
+        <button @click="showCreateModal = true"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>创建密钥
+        </button>
+    </div>
+
+    <!-- New Key Alert -->
+    <div x-show="newKey" x-cloak x-transition
+         class="mb-6 bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+        <div class="flex items-start gap-3">
+            <i class="fas fa-check-circle text-green-400 mt-0.5"></i>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-green-400">密钥创建成功</p>
+                <p class="text-xs text-gray-400 mt-1">请立即复制此密钥，关闭后将无法再次查看：</p>
+                <div class="mt-2 flex items-center gap-2">
+                    <code class="flex-1 px-3 py-2 bg-gray-900 rounded text-sm text-green-300 font-mono select-all"
+                          x-text="newKey"></code>
+                    <button @click="copyKey(newKey)"
+                            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <button @click="newKey = null" class="text-gray-400 hover:text-white">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-2xl text-indigo-400"></i>
+        <p class="text-gray-400 mt-2">加载中...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div x-show="!loading && keys.length === 0" class="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
+        <i class="fas fa-key text-4xl text-gray-600"></i>
+        <p class="text-gray-400 mt-3">还没有 API 密钥</p>
+        <p class="text-gray-500 text-sm mt-1">创建密钥以通过 API 访问系统</p>
+    </div>
+
+    <!-- Keys List -->
+    <div x-show="!loading && keys.length > 0" class="space-y-3">
+        <template x-for="key in keys" :key="key.id">
+            <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 hover:border-gray-600 transition">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-key text-indigo-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-white" x-text="key.label || 'Unnamed Key'"></p>
+                            <p class="text-xs text-gray-400 font-mono" x-text="key.key_preview"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-gray-400">
+                        <div class="text-right hidden sm:block">
+                            <p x-text="'创建: ' + formatDate(key.created_at)"></p>
+                            <p x-text="key.last_used_at ? '最后使用: ' + formatDate(key.last_used_at) : '从未使用'"></p>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <template x-for="scope in (key.scopes || [])" :key="scope">
+                                <span class="px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-300" x-text="scope"></span>
+                            </template>
+                        </div>
+                        <button @click="confirmRevoke(key)"
+                                class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition" title="撤销">
+                            <i class="fas fa-trash text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Create Modal -->
+    <div x-show="showCreateModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="showCreateModal = false"></div>
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-4">创建 API 密钥</h3>
+            <form @submit.prevent="createKey()">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">标签</label>
+                    <input type="text" x-model="createForm.label"
+                           class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                  placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                           placeholder="例如: My App">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">过期时间</label>
+                    <select x-model="createForm.expires_days"
+                            class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white
+                                   focus:outline-none focus:border-indigo-500">
+                        <option value="">永不过期</option>
+                        <option value="30">30 天</option>
+                        <option value="90">90 天</option>
+                        <option value="180">180 天</option>
+                        <option value="365">1 年</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" @click="showCreateModal = false"
+                            class="px-4 py-2 text-sm text-gray-300 hover:text-white transition">取消</button>
+                    <button type="submit" :disabled="creating"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition disabled:opacity-50">
+                        <i x-show="creating" class="fas fa-spinner fa-spin mr-1"></i>创建
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Revoke Confirmation Modal -->
+    <div x-show="showRevokeModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="showRevokeModal = false"></div>
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">确认撤销</h3>
+            <p class="text-gray-400 text-sm mb-6">
+                确定要撤销密钥 <span class="text-white font-medium" x-text="revokeTarget?.label || revokeTarget?.key_preview"></span> 吗？使用此密钥的应用将立即失去访问权限。
+            </p>
+            <div class="flex justify-end gap-3">
+                <button @click="showRevokeModal = false"
+                        class="px-4 py-2 text-sm text-gray-300 hover:text-white transition">取消</button>
+                <button @click="revokeKey()"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition">确认撤销</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function apiKeysPage() {
+    return {
+        keys: [],
+        loading: true,
+        newKey: null,
+        showCreateModal: false,
+        showRevokeModal: false,
+        createForm: { label: '', expires_days: '' },
+        revokeTarget: null,
+        creating: false,
+
+        async init() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('new_key')) {
+                this.newKey = params.get('new_key');
+                window.history.replaceState({}, '', '/api-keys');
+            }
+            await this.loadKeys();
+        },
+
+        async loadKeys() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/api/auth/api-keys');
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                this.keys = data.items || [];
+            } catch (e) {
+                console.error('Load keys error:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async createKey() {
+            this.creating = true;
+            try {
+                const params = new URLSearchParams();
+                if (this.createForm.label) params.set('label', this.createForm.label);
+                if (this.createForm.expires_days) params.set('expires_days', this.createForm.expires_days);
+                
+                const resp = await fetch('/api/auth/api-keys?' + params.toString(), { method: 'POST' });
+                const data = await resp.json();
+                
+                if (data.success) {
+                    this.newKey = data.key;
+                    this.showCreateModal = false;
+                    this.createForm = { label: '', expires_days: '' };
+                    await this.loadKeys();
+                }
+            } catch (e) {
+                console.error('Create key error:', e);
+            } finally {
+                this.creating = false;
+            }
+        },
+
+        confirmRevoke(key) {
+            this.revokeTarget = key;
+            this.showRevokeModal = true;
+        },
+
+        async revokeKey() {
+            if (!this.revokeTarget) return;
+            try {
+                const resp = await fetch(`/api/auth/api-keys/${this.revokeTarget.id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success) {
+                    this.showRevokeModal = false;
+                    this.revokeTarget = null;
+                    await this.loadKeys();
+                }
+            } catch (e) {
+                console.error('Revoke key error:', e);
+            }
+        },
+
+        copyKey(key) {
+            navigator.clipboard.writeText(key).catch(() => {});
+        },
+
+        formatDate(iso) {
+            if (!iso) return '-';
+            return new Date(iso).toLocaleDateString('zh-CN');
+        }
+    };
+}
+</script>
+{% endblock %}

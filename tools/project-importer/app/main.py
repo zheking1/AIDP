@@ -179,6 +179,8 @@ async def import_project(request: Request):
     project_path = body.get("path", "")
     project_name = body.get("name", "")
     project_type = body.get("type", "java")
+    delete_local_docs = body.get("delete_local_docs", False)
+    delete_local_configs = body.get("delete_local_configs", False)
 
     if not project_path or not project_name:
         raise HTTPException(400, "path and name are required")
@@ -196,13 +198,27 @@ async def import_project(request: Request):
     await _step(result, "Index code", _index_code, project_id, project_path, project_name)
 
     # Step 4: Import README/markdown docs to Knowledge
+    doc_files = files_by_type.get("doc", [])
     await _step(result, "Import docs", _import_docs, project_id, project_path, files_by_type)
 
-    # Step 5: Import configs (application.yml/.env/.properties) to Controller
+    # Step 5: Import configs to knowledge-tool
+    config_files = files_by_type.get("config", [])
     await _step(result, "Import configs", _import_configs, project_id, project_path, files_by_type)
 
     # Step 6: Import scripts/templates to Asset Tool
     await _step(result, "Import assets", _import_assets, project_id, project_path, files_by_type)
+
+    # Step 7: Delete local docs if requested
+    deleted_docs = []
+    if delete_local_docs and doc_files:
+        deleted_docs = _delete_local_files(doc_files)
+        result["steps"].append({"step": "Delete local docs", "status": "ok", "deleted": deleted_docs})
+
+    # Step 8: Delete local configs if requested
+    deleted_configs = []
+    if delete_local_configs and config_files:
+        deleted_configs = _delete_local_files(config_files)
+        result["steps"].append({"step": "Delete local configs", "status": "ok", "deleted": deleted_configs})
 
     # Summary
     result["summary"] = {
@@ -212,9 +228,11 @@ async def import_project(request: Request):
         "total_errors": len(result["errors"]),
         "files_found": len(files),
         "code_files": len(files_by_type.get("code", [])),
-        "doc_files": len(files_by_type.get("doc", [])),
-        "config_files": len(files_by_type.get("config", [])),
+        "doc_files": len(doc_files),
+        "config_files": len(config_files),
         "script_files": len(files_by_type.get("script", [])),
+        "deleted_docs": deleted_docs,
+        "deleted_configs": deleted_configs,
     }
     return JSONResponse(result)
 
@@ -226,6 +244,121 @@ async def scan_project(path: str):
         "path": path,
         "total_files": len(files),
         "by_type": _group_by_type(files),
+    })
+
+
+@app.post("/api/export/docs")
+async def export_docs_to_local(request: Request):
+    """Export documents from knowledge-tool to local directory."""
+    body = await request.json()
+    project_id = body.get("project_id")
+    local_path = body.get("local_path")
+    doc_type = body.get("doc_type", "all")
+
+    if not project_id or not local_path:
+        raise HTTPException(400, "project_id and local_path are required")
+
+    if not os.path.exists(local_path):
+        os.makedirs(local_path, exist_ok=True)
+
+    result = {"exported": [], "errors": []}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            resp = await c.get(
+                f"{KNOWLEDGE}/api/documents",
+                params={"project_id": str(project_id), "workspace_id": "default"},
+            )
+            resp.raise_for_status()
+            documents = resp.json().get("documents", [])
+
+            for doc in documents:
+                try:
+                    title = doc.get("title", "unknown")
+                    content = doc.get("content", "")
+                    source_uri = doc.get("source_uri", "")
+
+                    if doc_type != "all":
+                        if doc_type == "doc" and not title.endswith(".md"):
+                            continue
+                        if doc_type == "config" and not any(title.endswith(ext) for ext in [".yml", ".yaml", ".properties", ".env", ".json", ".toml", ".ini", ".cfg", ".xml"]):
+                            continue
+
+                    file_path = os.path.join(local_path, source_uri if source_uri else title)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+
+                    result["exported"].append({"title": title, "path": file_path})
+                except Exception as e:
+                    result["errors"].append({"title": title, "error": str(e)})
+
+    except Exception as e:
+        raise HTTPException(500, f"Failed to fetch documents: {str(e)}")
+
+    return JSONResponse({
+        "local_path": local_path,
+        "total_exported": len(result["exported"]),
+        "total_errors": len(result["errors"]),
+        "exported": result["exported"],
+        "errors": result["errors"],
+    })
+
+
+@app.post("/api/export/configs")
+async def export_configs_to_local(request: Request):
+    """Export config files from knowledge-tool to local directory."""
+    body = await request.json()
+    project_id = body.get("project_id")
+    local_path = body.get("local_path")
+
+    if not project_id or not local_path:
+        raise HTTPException(400, "project_id and local_path are required")
+
+    if not os.path.exists(local_path):
+        os.makedirs(local_path, exist_ok=True)
+
+    result = {"exported": [], "errors": []}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            resp = await c.get(
+                f"{KNOWLEDGE}/api/documents",
+                params={"project_id": str(project_id), "workspace_id": "default"},
+            )
+            resp.raise_for_status()
+            documents = resp.json().get("documents", [])
+
+            for doc in documents:
+                try:
+                    doc_type = doc.get("doc_type", "")
+                    if doc_type != "config":
+                        continue
+
+                    title = doc.get("title", "unknown")
+                    content = doc.get("content", "")
+                    source_uri = doc.get("source_uri", "")
+
+                    file_path = os.path.join(local_path, source_uri if source_uri else title)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+
+                    result["exported"].append({"title": title, "path": file_path})
+                except Exception as e:
+                    result["errors"].append({"title": title, "error": str(e)})
+
+    except Exception as e:
+        raise HTTPException(500, f"Failed to fetch configs: {str(e)}")
+
+    return JSONResponse({
+        "local_path": local_path,
+        "total_exported": len(result["exported"]),
+        "total_errors": len(result["errors"]),
+        "exported": result["exported"],
+        "errors": result["errors"],
     })
 
 
@@ -248,6 +381,16 @@ async def _step(result, name, fn, *args):
 async def _create_project(name, ptype):
     async with httpx.AsyncClient() as c:
         await c.post(f"{CONTROLLER}/api/auth/login", json={"username": os.environ.get("ADMIN_USERNAME", "admin"), "password": os.environ.get("ADMIN_PASSWORD", "admin123")})
+
+        # Check if project exists
+        r = await c.get(f"{CONTROLLER}/api/projects/", params={"name": name})
+        if r.status_code == 200:
+            projects = r.json().get("projects", [])
+            for p in projects:
+                if p.get("name") == name:
+                    return p["id"]
+
+        # Create new project
         r = await c.post(f"{CONTROLLER}/api/projects/", json={"name": name, "description": "Imported project", "type": ptype})
         r.raise_for_status()
         return r.json()["id"]
@@ -289,6 +432,19 @@ def _group_by_type(files):
     return groups
 
 
+def _delete_local_files(file_list):
+    """Delete local files after successful import to AIDP."""
+    deleted = []
+    for f in file_list:
+        try:
+            if os.path.exists(f["full_path"]):
+                os.remove(f["full_path"])
+                deleted.append(f["path"])
+        except Exception as e:
+            print(f"[ProjectImporter] Failed to delete {f['full_path']}: {e}")
+    return deleted
+
+
 async def _index_code(project_id, path, name):
     async with httpx.AsyncClient() as c:
         r = await c.post(f"{CODE_INDEX}/api/projects", json={"name": name, "path": path})
@@ -323,11 +479,12 @@ async def _import_docs(project_id, path, groups):
 
 
 async def _import_configs(project_id, path, groups):
+    """Import config files to knowledge-tool for centralized management."""
     count = 0
     for f in groups.get("config", [])[:30]:
         try:
             with open(f["full_path"], "r", encoding="utf-8", errors="ignore") as fh:
-                content = fh.read()[:5000]
+                content = fh.read()[:10000]
         except:
             content = ""
         env = "dev"
@@ -335,11 +492,20 @@ async def _import_configs(project_id, path, groups):
             env = "prod"
         elif "test" in f["path"].lower():
             env = "test"
+
+        doc_title = f"[{env.upper()}] {f['path']}"
+        doc_content = f"# {f['path']}\n\n**Environment:** {env}\n**Path:** {f['path']}\n\n```\n{content}\n```"
+
         async with httpx.AsyncClient() as c:
-            r = await c.post(f"{CONTROLLER}/api/projects/{project_id}/configs", json={
-                "env_type": env,
-                "config_key": f["path"],
-                "config_value": content[:500],
+            r = await c.post(f"{KNOWLEDGE}/api/documents", json={
+                "workspace_id": "default",
+                "document_id": str(project_id or ""),
+                "title": doc_title,
+                "doc_type": "config",
+                "content": doc_content,
+                "source_uri": f["path"],
+                "project_id": str(project_id),
+                "metadata": {"env_type": env, "file_path": f["path"]},
             })
             if r.status_code < 400:
                 count += 1

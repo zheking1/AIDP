@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  file-watcher:
+    build: .
+    ports:
+      - "18091:18091"
+    volumes:
+      - ./data:/app/data
+      - /path/to/your/projects:/watched-projects:ro
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/file_watcher.db
+      - CODE_INDEX_URL=http://host.docker.internal:18086
+      - CONTROLLER_URL=http://host.docker.internal:8883
+    restart: unless-stopped

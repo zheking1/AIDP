@@ -5,7 +5,7 @@ from app.db.database import get_db
 from app.services.nas_storage_service import NASStorageService
 from app.services.project_service import ProjectService
 from app.services.permission_service import PermissionChecker
-from app.models.user import User
+from app.db.auth_models import User
 
 router = APIRouter(prefix="/api/projects", tags=["nas-storage"])
 

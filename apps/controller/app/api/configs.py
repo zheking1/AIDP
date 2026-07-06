@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.services.config_service import ConfigService
 from app.services.permission_service import PermissionChecker
-from app.models.user import User
+from app.db.auth_models import User
 
 router = APIRouter(prefix="/api/projects/{project_id}/configs", tags=["configs"])
 

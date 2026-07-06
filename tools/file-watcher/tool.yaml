@@ -1,0 +1,11 @@
+name: file-watcher
+version: 0.1.0
+endpoint: http://127.0.0.1:18091
+description: File Watcher Tool - Real-time file change monitoring and automatic code indexing
+capabilities:
+  - watcher.add_project
+  - watcher.list_projects
+  - watcher.remove_project
+  - watcher.rescan
+  - watcher.get_events
+  - watcher.stats

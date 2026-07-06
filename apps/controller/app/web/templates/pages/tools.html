@@ -1,0 +1,183 @@
+{% extends "layouts/base.html" %}
+{% set active_page = 'tools' %}
+{% block title %}工具管理{% endblock %}
+
+{% block content %}
+<div x-data="AIDP.toolsPageData()" x-init="init()" class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">工具管理</h1>
+            <p class="text-gray-400 mt-1">查看和管理所有 AIDP 工具</p>
+        </div>
+        <div class="flex gap-3">
+            <button @click="refreshAllHealth()" 
+                    :disabled="refreshing"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <i class="fas fa-sync-alt" :class="refreshing ? 'animate-spin' : ''"></i>
+                <span class="hidden sm:inline">刷新状态</span>
+            </button>
+            <a href="/tools/manage" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <i class="fas fa-plus"></i>
+                <span class="hidden sm:inline">注册工具</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-6">
+        <div class="flex flex-wrap gap-4">
+            <div class="flex-1 min-w-64">
+                <div class="relative">
+                    <input type="text" 
+                           x-model="searchQuery"
+                           placeholder="搜索工具名称..."
+                           class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <select x-model="statusFilter" class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    <option value="">所有状态</option>
+                    <option value="healthy">🟢 健康</option>
+                    <option value="registered">🟡 已注册</option>
+                    <option value="unhealthy">🔴 异常</option>
+                    <option value="unreachable">⚪ 不可达</option>
+                    <option value="disabled">⏸️ 已禁用</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tools Table -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-800/50 text-gray-400 border-b border-gray-700">
+                    <tr>
+                        <th class="px-5 py-4 text-left font-medium">工具</th>
+                        <th class="px-5 py-4 text-left font-medium">状态</th>
+                        <th class="px-5 py-4 text-left font-medium hidden md:table-cell">端点</th>
+                        <th class="px-5 py-4 text-left font-medium">能力</th>
+                        <th class="px-5 py-4 text-left font-medium hidden lg:table-cell">版本</th>
+                        <th class="px-5 py-4 text-left font-medium hidden xl:table-cell">健康检查</th>
+                        <th class="px-5 py-4 text-right font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <!-- Loading State -->
+                    <tr x-show="loading">
+                        <td colspan="7" class="px-5 py-12 text-center text-gray-500">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                            加载中...
+                        </td>
+                    </tr>
+
+                    <!-- Empty State -->
+                    <tr x-show="!loading && filteredTools.length === 0">
+                        <td colspan="7" class="px-5 py-12 text-center text-gray-500">
+                            <i class="fas fa-search text-3xl mb-3 block"></i>
+                            <p>未找到匹配的工具</p>
+                        </td>
+                    </tr>
+
+                    <!-- Data Rows -->
+                    <template x-for="tool in filteredTools" :key="tool.name">
+                        <tr class="hover:bg-gray-700/30 transition">
+                            <td class="px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                                         :class="'bg-' + getStatusColor(tool.status) + '-500/20'">
+                                        <i class="fas fa-cube" :class="'text-' + getStatusColor(tool.status) + '-400'"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-white" x-text="tool.displayName || tool.name"></div>
+                                        <div class="text-xs text-gray-500" x-text="tool.name"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-5 py-4">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                      :class="'bg-' + getStatusColor(tool.status) + '-500/20 text-' + getStatusColor(tool.status) + '-400'"
+                                      x-text="getStatusText(tool.status)"></span>
+                            </td>
+                            <td class="px-5 py-4 hidden md:table-cell">
+                                <code class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300" x-text="tool.endpoint"></code>
+                            </td>
+                            <td class="px-5 py-4">
+                                <span class="text-gray-400">
+                                    <span x-text="(tool.capabilities || []).length"></span> 个能力
+                                </span>
+                            </td>
+                            <td class="px-5 py-4 text-gray-400 hidden lg:table-cell" x-text="tool.version || '-'"></td>
+                            <td class="px-5 py-4 text-gray-400 text-xs hidden xl:table-cell" x-text="formatTime(tool.lastHealthCheck)"></td>
+                            <td class="px-5 py-4">
+                                <div class="flex items-center justify-end gap-1">
+                                    <a :href="'/tools/' + tool.name" 
+                                       class="p-2 text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition"
+                                       title="打开工具">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                    <button @click="checkHealth(tool.name)"
+                                            class="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition"
+                                            title="健康检查">
+                                        <i class="fas fa-heartbeat"></i>
+                                    </button>
+                                    <button @click="syncCapabilities(tool.name)"
+                                            class="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg transition"
+                                            title="同步能力">
+                                        <i class="fas fa-sync"></i>
+                                    </button>
+                                    <button @click="toggleTool(tool)"
+                                            class="p-2 rounded-lg transition"
+                                            :class="tool.status === 'disabled' ? 'text-green-400 hover:bg-green-500/20' : 'text-yellow-400 hover:bg-yellow-500/20'"
+                                            :title="tool.status === 'disabled' ? '启用' : '禁用'">
+                                        <i class="fas" :class="tool.status === 'disabled' ? 'fa-play' : 'fa-pause'"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Stats Footer -->
+    <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <span>显示 <span x-text="filteredTools.length"></span> 个工具</span>
+        <div class="flex gap-4">
+            <span class="flex items-center gap-1"><span class="status-dot status-healthy"></span> 健康: <span x-text="tools.filter(t => t.status === 'healthy').length"></span></span>
+            <span class="flex items-center gap-1"><span class="status-dot status-registered"></span> 已注册: <span x-text="tools.filter(t => t.status === 'registered').length"></span></span>
+            <span class="flex items-center gap-1"><span class="status-dot status-unhealthy"></span> 异常: <span x-text="tools.filter(t => t.status === 'unhealthy').length"></span></span>
+        </div>
+    </div>
+</div>
+
+<script>
+// Helper functions for the tools page
+Object.assign(AIDP.toolsPageData, {
+    getStatusColor(status) {
+        const colors = {
+            'healthy': 'green',
+            'registered': 'yellow',
+            'unhealthy': 'red',
+            'unreachable': 'gray',
+            'disabled': 'gray'
+        };
+        return colors[status] || 'gray';
+    },
+    
+    getStatusText(status) {
+        const texts = {
+            'healthy': '健康',
+            'registered': '已注册',
+            'unhealthy': '异常',
+            'unreachable': '不可达',
+            'disabled': '已禁用'
+        };
+        return texts[status] || status;
+    }
+});
+</script>
+{% endblock %}

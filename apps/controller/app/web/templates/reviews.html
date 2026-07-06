@@ -1,131 +1,213 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reviews - AIDP Controller</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100">
-    <nav class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
-                    <a href="/" class="ml-6 text-gray-600 hover:text-gray-900">Home</a>
-                    <a href="/projects" class="ml-6 text-indigo-600 hover:text-indigo-900">Projects</a>
-                    <a href="/configs" class="ml-6 text-gray-600 hover:text-gray-900">Configs</a>
-                    <a href="/reviews" class="ml-6 text-indigo-600 hover:text-indigo-900">Reviews</a>
-                </div>
-                <div class="flex items-center">
-                    <span class="text-gray-600">{{ username }}</span>
-                    <form action="/api/auth/logout" method="POST" class="ml-4">
-                        <button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
-                    </form>
-                </div>
-            </div>
+{% extends "unified_base.html" %}
+{% set active_page = 'reviews' %}
+{% block title %}评审管理{% endblock %}
+
+{% block content %}
+<div x-cloak x-data="reviewsPage()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">评审管理</h1>
+            <p class="text-gray-400 text-sm mt-1">管理代码评审和文档审批</p>
         </div>
-    </nav>
+        <button @click="loadReviews()"
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-sync-alt mr-2"></i>刷新
+        </button>
+    </div>
 
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Review Queue</h1>
+    <!-- Status Tabs -->
+    <div class="flex gap-2 mb-6">
+        <button @click="filter.status = 'pending'; loadReviews()"
+                class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                :class="filter.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700'">
+            <i class="fas fa-clock mr-2"></i>待处理
+            <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-700" x-text="counts.pending"></span>
+        </button>
+        <button @click="filter.status = 'approved'; loadReviews()"
+                class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                :class="filter.status === 'approved' ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700'">
+            <i class="fas fa-check mr-2"></i>已通过
+            <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-700" x-text="counts.approved"></span>
+        </button>
+        <button @click="filter.status = 'rejected'; loadReviews()"
+                class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                :class="filter.status === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700'">
+            <i class="fas fa-times mr-2"></i>已拒绝
+            <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-700" x-text="counts.rejected"></span>
+        </button>
+    </div>
 
-            <div class="bg-white p-6 rounded-lg shadow">
-                <div class="flex space-x-4 mb-4">
-                    <button onclick="loadReviews('pending')" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Pending</button>
-                    <button onclick="loadReviews('approved')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Approved</button>
-                    <button onclick="loadReviews('rejected')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Rejected</button>
-                </div>
-
-                <div id="reviewsList" class="space-y-4">
-                    <div class="text-center py-8">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <p class="mt-2 text-gray-500">Loading reviews...</p>
+    <!-- Reviews List -->
+    <div class="space-y-4">
+        <template x-for="review in reviews" :key="review.id">
+            <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="px-2 py-1 rounded text-xs font-medium"
+                                  :class="{
+                                      'bg-yellow-500/20 text-yellow-400': review.status === 'pending',
+                                      'bg-green-500/20 text-green-400': review.status === 'approved',
+                                      'bg-red-500/20 text-red-400': review.status === 'rejected'
+                                  }"
+                                  x-text="review.status"></span>
+                            <span class="text-gray-400 text-sm" x-text="'#' + review.id"></span>
+                            <span class="text-gray-500 text-xs" x-text="formatTime(review.createdAt)"></span>
+                        </div>
+                        <div class="text-white font-medium mb-1" x-text="review.title || '文档评审'"></div>
+                        <div class="text-gray-400 text-sm mb-2" x-text="review.description || ''"></div>
+                        <div class="flex items-center gap-4 text-xs text-gray-500">
+                            <span><i class="fas fa-user mr-1"></i><span x-text="review.userId || 'system'"></span></span>
+                            <span><i class="fas fa-file mr-1"></i><span x-text="review.documentType || 'unknown'"></span></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2" x-show="review.status === 'pending'">
+                        <button @click="approveReview(review)"
+                                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-xs text-white font-medium transition">
+                            <i class="fas fa-check mr-1"></i>通过
+                        </button>
+                        <button @click="rejectReview(review)"
+                                class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-xs text-white font-medium transition">
+                            <i class="fas fa-times mr-1"></i>拒绝
+                        </button>
                     </div>
                 </div>
+                <div x-show="review.content" class="mt-3 p-3 bg-gray-900 rounded-lg text-sm text-gray-300 max-h-32 overflow-y-auto"
+                     x-text="review.content"></div>
+                <div x-show="review.reviewComment" class="mt-3 p-3 bg-gray-900/50 rounded-lg text-sm text-gray-400 border-l-2 border-indigo-500">
+                    <span class="text-xs text-gray-500">评审意见：</span>
+                    <span x-text="review.reviewComment"></span>
+                </div>
+            </div>
+        </template>
+
+        <!-- Empty State -->
+        <div x-show="reviews.length === 0 && !loading"
+             class="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
+            <i class="fas fa-clipboard-check text-4xl text-gray-600 mb-4 block"></i>
+            <p class="text-gray-400">暂无评审记录</p>
+        </div>
+    </div>
+
+    <!-- Reject Modal -->
+    <div x-show="showRejectModal" x-cloak
+         class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50"
+         @click.self="showRejectModal = false">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">拒绝评审</h3>
+                <button @click="showRejectModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <label class="block text-sm font-medium text-gray-300 mb-2">拒绝原因 *</label>
+                <textarea x-model="rejectReason" rows="4" required
+                          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+                          placeholder="请输入拒绝原因..."></textarea>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+                <button @click="showRejectModal = false"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                    取消
+                </button>
+                <button @click="confirmReject()"
+                        :disabled="!rejectReason"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50">
+                    确认拒绝
+                </button>
             </div>
         </div>
     </div>
 
-    <script>
-        let currentStatus = 'pending';
+    <!-- Loading -->
+    <div x-show="loading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-400">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-        async function loadReviews(status) {
-            currentStatus = status;
-            try {
-                const response = await fetch(`/api/reviews/?status=${status}`);
-                const data = await response.json();
-                const listEl = document.getElementById('reviewsList');
-                
-                if (!data.reviews || data.reviews.length === 0) {
-                    listEl.innerHTML = '<div class="text-center py-8 text-gray-500">No reviews found</div>';
-                    return;
+{% block extra_js %}
+<script>
+    function reviewsPage() {
+        return {
+            reviews: [],
+            loading: true,
+            filter: { status: 'pending' },
+            counts: { pending: 0, approved: 0, rejected: 0 },
+            showRejectModal: false,
+            rejectReason: '',
+            rejectingReview: null,
+            async init() {
+                await this.loadReviews();
+                this.loading = false;
+            },
+            async loadReviews() {
+                this.loading = true;
+                try {
+                    const r = await fetch(`/api/reviews/?status=${this.filter.status}`);
+                    const data = await r.json();
+                    this.reviews = data.reviews || [];
+                    await this.loadCounts();
+                } catch(e) {
+                    console.error('Failed to load reviews:', e);
+                } finally {
+                    this.loading = false;
                 }
-                
-                listEl.innerHTML = data.reviews.map(r => `
-                    <div class="border rounded-lg p-4 ${r.status === 'pending' ? 'border-yellow-300 bg-yellow-50' : r.status === 'approved' ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-medium">Document ID: ${r.document_id}</h3>
-                                <p class="text-sm text-gray-600">Action: ${r.action}</p>
-                                <p class="text-sm text-gray-600">Submitted by: ${r.user_id}</p>
-                                <p class="text-sm text-gray-600">Created: ${r.created_at}</p>
-                                ${r.content ? `<p class="text-sm text-gray-600 mt-2">${r.content.substring(0, 100)}...</p>` : ''}
-                                ${r.review_comment ? `<p class="text-sm text-gray-600 mt-2">Comment: ${r.review_comment}</p>` : ''}
-                            </div>
-                            ${r.status === 'pending' ? `
-                                <div class="space-x-2">
-                                    <button onclick="approveReview(${r.id})" class="bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700">Approve</button>
-                                    <button onclick="rejectReview(${r.id})" class="bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700">Reject</button>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `).join('');
-            } catch (err) {
-                document.getElementById('reviewsList').innerHTML = '<div class="text-center py-8 text-red-500">Failed to load reviews</div>';
-            }
-        }
-
-        async function approveReview(reviewId) {
-            try {
-                const response = await fetch(`/api/reviews/${reviewId}/approve`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({comment: "Approved"})
-                });
-                
-                if (response.ok) {
-                    loadReviews(currentStatus);
+            },
+            async loadCounts() {
+                for (const status of ['pending', 'approved', 'rejected']) {
+                    try {
+                        const r = await fetch(`/api/reviews/?status=${status}`);
+                        const data = await r.json();
+                        this.counts[status] = (data.reviews || []).length;
+                    } catch(e) {}
                 }
-            } catch (err) {
-                alert('Failed to approve review');
-            }
-        }
-
-        async function rejectReview(reviewId) {
-            const reason = prompt('Enter rejection reason:');
-            if (!reason) return;
-            
-            try {
-                const response = await fetch(`/api/reviews/${reviewId}/reject`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({reason})
-                });
-                
-                if (response.ok) {
-                    loadReviews(currentStatus);
+            },
+            async approveReview(review) {
+                try {
+                    const r = await fetch(`/api/reviews/${review.id}/approve`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ comment: 'Approved via web UI' })
+                    });
+                    if (r.ok) await this.loadReviews();
+                } catch(e) {
+                    alert('操作失败');
                 }
-            } catch (err) {
-                alert('Failed to reject review');
+            },
+            rejectReview(review) {
+                this.rejectingReview = review;
+                this.rejectReason = '';
+                this.showRejectModal = true;
+            },
+            async confirmReject() {
+                if (!this.rejectReason || !this.rejectingReview) return;
+                try {
+                    const r = await fetch(`/api/reviews/${this.rejectingReview.id}/reject`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: this.rejectReason })
+                    });
+                    if (r.ok) {
+                        this.showRejectModal = false;
+                        this.rejectReason = '';
+                        this.rejectingReview = null;
+                        await this.loadReviews();
+                    }
+                } catch(e) {
+                    alert('操作失败');
+                }
+            },
+            formatTime(isoString) {
+                if (!isoString) return '-';
+                return new Date(isoString).toLocaleString('zh-CN');
             }
-        }
-
-        loadReviews('pending');
-    </script>
-</body>
-</html>
+        };
+    }
+</script>
+{% endblock %}

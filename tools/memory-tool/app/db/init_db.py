@@ -10,14 +10,14 @@ async def init_database():
     async with engine.begin() as conn:
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS mem_entry (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project VARCHAR(256) NOT NULL,
                 user_id INTEGER,
                 category VARCHAR(64) NOT NULL,
                 title VARCHAR(512) NOT NULL,
                 content TEXT NOT NULL,
                 tags TEXT,
-                pinned BOOLEAN DEFAULT FALSE,
+                pinned BOOLEAN DEFAULT 0,
                 memory_tier VARCHAR(20) DEFAULT 'episodic',
                 parent_id INTEGER REFERENCES mem_entry(id),
                 source_type VARCHAR(50) DEFAULT 'manual',
@@ -25,8 +25,8 @@ async def init_database():
                 access_count INTEGER DEFAULT 0,
                 last_accessed_at TIMESTAMP,
                 confidence FLOAT DEFAULT 1.0,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 deleted_at TIMESTAMP
             )
         """))
@@ -37,22 +37,22 @@ async def init_database():
 
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS mem_node (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 memory_id INTEGER REFERENCES mem_entry(id),
                 label VARCHAR(256),
                 memory_type VARCHAR(20),
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
 
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS mem_edge (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_id INTEGER REFERENCES mem_node(id),
                 target_id INTEGER REFERENCES mem_node(id),
                 relation VARCHAR(64),
                 weight FLOAT DEFAULT 1.0,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
 

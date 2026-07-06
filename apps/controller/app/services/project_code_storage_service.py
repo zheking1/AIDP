@@ -2,7 +2,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.project import Project
-from app.models.user import User
+from app.db.auth_models import User
 
 
 class ProjectCodeStorageService:
@@ -26,24 +26,24 @@ class ProjectCodeStorageService:
         return result.scalar_one_or_none()
 
     async def sync_code_from_git(self, project_id: int, git_url: str, branch: str = "main") -> bool:
-        """�?Git 仓库同步代码�?NAS"""
+        """�?Git 仓库同步代码�?NAS"""
         code_path = await self.get_project_code_path(project_id)
         if not code_path:
             return False
         
         # 这里应该调用 NAS SSH 执行 git clone
-        # 由于是异步服务，实际实现需要通过 SSH 连接�?NAS
+        # 由于是异步服务，实际实现需要通过 SSH 连接�?NAS
         # 示例命令: ssh root@192.168.0.100 "mkdir -p {code_path} && cd {code_path} && git clone {git_url} . && git checkout {branch}"
         
-        # 返回成功状�?        return True
+        # 返回成功状�?        return True
 
     async def get_project_code_status(self, project_id: int) -> dict:
-        """获取项目代码状�?""
+        """获取项目代码状�?""
         code_path = await self.get_project_code_path(project_id)
         if not code_path:
             return {"exists": False, "path": None}
         
-        # 这里应该检�?NAS 上的目录是否存在
+        # 这里应该检�?NAS 上的目录是否存在
         # 示例: ssh root@192.168.0.100 "ls -la {code_path}"
         
         return {

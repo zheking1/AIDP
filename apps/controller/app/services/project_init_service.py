@@ -79,26 +79,44 @@ async def init_project(
             errors.append(str(err))
         steps.append(entry)
 
-    # Step 1: Create project record in Controller DB
+    # Step 1: Create or update project record in Controller DB
     project_id = None
+    is_update = False
     try:
         from app.db.database import async_session_factory
         from app.models.project import Project
+        from sqlalchemy import select
         async with async_session_factory() as session:
-            project = Project(
-                name=project_name,
-                description=description or f"{project_name} - initialized via aidp init",
-                project_type=(tech_stack or "unknown")[:64],
-                owner_id=str(user_id) if user_id else "0",
+            result = await session.execute(
+                select(Project).where(Project.name == project_name)
             )
-            session.add(project)
-            await session.commit()
-            await session.refresh(project)
-            project_id = project.id
-        step("create_project", {"project_id": project_id})
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                # Update existing project
+                project_id = existing.id
+                is_update = True
+                if description:
+                    existing.description = description
+                if tech_stack:
+                    existing.project_type = tech_stack[:64]
+                await session.commit()
+            else:
+                # Create new project
+                project = Project(
+                    name=project_name,
+                    description=description or f"{project_name} - initialized via aidp init",
+                    project_type=(tech_stack or "unknown")[:64],
+                    owner_id=str(user_id) if user_id else "0",
+                )
+                session.add(project)
+                await session.commit()
+                await session.refresh(project)
+                project_id = project.id
+        step("create_project", {"project_id": project_id, "is_update": is_update})
     except Exception as e:
         step("create_project", err=e)
-        logger.warning(f"Project creation skipped or already exists: {e}")
+        logger.warning(f"Project creation failed: {e}")
 
     # Step 2: If nas_path provided, trigger project-importer full scan
     if nas_path:

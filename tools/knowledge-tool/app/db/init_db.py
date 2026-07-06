@@ -6,14 +6,14 @@ from app.db.database import engine, async_session_factory
 
 logger = logging.getLogger(__name__)
 
-CREATE_TABLES_SQL = """
+CREATE_TABLES_SQLITE = """
 CREATE TABLE IF NOT EXISTS kt_document (
     id VARCHAR(36) PRIMARY KEY,
     workspace_id VARCHAR(128) NOT NULL,
     project_id VARCHAR(128),
     title VARCHAR(512) NOT NULL,
     doc_type VARCHAR(128) NOT NULL,
-    visibility VARCHAR(32) NOT NULL,
+    visibility VARCHAR(32) NOT NULL DEFAULT 'private',
     source_uri TEXT,
     object_key TEXT,
     mime_type VARCHAR(255),
@@ -22,13 +22,15 @@ CREATE TABLE IF NOT EXISTS kt_document (
     checksum VARCHAR(128),
     version VARCHAR(128) NOT NULL DEFAULT 'v1',
     index_status VARCHAR(32) NOT NULL DEFAULT 'created',
-    tags JSONB NOT NULL DEFAULT '[]',
-    metadata JSONB NOT NULL DEFAULT '{}',
+    tags TEXT NOT NULL DEFAULT '[]',
+    metadata TEXT NOT NULL DEFAULT '{}',
     created_by VARCHAR(128),
     updated_by VARCHAR(128),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
+    owner_type VARCHAR(32) NOT NULL DEFAULT 'personal',
+    owner_id VARCHAR(128),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS kt_document_chunk (
@@ -40,7 +42,7 @@ CREATE TABLE IF NOT EXISTS kt_document_chunk (
     content TEXT NOT NULL,
     content_hash VARCHAR(128) NOT NULL,
     token_count INTEGER NOT NULL,
-    heading_path JSONB NOT NULL DEFAULT '[]',
+    heading_path TEXT NOT NULL DEFAULT '[]',
     source_start_line INTEGER,
     source_end_line INTEGER,
     page_number INTEGER,
@@ -49,10 +51,10 @@ CREATE TABLE IF NOT EXISTS kt_document_chunk (
     embedding_dimension INTEGER,
     embedding TEXT,
     keyword_tsv TEXT,
-    metadata JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     UNIQUE (document_id, chunk_index)
 );
 
@@ -63,25 +65,25 @@ CREATE TABLE IF NOT EXISTS kt_document_index_job (
     project_id VARCHAR(128),
     status VARCHAR(32) NOT NULL DEFAULT 'pending',
     trigger_type VARCHAR(32) NOT NULL DEFAULT 'manual',
-    force_reindex BOOLEAN NOT NULL DEFAULT FALSE,
+    force_reindex BOOLEAN NOT NULL DEFAULT 0,
     chunk_size INTEGER,
     overlap_size INTEGER,
     embedding_model VARCHAR(128),
     chunk_count INTEGER,
     error_code VARCHAR(128),
     error_message TEXT,
-    error_details JSONB NOT NULL DEFAULT '{}',
+    error_details TEXT NOT NULL DEFAULT '{}',
     trace_id VARCHAR(128),
     created_by VARCHAR(128),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    started_at TIMESTAMPTZ,
-    finished_at TIMESTAMPTZ
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_kt_document_scope ON kt_document (workspace_id, project_id, visibility) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kt_document_doc_type ON kt_document (doc_type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kt_document_index_status ON kt_document (index_status) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_kt_document_tags ON kt_document USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_kt_document_owner ON kt_document (workspace_id, owner_type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kt_chunk_document ON kt_document_chunk (document_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kt_chunk_scope ON kt_document_chunk (workspace_id, project_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kt_index_job_document ON kt_document_index_job (document_id, created_at DESC);
@@ -93,29 +95,9 @@ async def init_database():
     logger.info("Initializing knowledge-tool database...")
 
     async with engine.begin() as conn:
-        for statement in CREATE_TABLES_SQL.split(";"):
+        for statement in CREATE_TABLES_SQLITE.split(";"):
             statement = statement.strip()
             if statement:
                 await conn.execute(text(statement))
-
-        # Check and add owner_type/owner_id columns
-        result = await conn.execute(text(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'kt_document'"
-        ))
-        columns = [row[0] for row in result.fetchall()]
-
-        if "owner_type" not in columns:
-            await conn.execute(text(
-                "ALTER TABLE kt_document ADD COLUMN owner_type VARCHAR(32) NOT NULL DEFAULT 'personal'"
-            ))
-        if "owner_id" not in columns:
-            await conn.execute(text(
-                "ALTER TABLE kt_document ADD COLUMN owner_id VARCHAR(128)"
-            ))
-
-        # Create owner index after columns exist
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_kt_document_owner ON kt_document (workspace_id, owner_type) WHERE deleted_at IS NULL;"
-        ))
 
     logger.info("Knowledge-tool database initialized successfully")

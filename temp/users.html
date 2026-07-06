@@ -1,0 +1,415 @@
+{% extends "layouts/unified_base.html" %}
+{% block title %}用户管理{% endblock %}
+
+{% block content %}
+<div x-data="usersPage()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">用户管理</h1>
+            <p class="text-sm text-gray-400 mt-1">管理系统用户和权限</p>
+        </div>
+        <a href="/admin/users/create" 
+           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>创建用户
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-users text-blue-400"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-white" x-text="stats.total">-</p>
+                    <p class="text-xs text-gray-400">总用户数</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-user-check text-green-400"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-white" x-text="stats.active">-</p>
+                    <p class="text-xs text-gray-400">活跃用户</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-user-shield text-yellow-400"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-white" x-text="stats.admins">-</p>
+                    <p class="text-xs text-gray-400">管理员</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-user-times text-red-400"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-white" x-text="stats.disabled">-</p>
+                    <p class="text-xs text-gray-400">已禁用</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1 relative">
+                <input type="text" x-model="search" @input.debounce.300ms="loadUsers()" 
+                       placeholder="搜索用户名、邮箱、昵称..."
+                       class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm
+                              text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            </div>
+            <select x-model="filterRole" @change="loadUsers()"
+                    class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                <option value="">全部角色</option>
+                <option value="super_admin">超级管理员</option>
+                <option value="admin">管理员</option>
+                <option value="developer">开发者</option>
+                <option value="user">普通用户</option>
+                <option value="readonly">只读用户</option>
+            </select>
+            <select x-model="filterStatus" @change="loadUsers()"
+                    class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                <option value="">全部状态</option>
+                <option value="active">活跃</option>
+                <option value="inactive">已禁用</option>
+                <option value="suspended">已挂起</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <!-- Loading -->
+        <div x-show="loading" class="p-8 text-center">
+            <i class="fas fa-spinner fa-spin text-2xl text-indigo-400"></i>
+            <p class="text-gray-400 mt-2">加载中...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!loading && users.length === 0" class="p-8 text-center">
+            <i class="fas fa-users text-4xl text-gray-600"></i>
+            <p class="text-gray-400 mt-2">没有找到用户</p>
+        </div>
+
+        <!-- Table -->
+        <div x-show="!loading && users.length > 0" class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-900/50">
+                    <tr>
+                        <th class="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase">用户</th>
+                        <th class="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase">角色</th>
+                        <th class="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase">状态</th>
+                        <th class="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase">备注</th>
+                        <th class="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase">最近登录</th>
+                        <th class="text-right px-6 py-3 text-xs font-semibold text-gray-400 uppercase">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="user in users" :key="user.id">
+                        <tr class="hover:bg-gray-700/50 transition">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                                         :class="user.role === 'super_admin' ? 'bg-gradient-to-br from-red-500 to-orange-600' :
+                                                 user.role === 'admin' ? 'bg-gradient-to-br from-indigo-500 to-purple-600' :
+                                                 'bg-gradient-to-br from-gray-500 to-gray-600'"
+                                         x-text="(user.nickname || user.username)[0].toUpperCase()">
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-white" x-text="user.username"></p>
+                                        <p class="text-xs text-gray-400" x-text="user.email || 'No email'"></p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="{
+                                          'bg-red-500/20 text-red-400': user.role === 'super_admin',
+                                          'bg-indigo-500/20 text-indigo-400': user.role === 'admin',
+                                          'bg-blue-500/20 text-blue-400': user.role === 'developer',
+                                          'bg-gray-500/20 text-gray-400': user.role === 'user',
+                                          'bg-yellow-500/20 text-yellow-400': user.role === 'readonly'
+                                      }"
+                                      x-text="roleLabels[user.role] || user.role">
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="{
+                                          'bg-green-500/20 text-green-400': user.status === 'active',
+                                          'bg-gray-500/20 text-gray-400': user.status === 'inactive',
+                                          'bg-yellow-500/20 text-yellow-400': user.status === 'suspended',
+                                          'bg-blue-500/20 text-blue-400': user.status === 'pending'
+                                      }">
+                                    <span class="w-1.5 h-1.5 rounded-full"
+                                          :class="{
+                                              'bg-green-400': user.status === 'active',
+                                              'bg-gray-400': user.status === 'inactive',
+                                              'bg-yellow-400': user.status === 'suspended',
+                                              'bg-blue-400': user.status === 'pending'
+                                          }"></span>
+                                    <span x-text="statusLabels[user.status] || user.status"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div x-show="editingRemark !== user.id" 
+                                     @click="startEditRemark(user)" 
+                                     class="text-sm text-gray-300 cursor-pointer hover:text-white min-w-[120px] px-2 py-1 rounded hover:bg-gray-600/50 transition"
+                                     x-text="user.remark || '点击添加备注'">
+                                </div>
+                                <div x-show="editingRemark === user.id" class="flex items-center gap-1">
+                                    <input type="text" x-model="remarkDraft" 
+                                           @keydown.enter="saveRemark(user)" @keydown.escape="cancelEditRemark()"
+                                           x-ref="remarkInput"
+                                           class="flex-1 px-2 py-1 bg-gray-700 border border-indigo-500 rounded text-sm text-white focus:outline-none"
+                                           placeholder="输入备注...">
+                                    <button @click="saveRemark(user)" class="p-1 text-green-400 hover:text-green-300" title="保存">
+                                        <i class="fas fa-check text-xs"></i>
+                                    </button>
+                                    <button @click="cancelEditRemark()" class="p-1 text-gray-400 hover:text-gray-300" title="取消">
+                                        <i class="fas fa-times text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-400" x-text="user.last_login_at ? formatDate(user.last_login_at) : '从未登录'"></td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button @click="toggleUser(user)" 
+                                            class="p-1.5 rounded-lg text-sm transition"
+                                            :class="user.status === 'active' ? 'text-yellow-400 hover:bg-yellow-500/20' : 'text-green-400 hover:bg-green-500/20'"
+                                            :title="user.status === 'active' ? '禁用' : '启用'">
+                                        <i :class="user.status === 'active' ? 'fas fa-ban' : 'fas fa-check'"></i>
+                                    </button>
+                                    <button @click="confirmDelete(user)" 
+                                            class="p-1.5 rounded-lg text-red-400 hover:bg-red-500/20 text-sm transition"
+                                            title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="px-6 py-4 border-t border-gray-700 flex items-center justify-between">
+            <p class="text-sm text-gray-400">
+                共 <span x-text="totalItems"></span> 个用户
+            </p>
+            <div class="flex items-center gap-2">
+                <button @click="prevPage()" :disabled="currentPage <= 1"
+                        class="px-3 py-1 rounded-lg text-sm border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                    上一页
+                </button>
+                <span class="text-sm text-gray-400" x-text="currentPage + ' / ' + totalPages"></span>
+                <button @click="nextPage()" :disabled="currentPage >= totalPages"
+                        class="px-3 py-1 rounded-lg text-sm border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                    下一页
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="showDeleteModal = false"></div>
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">确认删除</h3>
+            <p class="text-gray-400 text-sm mb-6">
+                确定要删除用户 <span class="text-white font-medium" x-text="deleteTarget?.username"></span> 吗？此操作不可撤销。
+            </p>
+            <div class="flex justify-end gap-3">
+                <button @click="showDeleteModal = false"
+                        class="px-4 py-2 text-sm text-gray-300 hover:text-white transition">
+                    取消
+                </button>
+                <button @click="deleteUser()" 
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function usersPage() {
+    return {
+        users: [],
+        loading: true,
+        search: '',
+        filterRole: '',
+        filterStatus: '',
+        currentPage: 1,
+        pageSize: 20,
+        totalItems: 0,
+        totalPages: 0,
+        stats: { total: 0, active: 0, admins: 0, disabled: 0 },
+        showDeleteModal: false,
+        deleteTarget: null,
+        editingRemark: null,
+        remarkDraft: '',
+        roleLabels: {
+            'super_admin': '超级管理员',
+            'admin': '管理员',
+            'developer': '开发者',
+            'user': '普通用户',
+            'readonly': '只读用户'
+        },
+        statusLabels: {
+            'active': '活跃',
+            'inactive': '已禁用',
+            'suspended': '已挂起',
+            'pending': '待审核'
+        },
+
+        async init() {
+            await this.loadUsers();
+        },
+
+        async loadUsers() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.currentPage,
+                    size: this.pageSize
+                });
+                if (this.search) params.set('search', this.search);
+                
+                const resp = await fetch('/api/auth/users?' + params.toString());
+                if (!resp.ok) throw new Error('Failed to load users');
+                const data = await resp.json();
+                
+                let filtered = data.items || [];
+                if (this.filterRole) {
+                    filtered = filtered.filter(u => u.role === this.filterRole);
+                }
+                if (this.filterStatus) {
+                    filtered = filtered.filter(u => u.status === this.filterStatus);
+                }
+                
+                this.users = filtered;
+                this.totalItems = data.total || 0;
+                this.totalPages = data.pages || 1;
+                
+                this.computeStats(data.items || []);
+            } catch (e) {
+                console.error('Load users error:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        computeStats(allUsers) {
+            this.stats.total = this.totalItems;
+            this.stats.active = allUsers.filter(u => u.status === 'active').length;
+            this.stats.admins = allUsers.filter(u => ['admin', 'super_admin'].includes(u.role)).length;
+            this.stats.disabled = allUsers.filter(u => u.status === 'inactive').length;
+        },
+
+        startEditRemark(user) {
+            this.editingRemark = user.id;
+            this.remarkDraft = user.remark || '';
+            this.$nextTick(() => {
+                if (this.$refs.remarkInput) this.$refs.remarkInput.focus();
+            });
+        },
+
+        cancelEditRemark() {
+            this.editingRemark = null;
+            this.remarkDraft = '';
+        },
+
+        async saveRemark(user) {
+            try {
+                const resp = await fetch(`/api/auth/users/${user.id}/remark`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ remark: this.remarkDraft || null })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    user.remark = this.remarkDraft || null;
+                    this.editingRemark = null;
+                    this.remarkDraft = '';
+                }
+            } catch (e) {
+                console.error('Save remark error:', e);
+            }
+        },
+
+        async toggleUser(user) {
+            try {
+                const resp = await fetch(`/api/auth/users/${user.id}/toggle`, { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) {
+                    await this.loadUsers();
+                }
+            } catch (e) {
+                console.error('Toggle user error:', e);
+            }
+        },
+
+        confirmDelete(user) {
+            this.deleteTarget = user;
+            this.showDeleteModal = true;
+        },
+
+        async deleteUser() {
+            if (!this.deleteTarget) return;
+            try {
+                const resp = await fetch(`/api/auth/users/${this.deleteTarget.id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success) {
+                    this.showDeleteModal = false;
+                    this.deleteTarget = null;
+                    await this.loadUsers();
+                }
+            } catch (e) {
+                console.error('Delete user error:', e);
+            }
+        },
+
+        prevPage() {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadUsers();
+            }
+        },
+
+        nextPage() {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                this.loadUsers();
+            }
+        },
+
+        formatDate(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+    };
+}
+</script>
+{% endblock %}

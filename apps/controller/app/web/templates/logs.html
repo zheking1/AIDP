@@ -1,15 +1,28 @@
-{% extends "base.html" %}
+{% extends "unified_base.html" %}
+{% set active_page = 'logs' %}
+{% block title %}调用日志{% endblock %}
 
 {% block content %}
-<div x-data="logsManager()" x-init="init()">
-    <h2 class="text-2xl font-bold text-gray-800 mb-6">调用日志</h2>
-    
+<div x-cloak x-data="logsPage()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">调用日志</h1>
+            <p class="text-gray-400 text-sm mt-1">查看所有工具调用记录</p>
+        </div>
+        <button @click="loadLogs()"
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-sync-alt mr-2"></i>刷新
+        </button>
+    </div>
+
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
         <div class="flex gap-4 items-end">
             <div>
-                <label class="block text-sm font-medium text-gray-700">工具</label>
-                <select x-model="filter.tool" @change="loadLogs()" class="mt-1 block border rounded-md px-3 py-2">
+                <label class="block text-sm font-medium text-gray-300 mb-1">工具</label>
+                <select x-model="filter.tool" @change="loadLogs()"
+                        class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
                     <option value="">全部</option>
                     <template x-for="tool in toolNames" :key="tool">
                         <option :value="tool" x-text="tool"></option>
@@ -17,138 +30,186 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700">数量</label>
-                <select x-model="filter.limit" @change="loadLogs()" class="mt-1 block border rounded-md px-3 py-2">
-                    <option value="10">10</option>
+                <label class="block text-sm font-medium text-gray-300 mb-1">状态</label>
+                <select x-model="filter.status" @change="loadLogs()"
+                        class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                    <option value="">全部</option>
+                    <option value="success">成功</option>
+                    <option value="error">失败</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">数量</label>
+                <select x-model="filter.limit" @change="loadLogs()"
+                        class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
                     <option value="20">20</option>
                     <option value="50">50</option>
                     <option value="100">100</option>
+                    <option value="200">200</option>
                 </select>
             </div>
-            <button @click="loadLogs()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">刷新</button>
         </div>
     </div>
-    
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-white" x-text="logs.length">0</div>
+            <div class="text-xs text-gray-500">总调用数</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-green-400" x-text="logs.filter(l => l.status === 'success').length">0</div>
+            <div class="text-xs text-gray-500">成功</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-red-400" x-text="logs.filter(l => l.status === 'error').length">0</div>
+            <div class="text-xs text-gray-500">失败</div>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+            <div class="text-2xl font-bold text-blue-400" x-text="avgDuration">0ms</div>
+            <div class="text-xs text-gray-500">平均耗时</div>
+        </div>
+    </div>
+
     <!-- Logs Table -->
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">工具</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">能力</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">耗时</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">时间</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                <template x-for="log in logs" :key="log.id">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-800/50 text-gray-400">
                     <tr>
-                        <td class="px-4 py-3 text-sm text-gray-500" x-text="log.id"></td>
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800" x-text="log.toolName"></span>
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600 font-mono" x-text="log.capability"></td>
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                  :class="{
-                                      'bg-green-100 text-green-800': log.status === 'success',
-                                      'bg-red-100 text-red-800': log.status === 'error'
-                                  }"
-                                  x-text="log.status"></span>
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-500" x-text="log.durationMs + 'ms'"></td>
-                        <td class="px-4 py-3 text-sm text-gray-500" x-text="formatTime(log.createdAt)"></td>
-                        <td class="px-4 py-3 text-sm">
-                            <button @click="selectedLog = log; showDetail = true" class="text-blue-600 hover:text-blue-800">详情</button>
+                        <th class="px-5 py-3 text-left font-medium">工具</th>
+                        <th class="px-5 py-3 text-left font-medium">能力</th>
+                        <th class="px-5 py-3 text-left font-medium">状态</th>
+                        <th class="px-5 py-3 text-left font-medium">耗时</th>
+                        <th class="px-5 py-3 text-left font-medium">时间</th>
+                        <th class="px-5 py-3 text-right font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="log in logs" :key="log.id">
+                        <tr class="hover:bg-gray-700/30">
+                            <td class="px-5 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium bg-indigo-500/20 text-indigo-400" x-text="log.toolName"></span>
+                            </td>
+                            <td class="px-5 py-3 text-gray-400 font-mono text-xs" x-text="log.capability || '-'"></td>
+                            <td class="px-5 py-3">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                      :class="log.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                      x-text="log.status"></span>
+                            </td>
+                            <td class="px-5 py-3 text-gray-400" x-text="(log.durationMs || 0) + 'ms'"></td>
+                            <td class="px-5 py-3 text-gray-500 text-xs" x-text="formatTime(log.createdAt)"></td>
+                            <td class="px-5 py-3 text-right">
+                                <button @click="selectedLog = log; showDetail = true"
+                                        class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 transition">
+                                    详情
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="logs.length === 0">
+                        <td colspan="6" class="px-5 py-12 text-center text-gray-500">
+                            <i class="fas fa-inbox text-3xl mb-3 block"></i>
+                            <p>暂无调用记录</p>
                         </td>
                     </tr>
-                </template>
-                <tr x-show="logs.length === 0">
-                    <td colspan="7" class="px-6 py-12 text-center text-gray-500">暂无调用记录</td>
-                </tr>
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
-    
+
     <!-- Detail Modal -->
-    <div x-show="showDetail" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-auto">
-            <h3 class="text-lg font-bold mb-4">调用详情</h3>
-            <div class="space-y-4">
-                <div>
-                    <div class="text-sm font-medium text-gray-500">工具</div>
-                    <div class="text-gray-900" x-text="selectedLog?.toolName"></div>
-                </div>
-                <div>
-                    <div class="text-sm font-medium text-gray-500">能力</div>
-                    <div class="text-gray-900 font-mono" x-text="selectedLog?.capability"></div>
-                </div>
-                <div>
-                    <div class="text-sm font-medium text-gray-500">状态</div>
-                    <div x-text="selectedLog?.status"></div>
-                </div>
-                <div>
-                    <div class="text-sm font-medium text-gray-500">耗时</div>
-                    <div class="text-gray-900" x-text="(selectedLog?.durationMs || 0) + 'ms'"></div>
+    <div x-show="showDetail" x-cloak
+         class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50"
+         @click.self="showDetail = false">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-2xl mx-4">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">调用详情</h3>
+                <button @click="showDetail = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">工具</div>
+                        <div class="text-white" x-text="selectedLog?.toolName"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">能力</div>
+                        <div class="text-white font-mono" x-text="selectedLog?.capability || '-'"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">状态</div>
+                        <span class="px-2 py-1 rounded-full text-xs font-medium"
+                              :class="selectedLog?.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                              x-text="selectedLog?.status"></span>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">耗时</div>
+                        <div class="text-white" x-text="(selectedLog?.durationMs || 0) + 'ms'"></div>
+                    </div>
                 </div>
                 <div x-show="selectedLog?.error">
-                    <div class="text-sm font-medium text-gray-500">错误</div>
-                    <pre class="text-red-600 text-sm bg-red-50 p-2 rounded" x-text="selectedLog?.error"></pre>
+                    <div class="text-xs text-gray-500 mb-1">错误信息</div>
+                    <pre class="text-red-400 text-sm bg-gray-900 p-3 rounded-lg overflow-auto max-h-40" x-text="selectedLog?.error"></pre>
                 </div>
-            </div>
-            <div class="flex justify-end mt-6">
-                <button @click="showDetail = false" class="px-4 py-2 text-gray-600 hover:text-gray-800">关闭</button>
+                <div x-show="selectedLog?.result">
+                    <div class="text-xs text-gray-500 mb-1">返回结果</div>
+                    <pre class="text-gray-300 text-sm bg-gray-900 p-3 rounded-lg overflow-auto max-h-60" x-text="selectedLog?.result"></pre>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function logsManager() {
-    return {
-        logs: [],
-        toolNames: [],
-        filter: { tool: '', limit: '20' },
-        showDetail: false,
-        selectedLog: null,
-        
-        async init() {
-            await this.loadTools();
-            await this.loadLogs();
-        },
-        
-        async loadTools() {
-            try {
-                const resp = await fetch('/api/tools');
-                const tools = await resp.json();
-                this.toolNames = tools.map(t => t.name);
-            } catch (e) {
-                console.error('Failed to load tools:', e);
-            }
-        },
-        
-        async loadLogs() {
-            try {
-                let url = `/api/tools/invocations/history?limit=${this.filter.limit}`;
-                if (this.filter.tool) {
-                    url += `&tool_name=${this.filter.tool}`;
+    function logsPage() {
+        return {
+            logs: [],
+            toolNames: [],
+            filter: { tool: '', status: '', limit: '20' },
+            showDetail: false,
+            selectedLog: null,
+            get avgDuration() {
+                if (this.logs.length === 0) return '0ms';
+                const avg = this.logs.reduce((a, l) => a + (l.durationMs || 0), 0) / this.logs.length;
+                return Math.round(avg) + 'ms';
+            },
+            async init() {
+                await this.loadTools();
+                await this.loadLogs();
+            },
+            async loadTools() {
+                try {
+                    const r = await fetch('/api/tools');
+                    const tools = await r.json();
+                    this.toolNames = tools.map(t => t.name);
+                } catch(e) {
+                    console.error('Failed to load tools:', e);
                 }
-                const resp = await fetch(url);
-                this.logs = await resp.json();
-            } catch (e) {
-                console.error('Failed to load logs:', e);
+            },
+            async loadLogs() {
+                try {
+                    let url = `/api/tools/invocations/history?limit=${this.filter.limit}`;
+                    if (this.filter.tool) url += `&tool_name=${this.filter.tool}`;
+                    const r = await fetch(url);
+                    let data = await r.json();
+                    if (this.filter.status) {
+                        data = data.filter(l => l.status === this.filter.status);
+                    }
+                    this.logs = data;
+                } catch(e) {
+                    console.error('Failed to load logs:', e);
+                }
+            },
+            formatTime(isoString) {
+                if (!isoString) return '-';
+                return new Date(isoString).toLocaleString('zh-CN');
             }
-        },
-        
-        formatTime(isoString) {
-            if (!isoString) return '-';
-            const d = new Date(isoString);
-            return d.toLocaleString('zh-CN');
-        }
-    };
-}
+        };
+    }
 </script>
 {% endblock %}

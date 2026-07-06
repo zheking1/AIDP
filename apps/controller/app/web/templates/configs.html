@@ -1,133 +1,305 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configs - AIDP Controller</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100">
-    <nav class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <span class="text-xl font-bold text-gray-800">AIDP Controller</span>
-                    <a href="/" class="ml-6 text-gray-600 hover:text-gray-900">Home</a>
-                    <a href="/projects" class="ml-6 text-indigo-600 hover:text-indigo-900">Projects</a>
-                    <a href="/configs" class="ml-6 text-indigo-600 hover:text-indigo-900">Configs</a>
-                    <a href="/reviews" class="ml-6 text-gray-600 hover:text-gray-900">Reviews</a>
+{% extends "unified_base.html" %}
+{% set active_page = 'configs' %}
+{% block title %}系统配置{% endblock %}
+
+{% block content %}
+<div x-cloak x-data="configsPage()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">系统配置</h1>
+            <p class="text-gray-400 text-sm mt-1">管理 AIDP 系统设置和配置</p>
+        </div>
+        <button @click="showCreateModal = true"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>添加配置
+        </button>
+    </div>
+
+    <!-- Quick Settings -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- Auth Settings -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+            <h3 class="font-semibold text-white mb-4">
+                <i class="fas fa-shield-alt text-blue-400 mr-2"></i>认证设置
+            </h3>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-300 text-sm">允许注册</span>
+                    <button @click="toggleSetting('allow_registration')"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                            :class="settings.allow_registration === 'true' ? 'bg-green-500' : 'bg-gray-600'">
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                              :class="settings.allow_registration === 'true' ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
                 </div>
-                <div class="flex items-center">
-                    <span class="text-gray-600">{{ username }}</span>
-                    <form action="/api/auth/logout" method="POST" class="ml-4">
-                        <button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
-                    </form>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-300 text-sm">强制 HTTPS</span>
+                    <button @click="toggleSetting('force_https')"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                            :class="settings.force_https === 'true' ? 'bg-green-500' : 'bg-gray-600'">
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                              :class="settings.force_https === 'true' ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-300 text-sm">会话超时 (分钟)</span>
+                    <input type="number" x-model="settings.session_timeout_minutes" @change="saveSetting('session_timeout_minutes')"
+                           class="w-20 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm text-right focus:outline-none focus:border-indigo-500">
                 </div>
             </div>
         </div>
-    </nav>
 
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Project Configs</h1>
-
-            <div class="bg-white p-6 rounded-lg shadow mb-6">
-                <h2 class="text-lg font-medium mb-4">Add Configuration</h2>
-                <form id="configForm" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Env Type</label>
-                            <select id="envType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                                <option value="dev">Dev</option>
-                                <option value="test">Test</option>
-                                <option value="prod">Prod</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Config Key</label>
-                            <input type="text" id="configKey" placeholder="e.g., database_url" required
-                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        </div>
+        <!-- MCP Settings -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+            <h3 class="font-semibold text-white mb-4">
+                <i class="fas fa-plug text-purple-400 mr-2"></i>MCP 设置
+            </h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-gray-400 text-xs">MCP 端点</label>
+                    <div class="flex items-center gap-2 mt-1">
+                        <input type="text" x-model="settings.mcp_endpoint" @change="saveSetting('mcp_endpoint')"
+                               class="flex-1 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                               placeholder="http://192.168.0.100:8883/mcp/">
+                        <button @click="testMcpConnection()"
+                                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white transition">
+                            <i class="fas fa-plug"></i>
+                        </button>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Config Value</label>
-                        <input type="text" id="configValue" placeholder="e.g., jdbc:mysql://localhost:3306/db" required
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div id="configError" class="text-red-500 text-sm hidden"></div>
-                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">
-                        Add Config
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-300 text-sm">自动刷新健康状态</span>
+                    <button @click="toggleSetting('auto_health_check')"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                            :class="settings.auto_health_check === 'true' ? 'bg-green-500' : 'bg-gray-600'">
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                              :class="settings.auto_health_check === 'true' ? 'translate-x-6' : 'translate-x-1'"></span>
                     </button>
-                </form>
-            </div>
-
-            <div class="bg-white p-6 rounded-lg shadow">
-                <h2 class="text-lg font-medium mb-4">Existing Configs</h2>
-                <div id="configsList" class="space-y-2">
-                    <div class="text-center py-4 text-gray-500">Loading configs...</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        async function loadConfigs() {
-            try {
-                const response = await fetch('/api/projects/1/configs/');
-                const data = await response.json();
-                const listEl = document.getElementById('configsList');
-                
-                if (!data.configs || data.configs.length === 0) {
-                    listEl.innerHTML = '<div class="text-center py-4 text-gray-500">No configs found</div>';
-                    return;
-                }
-                
-                listEl.innerHTML = data.configs.map(c => `
-                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
-                        <div>
-                            <span class="font-medium">${c.config_key}</span>
-                            <span class="ml-2 text-sm text-gray-500">[${c.env_type}]</span>
-                        </div>
-                        <code class="text-sm text-gray-600">${c.config_value}</code>
-                    </div>
-                `).join('');
-            } catch (err) {
-                document.getElementById('configsList').innerHTML = '<div class="text-center py-4 text-red-500">Failed to load configs</div>';
-            }
-        }
+    <!-- All Settings -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
+            <h3 class="font-semibold text-white">
+                <i class="fas fa-cog text-gray-400 mr-2"></i>所有设置
+            </h3>
+            <input type="text" x-model="searchQuery" placeholder="搜索设置..."
+                   class="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-48">
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-800/50 text-gray-400">
+                    <tr>
+                        <th class="px-5 py-3 text-left font-medium">键</th>
+                        <th class="px-5 py-3 text-left font-medium">值</th>
+                        <th class="px-5 py-3 text-left font-medium">类型</th>
+                        <th class="px-5 py-3 text-left font-medium">描述</th>
+                        <th class="px-5 py-3 text-right font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="(value, key) in filteredSettings" :key="key">
+                        <tr class="hover:bg-gray-700/30">
+                            <td class="px-5 py-3">
+                                <code class="text-indigo-400 text-xs" x-text="key"></code>
+                            </td>
+                            <td class="px-5 py-3">
+                                <template x-if="typeof value === 'boolean' || value === 'true' || value === 'false'">
+                                    <button @click="toggleSetting(key)"
+                                            class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                                            :class="value === 'true' || value === true ? 'bg-green-500' : 'bg-gray-600'">
+                                        <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform"
+                                              :class="value === 'true' || value === true ? 'translate-x-4.5' : 'translate-x-1'"></span>
+                                    </button>
+                                </template>
+                                <template x-if="typeof value !== 'boolean' && value !== 'true' && value !== 'false'">
+                                    <input type="text" :value="value" @blur="updateSetting(key, $event.target.value)"
+                                           class="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs w-48 focus:outline-none focus:border-indigo-500">
+                                </template>
+                            </td>
+                            <td class="px-5 py-3">
+                                <span class="px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-400"
+                                      x-text="typeof value === 'boolean' || value === 'true' || value === 'false' ? 'boolean' : 'string'"></span>
+                            </td>
+                            <td class="px-5 py-3 text-gray-500 text-xs" x-text="getSettingDescription(key)"></td>
+                            <td class="px-5 py-3 text-right">
+                                <button @click="deleteSetting(key)"
+                                        class="text-red-400 hover:text-red-300 text-xs">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-        document.getElementById('configForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const errorDiv = document.getElementById('configError');
-            errorDiv.classList.add('hidden');
-            
-            const envType = document.getElementById('envType').value;
-            const configKey = document.getElementById('configKey').value;
-            const configValue = document.getElementById('configValue').value;
-            
-            try {
-                const response = await fetch('/api/projects/1/configs/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({env_type: envType, config_key: configKey, config_value: configValue})
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    document.getElementById('configForm').reset();
-                    loadConfigs();
-                } else {
-                    errorDiv.textContent = data.detail || 'Failed to add config';
-                    errorDiv.classList.remove('hidden');
-                }
-            } catch (err) {
-                errorDiv.textContent = 'Network error';
-                errorDiv.classList.remove('hidden');
-            }
-        });
+    <!-- Create Setting Modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50"
+         @click.self="showCreateModal = false">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">添加配置</h3>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form @submit.prevent="createSetting()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">键 *</label>
+                    <input type="text" x-model="newSetting.key" required placeholder="e.g., my_setting"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">值 *</label>
+                    <input type="text" x-model="newSetting.value" required
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">描述</label>
+                    <input type="text" x-model="newSetting.description"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div x-show="error" class="text-red-400 text-sm" x-text="error"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" @click="showCreateModal = false"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                        取消
+                    </button>
+                    <button type="submit" :disabled="saving"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50">
+                        保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-        loadConfigs();
-    </script>
-</body>
-</html>
+    <!-- Loading -->
+    <div x-show="loading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-400">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function configsPage() {
+        return {
+            settings: {},
+            loading: true,
+            saving: false,
+            searchQuery: '',
+            showCreateModal: false,
+            error: '',
+            newSetting: { key: '', value: '', description: '' },
+            get filteredSettings() {
+                if (!this.searchQuery) return this.settings;
+                const q = this.searchQuery.toLowerCase();
+                const filtered = {};
+                for (const [k, v] of Object.entries(this.settings)) {
+                    if (k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)) {
+                        filtered[k] = v;
+                    }
+                }
+                return filtered;
+            },
+            async init() {
+                await this.loadSettings();
+                this.loading = false;
+            },
+            async loadSettings() {
+                try {
+                    const r = await fetch('/api/admin/settings');
+                    const data = await r.json();
+                    const settingsObj = {};
+                    (data.settings || []).forEach(s => {
+                        settingsObj[s.key] = s.value;
+                    });
+                    this.settings = settingsObj;
+                } catch(e) {
+                    console.error('Failed to load settings:', e);
+                }
+            },
+            async saveSetting(key) {
+                try {
+                    await fetch('/api/admin/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key, value: this.settings[key] })
+                    });
+                } catch(e) {
+                    console.error('Save failed:', e);
+                }
+            },
+            async toggleSetting(key) {
+                const current = this.settings[key];
+                this.settings[key] = (current === 'true' || current === true) ? 'false' : 'true';
+                await this.saveSetting(key);
+            },
+            async updateSetting(key, value) {
+                this.settings[key] = value;
+                await this.saveSetting(key);
+            },
+            async deleteSetting(key) {
+                if (!confirm('确定删除此设置？')) return;
+                try {
+                    await fetch(`/api/admin/settings/${key}`, { method: 'DELETE' });
+                    delete this.settings[key];
+                } catch(e) {
+                    console.error('Delete failed:', e);
+                }
+            },
+            async createSetting() {
+                this.error = '';
+                try {
+                    const r = await fetch('/api/admin/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newSetting)
+                    });
+                    if (r.ok) {
+                        this.showCreateModal = false;
+                        this.newSetting = { key: '', value: '', description: '' };
+                        await this.loadSettings();
+                    } else {
+                        const d = await r.json();
+                        this.error = d.detail || '保存失败';
+                    }
+                } catch(e) {
+                    this.error = '网络错误';
+                }
+            },
+            async testMcpConnection() {
+                try {
+                    const r = await fetch('/api/tools/health/all');
+                    const data = await r.json();
+                    const healthy = data.filter(t => t.status === 'healthy').length;
+                    alert(`MCP 连接成功！${healthy} 个工具健康`);
+                } catch(e) {
+                    alert('MCP 连接失败');
+                }
+            },
+            getSettingDescription(key) {
+                const desc = {
+                    'allow_registration': '允许新用户注册',
+                    'force_https': '强制使用 HTTPS',
+                    'session_timeout_minutes': '会话超时时间',
+                    'mcp_endpoint': 'MCP 服务端点',
+                    'auto_health_check': '自动检查工具健康状态'
+                };
+                return desc[key] || '';
+            }
+        };
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,246 @@
+{% extends "layouts/unified_base.html" %}
+{% block title %}模型管理{% endblock %}
+
+{% block content %}
+<div x-data="modelsPage()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">模型管理</h1>
+            <p class="text-sm text-gray-400 mt-1">配置和管理 AI 模型</p>
+        </div>
+        <button @click="showAddModal = true; resetForm()"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>添加模型
+        </button>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-2xl text-indigo-400"></i>
+    </div>
+
+    <!-- Models Grid -->
+    <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="model in models" :key="model.id">
+            <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 hover:border-gray-600 transition">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold"
+                             :class="providerColor(model.provider)"
+                             x-text="model.provider[0].toUpperCase()"></div>
+                        <div>
+                            <p class="text-sm font-medium text-white" x-text="model.display_name || model.name"></p>
+                            <p class="text-xs text-gray-400" x-text="model.model_id"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span x-show="model.is_default" class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-xs rounded-full">默认</span>
+                        <span class="w-2 h-2 rounded-full" :class="model.is_active ? 'bg-green-400' : 'bg-gray-500'"></span>
+                    </div>
+                </div>
+                <div class="space-y-2 text-xs text-gray-400 mb-4">
+                    <div class="flex justify-between">
+                        <span>Provider</span>
+                        <span class="text-gray-300" x-text="model.provider"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Max Tokens</span>
+                        <span class="text-gray-300" x-text="model.max_tokens"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Temperature</span>
+                        <span class="text-gray-300" x-text="model.temperature"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Base URL</span>
+                        <span class="text-gray-300 truncate max-w-[180px]" x-text="model.base_url || '-'"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-3 border-t border-gray-700">
+                    <button @click="editModel(model)" class="flex-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition">
+                        <i class="fas fa-edit mr-1"></i>编辑
+                    </button>
+                    <button @click="toggleActive(model)" class="flex-1 px-3 py-1.5 text-xs rounded-lg transition"
+                            :class="model.is_active ? 'text-yellow-400 hover:bg-yellow-500/20' : 'text-green-400 hover:bg-green-500/20'">
+                        <i :class="model.is_active ? 'fas fa-ban' : 'fas fa-check'"></i>
+                        <span x-text="model.is_active ? '禁用' : '启用'"></span>
+                    </button>
+                    <button @click="confirmDelete(model)" class="px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 rounded-lg transition">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Empty State -->
+    <div x-show="!loading && models.length === 0" class="text-center py-12">
+        <i class="fas fa-robot text-4xl text-gray-600"></i>
+        <p class="text-gray-400 mt-2">暂无模型配置</p>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div x-show="showModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="showModal = false"></div>
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-white mb-4" x-text="editingModel ? '编辑模型' : '添加模型'"></h3>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">名称 <span class="text-red-400">*</span></label>
+                        <input type="text" x-model="form.name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">显示名称</label>
+                        <input type="text" x-model="form.display_name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Provider <span class="text-red-400">*</span></label>
+                        <select x-model="form.provider" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="alibaba">Alibaba (Qwen)</option>
+                            <option value="zhipu">Zhipu (GLM)</option>
+                            <option value="local">Local</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Model ID <span class="text-red-400">*</span></label>
+                        <input type="text" x-model="form.model_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">API Key</label>
+                    <input type="password" x-model="form.api_key" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Base URL</label>
+                    <input type="text" x-model="form.base_url" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Max Tokens</label>
+                        <input type="number" x-model.number="form.max_tokens" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Temperature</label>
+                        <input type="number" step="0.1" min="0" max="2" x-model.number="form.temperature" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Timeout (s)</label>
+                        <input type="number" x-model.number="form.timeout_secs" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="form.is_active" class="w-4 h-4 rounded bg-gray-700 border-gray-600 text-indigo-500 focus:ring-indigo-500">
+                        <span class="text-sm text-gray-300">启用</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="form.is_default" class="w-4 h-4 rounded bg-gray-700 border-gray-600 text-indigo-500 focus:ring-indigo-500">
+                        <span class="text-sm text-gray-300">设为默认</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showModal = false" class="px-4 py-2 text-sm text-gray-300 hover:text-white transition">取消</button>
+                <button @click="saveModel()" :disabled="saving"
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition disabled:opacity-50">
+                    <span x-text="saving ? '保存中...' : '保存'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div x-show="showDeleteModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="showDeleteModal = false"></div>
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">确认删除</h3>
+            <p class="text-gray-400 text-sm mb-6">确定要删除模型 <span class="text-white" x-text="deleteTarget?.name"></span> 吗？</p>
+            <div class="flex justify-end gap-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-sm text-gray-300 hover:text-white transition">取消</button>
+                <button @click="deleteModel()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function modelsPage() {
+    return {
+        models: [],
+        loading: true,
+        showModal: false,
+        showDeleteModal: false,
+        editingModel: null,
+        deleteTarget: null,
+        saving: false,
+        form: { name: '', display_name: '', provider: 'openai', model_id: '', api_key: '', base_url: '', max_tokens: 4096, temperature: 0.7, timeout_secs: 60, is_active: true, is_default: false, extra_config: {} },
+
+        async init() { await this.loadModels(); },
+
+        async loadModels() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/api/auth/ai-models');
+                const data = await resp.json();
+                this.models = data.items || [];
+            } catch (e) { console.error(e); } finally { this.loading = false; }
+        },
+
+        resetForm() {
+            this.editingModel = null;
+            this.form = { name: '', display_name: '', provider: 'openai', model_id: '', api_key: '', base_url: '', max_tokens: 4096, temperature: 0.7, timeout_secs: 60, is_active: true, is_default: false, extra_config: {} };
+        },
+
+        editModel(model) {
+            this.editingModel = model;
+            this.form = { ...model, extra_config: model.extra_config || {} };
+            this.showModal = true;
+        },
+
+        async saveModel() {
+            this.saving = true;
+            try {
+                const url = this.editingModel ? `/api/auth/ai-models/${this.editingModel.id}` : '/api/auth/ai-models';
+                const method = this.editingModel ? 'PUT' : 'POST';
+                const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.form) });
+                const data = await resp.json();
+                if (data.success) { this.showModal = false; await this.loadModels(); }
+            } catch (e) { console.error(e); } finally { this.saving = false; }
+        },
+
+        async toggleActive(model) {
+            model.is_active = !model.is_active;
+            try {
+                await fetch(`/api/auth/ai-models/${model.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...model, api_key: model.api_key }) });
+            } catch (e) { console.error(e); }
+        },
+
+        confirmDelete(model) { this.deleteTarget = model; this.showDeleteModal = true; },
+
+        async deleteModel() {
+            if (!this.deleteTarget) return;
+            try {
+                await fetch(`/api/auth/ai-models/${this.deleteTarget.id}`, { method: 'DELETE' });
+                this.showDeleteModal = false; this.deleteTarget = null; await this.loadModels();
+            } catch (e) { console.error(e); }
+        },
+
+        providerColor(p) {
+            const c = { openai: 'bg-green-500/20 text-green-400', anthropic: 'bg-orange-500/20 text-orange-400', deepseek: 'bg-blue-500/20 text-blue-400', alibaba: 'bg-purple-500/20 text-purple-400', zhipu: 'bg-cyan-500/20 text-cyan-400', local: 'bg-gray-500/20 text-gray-400' };
+            return c[p] || 'bg-gray-500/20 text-gray-400';
+        }
+    };
+}
+</script>
+{% endblock %}

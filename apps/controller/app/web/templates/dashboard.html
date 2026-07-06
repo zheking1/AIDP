@@ -1,0 +1,254 @@
+{% extends "unified_base.html" %}
+{% set active_page = 'dashboard' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div x-cloak>
+    <!-- Welcome Banner -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-white mb-2">欢迎回来, {{ username }}!</h1>
+        <p class="text-gray-400">AIDP 统一控制台 - 管理和监控所有 AI 编程工具</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-gray-400 text-sm">工具总数</span>
+                <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-cubes text-blue-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white" x-text="tools.length">-</div>
+            <div class="text-xs text-gray-500 mt-1">已注册工具</div>
+        </div>
+        
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-gray-400 text-sm">健康运行</span>
+                <div class="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-check-circle text-green-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-green-400" x-text="healthyCount">-</div>
+            <div class="text-xs text-gray-500 mt-1">
+                <span x-show="healthyCount === tools.length" class="text-green-500">全部正常</span>
+                <span x-show="healthyCount !== tools.length" class="text-yellow-500">
+                    <span x-text="tools.length - healthyCount"></span> 个异常
+                </span>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-gray-400 text-sm">今日调用</span>
+                <div class="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-bolt text-purple-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white" x-text="invocations.length">-</div>
+            <div class="text-xs text-gray-500 mt-1">最近调用记录</div>
+        </div>
+        
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-gray-400 text-sm">项目</span>
+                <div class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-folder-open text-orange-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white" x-text="projectCount">-</div>
+            <div class="text-xs text-gray-500 mt-1">已导入项目</div>
+        </div>
+    </div>
+
+    <!-- Tools Grid -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-white">
+                <i class="fas fa-tools text-indigo-400 mr-2"></i>工具列表
+            </h2>
+            <a href="/tools" class="text-sm text-indigo-400 hover:text-indigo-300">
+                查看全部 <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            <template x-for="tool in tools" :key="tool.name">
+                <a :href="'/tools/' + tool.name" 
+                   class="tool-card bg-gray-800 rounded-xl p-4 border border-gray-700 block group">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                             :class="tool.status === 'healthy' ? 'bg-green-500/20' : tool.status === 'registered' ? 'bg-yellow-500/20' : 'bg-red-500/20'">
+                            <i class="fas fa-cube" :class="tool.status === 'healthy' ? 'text-green-400' : tool.status === 'registered' ? 'text-yellow-400' : 'text-red-400'"></i>
+                        </div>
+                        <span class="status-dot" :class="'status-' + tool.status"></span>
+                    </div>
+                    <div class="text-sm font-medium text-white mb-1 truncate" x-text="tool.displayName || tool.name"></div>
+                    <div class="text-xs text-gray-500 mb-2" x-text="tool.name"></div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-600">
+                            <i class="fas fa-plug mr-1"></i>
+                            <span x-text="(tool.capabilities || []).length"></span> 能力
+                        </span>
+                        <span class="text-indigo-400 group-hover:translate-x-1 transition">
+                            <i class="fas fa-external-link-alt"></i>
+                        </span>
+                    </div>
+                </a>
+            </template>
+            
+            <!-- Add Tool Card -->
+            <a href="/tools/manage" class="tool-card bg-gray-800/50 rounded-xl p-4 border border-dashed border-gray-600 block hover:border-indigo-500 hover:bg-gray-800 transition">
+                <div class="flex flex-col items-center justify-center h-full py-4">
+                    <div class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mb-3">
+                        <i class="fas fa-plus text-gray-400"></i>
+                    </div>
+                    <span class="text-sm text-gray-400">注册新工具</span>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recent Invocations -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="font-semibold text-white">
+                    <i class="fas fa-history text-blue-400 mr-2"></i>最近调用
+                </h3>
+                <a href="/logs" class="text-xs text-indigo-400 hover:text-indigo-300">查看全部</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-800/50 text-gray-400">
+                        <tr>
+                            <th class="px-4 py-3 text-left font-medium">工具</th>
+                            <th class="px-4 py-3 text-left font-medium">能力</th>
+                            <th class="px-4 py-3 text-left font-medium">状态</th>
+                            <th class="px-4 py-3 text-left font-medium">耗时</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        <template x-for="inv in invocations.slice(0, 8)" :key="inv.id">
+                            <tr class="hover:bg-gray-700/30">
+                                <td class="px-4 py-3">
+                                    <span class="text-gray-200" x-text="inv.toolName"></span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-400" x-text="inv.capability || '-'"></td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                          :class="inv.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                          x-text="inv.status"></span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-500" x-text="(inv.durationMs || 0) + 'ms'"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="invocations.length === 0">
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-inbox text-2xl mb-2 block"></i>
+                                暂无调用记录
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Health Status -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="font-semibold text-white">
+                    <i class="fas fa-heartbeat text-red-400 mr-2"></i>健康状态
+                </h3>
+                <button @click="refreshHealth()" class="text-xs text-indigo-400 hover:text-indigo-300">
+                    <i class="fas fa-sync-alt mr-1"></i>刷新
+                </button>
+            </div>
+            <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+                <template x-for="tool in tools" :key="tool.name">
+                    <div class="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <span class="status-dot" :class="'status-' + tool.status"></span>
+                            <div>
+                                <div class="text-sm font-medium text-white" x-text="tool.displayName || tool.name"></div>
+                                <div class="text-xs text-gray-500" x-text="tool.endpoint"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 rounded text-xs font-medium"
+                                  :class="{
+                                      'bg-green-500/20 text-green-400': tool.status === 'healthy',
+                                      'bg-yellow-500/20 text-yellow-400': tool.status === 'registered',
+                                      'bg-red-500/20 text-red-400': tool.status === 'unreachable' || tool.status === 'unhealthy',
+                                      'bg-gray-500/20 text-gray-400': tool.status === 'disabled'
+                                  }"
+                                  x-text="tool.status"></span>
+                            <a :href="'/tools/' + tool.name" class="text-gray-500 hover:text-indigo-400">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mt-8 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 rounded-xl p-6 border border-indigo-800/50">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-1">快速开始</h3>
+                <p class="text-gray-400 text-sm">导入新项目，开始使用 AIDP 的 AI 编程能力</p>
+            </div>
+            <div class="flex gap-3">
+                <a href="/onboarding" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-rocket mr-2"></i>导入项目
+                </a>
+                <a href="/projects" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-folder mr-2"></i>查看项目
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-400">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Extend unifiedApp with dashboard data
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('dashboard', () => ({
+            invocations: [],
+            projectCount: 0,
+            async initDashboard() {
+                await Promise.all([
+                    this.loadInvocations(),
+                    this.loadProjectCount()
+                ]);
+            },
+            async loadInvocations() {
+                try {
+                    const r = await fetch('/api/tools/invocations/history?limit=10');
+                    this.invocations = await r.json();
+                } catch(e) { this.invocations = []; }
+            },
+            async loadProjectCount() {
+                try {
+                    const r = await fetch('/api/projects');
+                    const data = await r.json();
+                    this.projectCount = (data.projects || []).length || 0;
+                } catch(e) { this.projectCount = 0; }
+            }
+        }));
+    });
+</script>
+{% endblock %}

@@ -1,8 +1,10 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
@@ -68,5 +70,10 @@ app.include_router(nas_storage_router)
 app.include_router(instructions_router)
 app.include_router(web_router)
 app.add_api_websocket_route("/ws/logs", ws_handler)
+
+# Mount static files
+static_dir = Path(__file__).parent / "web" / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.mount("/mcp", _mcp_app)

@@ -6,6 +6,7 @@ from app.db.database import Base, async_session_factory
 
 class ToolRegistry(Base):
     __tablename__ = "tool_registry"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(256), unique=True, nullable=False, index=True)
@@ -22,6 +23,7 @@ class ToolRegistry(Base):
 
 class ToolInvocation(Base):
     __tablename__ = "tool_invocation"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tool_name = Column(String(256), nullable=False, index=True)

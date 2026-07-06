@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token if csrf_token else '' }}">
+    <title>{% block title %}Dashboard{% endblock %} - AIDP Console</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- AIDP Styles -->
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        
+        /* Sidebar transitions */
+        .sidebar-item {
+            transition: all 0.2s ease;
+        }
+        .sidebar-item:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+        .sidebar-item.active {
+            background-color: rgba(99, 102, 241, 0.2);
+            border-right: 3px solid #6366f1;
+        }
+        
+        /* Card hover effects */
+        .tool-card {
+            transition: all 0.2s ease;
+        }
+        .tool-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Status dots */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-healthy { background-color: #10b981; }
+        .status-registered { background-color: #f59e0b; }
+        .status-unhealthy { background-color: #ef4444; }
+        .status-unreachable { background-color: #6b7280; }
+        .status-disabled { background-color: #374151; }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Line clamp */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Toast notifications */
+        .toast-enter {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        .toast-enter-active {
+            transform: translateX(0);
+            opacity: 1;
+            transition: all 0.3s ease;
+        }
+        .toast-exit {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .toast-exit-active {
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen" 
+      x-data="AIDP.layoutData()" 
+      x-init="init()"
+      x-cloak>
+
+    <!-- Top Navigation -->
+    <nav class="bg-gray-800 border-b border-gray-700 fixed top-0 left-0 right-0 z-50 h-14">
+        <div class="flex items-center justify-between h-full px-4">
+            <!-- Left: Logo -->
+            <div class="flex items-center gap-4">
+                <a href="/" class="flex items-center gap-2 hover:opacity-80 transition">
+                    <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-white text-sm"></i>
+                    </div>
+                    <span class="text-lg font-bold text-white tracking-tight">AIDP</span>
+                </a>
+                
+                <!-- Quick Tool Switcher -->
+                <div class="relative ml-4" x-data="{ open: false }">
+                    <button @click="open = !open" @click.away="open = false" 
+                            class="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition">
+                        <i class="fas fa-tools text-gray-400"></i>
+                        <span>工具</span>
+                        <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform"
+                           :class="open ? 'rotate-180' : ''"></i>
+                    </button>
+                    <div x-show="open" 
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute top-full left-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
+                        <div class="p-2">
+                            <a href="/tools" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition">
+                                <i class="fas fa-th-large w-5 text-center"></i> 全部工具
+                            </a>
+                            <div class="border-t border-gray-700 my-2"></div>
+                            <template x-for="tool in $store.aidp?.tools?.list?.slice(0, 10) || []" :key="tool.name">
+                                <a :href="'/tools/' + tool.name" 
+                                   class="flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-700 rounded-lg transition">
+                                    <span class="status-dot" :class="'status-' + tool.status"></span>
+                                    <span x-text="tool.displayName || tool.name" class="text-gray-200 truncate"></span>
+                                </a>
+                            </template>
+                            <div x-show="($store.aidp?.tools?.list?.length || 0) > 10" class="px-3 py-2 text-xs text-gray-500 text-center">
+                                还有 <span x-text="($store.aidp?.tools?.list?.length || 0) - 10"></span> 个工具...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right: Actions & User -->
+            <div class="flex items-center gap-3">
+                <!-- Global Search -->
+                <div class="relative hidden md:block">
+                    <input type="text" 
+                           placeholder="搜索工具、项目..." 
+                           class="w-56 pl-9 pr-4 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                </div>
+                
+                <!-- Health Indicator -->
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg">
+                    <span class="text-xs text-gray-400">健康</span>
+                    <span class="text-sm font-semibold" 
+                          :class="($store.aidp?.tools?.list?.filter(t => t.status === 'healthy').length || 0) === ($store.aidp?.tools?.list?.length || 0) ? 'text-green-400' : 'text-yellow-400'">
+                        <span x-text="$store.aidp?.tools?.list?.filter(t => t.status === 'healthy').length || 0"></span>
+                        /
+                        <span x-text="$store.aidp?.tools?.list?.length || 0"></span>
+                    </span>
+                </div>
+                
+                <!-- Notifications -->
+                <button class="relative p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition">
+                    <i class="fas fa-bell"></i>
+                    <span x-show="notifications.length > 0" 
+                          x-text="notifications.length"
+                          class="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-xs flex items-center justify-center"></span>
+                </button>
+                
+                <!-- User Menu -->
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" @click.away="open = false"
+                            class="flex items-center gap-2 pl-2 pr-3 py-1.5 hover:bg-gray-700 rounded-lg transition">
+                        <div class="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-xs font-bold text-white">
+                            {{ username[0]|upper if username else 'U' }}
+                        </div>
+                        <span class="text-sm hidden sm:block">{{ username }}</span>
+                        <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                    </button>
+                    <div x-show="open"
+                         x-transition
+                         class="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 py-1">
+                        <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-700">
+                            角色: <span class="text-gray-300">{{ role }}</span>
+                        </div>
+                        <a href="/configs" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition">
+                            <i class="fas fa-cog w-4"></i> 设置
+                        </a>
+                        <a href="/docs" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition">
+                            <i class="fas fa-book w-4"></i> API 文档
+                        </a>
+                        <div class="border-t border-gray-700 my-1"></div>
+                        <form action="/api/auth/logout" method="POST">
+                            <button type="submit" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-gray-700 transition">
+                                <i class="fas fa-sign-out-alt w-4"></i> 退出
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Layout Container -->
+    <div class="flex pt-14 min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-gray-800 border-r border-gray-700 fixed left-0 top-14 bottom-0 overflow-y-auto z-40"
+               :class="sidebarCollapsed ? '-ml-56' : ''"
+               style="transition: margin-left 0.3s ease;">
+            <nav class="p-3 space-y-1">
+                {% set nav_items = [
+                    ('/', 'dashboard', 'fa-home', '总览'),
+                    ('/tools', 'tools', 'fa-th-large', '工具管理'),
+                    ('/projects', 'projects', 'fa-folder', '项目'),
+                    ('/logs', 'logs', 'fa-terminal', '日志'),
+                    ('/audit', 'audit', 'fa-shield-alt', '审计'),
+                    ('/reviews', 'reviews', 'fa-check-circle', '评审')
+                ] %}
+                
+                {% for url, page_id, icon, label in nav_items %}
+                <a href="{{ url }}" 
+                   class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg {% if active_page == page_id %}active{% endif %}">
+                    <i class="fas {{ icon }} w-5 text-center {% if active_page == page_id %}text-indigo-400{% else %}text-gray-400{% endif %}"></i>
+                    <span class="{% if active_page == page_id %}text-white font-medium{% else %}text-gray-300{% endif %}">{{ label }}</span>
+                    {% if page_id == 'tools' %}
+                    <span class="ml-auto text-xs bg-gray-700 px-2 py-0.5 rounded" x-text="$store.aidp?.tools?.list?.length || 0"></span>
+                    {% endif %}
+                </a>
+                {% endfor %}
+                
+                <!-- Tool Shortcuts -->
+                <div class="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    工具快捷
+                </div>
+                <template x-for="tool in ($store.aidp?.tools?.list || []).slice(0, 5)" :key="tool.name">
+                    <a :href="'/tools/' + tool.name" 
+                       class="sidebar-item flex items-center gap-3 px-3 py-2 rounded-lg"
+                       :class="currentPage === 'tool-detail' && $store.aidp?.tools?.selected?.name === tool.name ? 'active' : ''">
+                        <span class="status-dot" :class="'status-' + tool.status"></span>
+                        <span class="text-sm truncate" 
+                              :class="currentPage === 'tool-detail' && $store.aidp?.tools?.selected?.name === tool.name ? 'text-white font-medium' : 'text-gray-400'"
+                              x-text="tool.displayName || tool.name"></span>
+                    </a>
+                </template>
+            </nav>
+        </aside>
+
+        <!-- Sidebar Toggle (Mobile) -->
+        <button @click="sidebarCollapsed = !sidebarCollapsed"
+                class="fixed bottom-6 right-6 z-50 w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center transition md:hidden">
+            <i class="fas" :class="sidebarCollapsed ? 'fa-bars' : 'fa-times'"></i>
+        </button>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-56 p-6 transition-all duration-300"
+              :class="sidebarCollapsed ? 'ml-0' : ''">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed top-20 right-4 z-50 space-y-2 w-80">
+        <template x-for="notification in notifications" :key="notification.id">
+            <div x-show="true"
+                 x-transition:enter="toast-enter toast-enter-active"
+                 x-transition:leave="toast-exit toast-exit-active"
+                 class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white"
+                 :class="getNotificationClass(notification.type)">
+                <i class="fas" :class="{
+                    'fa-info-circle': notification.type === 'info',
+                    'fa-check-circle': notification.type === 'success',
+                    'fa-exclamation-triangle': notification.type === 'warning',
+                    'fa-times-circle': notification.type === 'error'
+                }"></i>
+                <span class="flex-1 text-sm" x-text="notification.message"></span>
+                <button @click="removeNotification(notification.id)" class="opacity-75 hover:opacity-100">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- AIDP Scripts -->
+    <script src="/static/js/core/api.js"></script>
+    <script src="/static/js/core/store.js"></script>
+    <script src="/static/js/core/events.js"></script>
+    <script src="/static/js/services/toolService.js"></script>
+    <script src="/static/js/services/proxyService.js"></script>
+    <script src="/static/js/components/ToolCard.js"></script>
+    <script src="/static/js/components/StatusBadge.js"></script>
+    <script src="/static/js/components/DataTable.js"></script>
+    <script src="/static/js/components/index.js"></script>
+    <script src="/static/js/aidp.js"></script>
+
+    <!-- Initialize Alpine store -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('aidp', {
+                tools: AIDP.store.get('tools'),
+                dashboard: AIDP.store.get('dashboard'),
+                user: AIDP.store.get('user')
+            });
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
