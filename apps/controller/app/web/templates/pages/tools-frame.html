@@ -206,7 +206,7 @@
             async refreshAllHealth() {
                 this.refreshing = true;
                 try {
-                    await fetch('/api/tools/health-check', { method: 'POST' });
+                    await fetch('/api/tools/health/all', { method: 'GET' });
                     await this.loadTools();
                 } catch (e) {
                     console.error('Failed to refresh health:', e);
@@ -228,14 +228,12 @@
 
             async toggleTool(tool) {
                 try {
-                    const newStatus = tool.status === 'disabled' ? 'registered' : 'disabled';
-                    const response = await fetch(`/api/tools/${tool.name}/status`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: newStatus })
+                    const action = tool.status === 'disabled' ? 'enable' : 'disable';
+                    const response = await fetch(`/api/tools/${tool.name}/${action}`, {
+                        method: 'POST'
                     });
                     if (response.ok) {
-                        tool.status = newStatus;
+                        tool.status = tool.status === 'disabled' ? 'registered' : 'disabled';
                     }
                 } catch (e) {
                     console.error('Failed to toggle tool:', e);
