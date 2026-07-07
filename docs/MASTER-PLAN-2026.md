@@ -1,5 +1,7 @@
 # AIDP 2026 年综合开发计划总览
 
+> **文档整理说明**：本文档整合了 2024-2025 年的所有历史计划文档，包括 DEV-PLAN-V3、UNIFIED_WEB_UI_DESIGN、MASTER-DEVELOPMENT-PLAN 等。旧文档已归档至 `docs/archived/2024-2025/` 目录。
+
 ## 文档信息
 
 | 属性 | 值 |
@@ -9,6 +11,18 @@
 | 最后更新 | 2026-07-07 |
 | 状态 | 进行中 |
 | 编写者 | AIDP Team |
+
+### 相关文档
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| **本计划** | `docs/MASTER-PLAN-2026.md` | 综合开发计划总览（当前文档） |
+| **未完成任务** | `docs/UNFINISHED-TASKS.md` | 详细的待办任务清单 |
+| **计划总结** | `docs/PLANS-SUMMARY.md` | 已完成和待完成工作汇总 |
+| **Knowledge计划** | `docs/plans/KNOWLEDGE-WEB-UI-PLAN.md` | Knowledge Tool Web UI 详细计划 |
+| **Memory计划** | `docs/plans/MEMORY-WEB-UI-PLAN.md` | Memory Tool Web UI 详细计划 |
+| **Evolution计划** | `docs/plans/EVOLUTION-REFACTOR-PLAN.md` | Evolution Engine 重构计划 |
+| **历史归档** | `docs/archived/2024-2025/` | 已完成的旧文档归档 |
 
 ---
 
