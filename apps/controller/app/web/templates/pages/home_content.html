@@ -6,7 +6,7 @@
         </div>
     </div>
 
-    <!-- 统计卡片 -->
+    <!-- 统计卡片（两个页签共用） -->
     <div class="grid grid-cols-4 gap-4 mt-6">
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-indigo-500/30 transition cursor-pointer" @click="openTab('tools','工具列表','fa-th-large','/tools')">
             <div class="flex items-center justify-between mb-3">
@@ -14,7 +14,7 @@
                 <div class="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center"><i class="fas fa-cubes text-indigo-400"></i></div>
             </div>
             <div class="text-3xl font-bold text-white" x-text="stats.tools">-</div>
-            <div class="text-xs text-gray-500 mt-1">AIDP 平台工具</div>
+            <div class="text-xs text-gray-500 mt-1">平台工具</div>
         </div>
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-green-500/30 transition">
             <div class="flex items-center justify-between mb-3">
@@ -24,15 +24,15 @@
             <div class="text-3xl font-bold text-green-400" x-text="stats.healthy">-</div>
             <div class="text-xs text-green-500 mt-1">全部正常</div>
         </div>
-        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-purple-500/30 transition">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-purple-500/30 transition" @click="openTab('admin-models','模型管理','fa-microchip','/admin/models')">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-gray-400 text-sm">AI 模型</span>
                 <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center"><i class="fas fa-microchip text-purple-400"></i></div>
             </div>
             <div class="text-3xl font-bold text-white" x-text="stats.models">-</div>
-            <div class="text-xs text-gray-500 mt-1">LLM 配置</div>
+            <div class="text-xs text-gray-500 mt-1">LLM</div>
         </div>
-        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-orange-500/30 transition">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-orange-500/30 transition" @click="openTab('agents','Agent管理','fa-robot','/agents')">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-gray-400 text-sm">Agent</span>
                 <div class="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center"><i class="fas fa-robot text-orange-400"></i></div>
@@ -42,30 +42,68 @@
         </div>
     </div>
 
-    <!-- 使用指南 -->
-    <div class="mt-8">
-        <h2 class="text-lg font-semibold text-white mb-4"><i class="fas fa-book text-indigo-400 mr-2"></i>使用指南</h2>
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                <h3 class="font-medium text-white mb-2"><i class="fas fa-plug mr-2 text-green-400"></i>接入 AI Agent</h3>
-                <p class="text-sm text-gray-400 mb-3">在你的 MCP 配置中添加 AIDP Controller 地址，AI Agent 即可调用所有平台能力。</p>
-                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-green-400 overflow-x-auto">{"mcpServers":{"aidp":{"url":"http://192.168.0.100:8883/mcp"}}}</pre>
+    <!-- 页签切换 -->
+    <div class="flex gap-4 mt-6 border-b border-gray-700">
+        <button @click="activeTab='dashboard'" :class="activeTab==='dashboard'?'text-indigo-400 border-b-2 border-indigo-400':'text-gray-500'" class="pb-2 text-sm font-medium transition">仪表台</button>
+        <button @click="activeTab='guide'" :class="activeTab==='guide'?'text-indigo-400 border-b-2 border-indigo-400':'text-gray-500'" class="pb-2 text-sm font-medium transition">使用指南</button>
+    </div>
+
+    <!-- 仪表台内容 -->
+    <div x-show="activeTab==='dashboard'" class="mt-6 grid grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="text-sm font-medium text-gray-400 mb-3">MCP 工作流</h3>
+            <div class="space-y-2 text-sm text-gray-300">
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded bg-indigo-500/20 flex items-center justify-center text-xs text-indigo-400">1</span>aidp_context(project_name, task)</div>
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded bg-green-500/20 flex items-center justify-center text-xs text-green-400">2</span>invoke_tool_mcp(...) 执行任务</div>
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded bg-purple-500/20 flex items-center justify-center text-xs text-purple-400">3</span>index_changes(task, files) 索引变更</div>
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded bg-orange-500/20 flex items-center justify-center text-xs text-orange-400">4</span>promote_evolution(...) 知识沉淀</div>
             </div>
-            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                <h3 class="font-medium text-white mb-2"><i class="fas fa-rocket mr-2 text-blue-400"></i>初始化项目</h3>
-                <p class="text-sm text-gray-400 mb-3">Agent 调用 aidp_init 一键导入项目：扫描技术栈、索引代码、创建记忆和领域 Agent。</p>
-                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-blue-400">aidp_init(project_name="my-app", tech_stack="Python 3.13+FastAPI")</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="text-sm font-medium text-gray-400 mb-3">系统架构</h3>
+            <div class="space-y-1 text-xs text-gray-500">
+                <div>Controller :8883 — 统一入口</div>
+                <div>15 个模块 — 知识/记忆/技能/规则/Agent</div>
+                <div>13 个 MCP 工具</div>
+                <div>5 阶段上下文管线</div>
+                <div>8 个 LLM 统一管理</div>
+                <div>3 层文件索引</div>
             </div>
-            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                <h3 class="font-medium text-white mb-2"><i class="fas fa-search mr-2 text-yellow-400"></i>知识检索</h3>
-                <p class="text-sm text-gray-400 mb-3">aidp_context 自动加载项目上下文、匹配技能、检索知识——Agent 开发前必调第一步。</p>
-                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-yellow-400">aidp_context(project_name="my-app", task="修复登录bug")</pre>
-            </div>
-            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                <h3 class="font-medium text-white mb-2"><i class="fas fa-code-branch mr-2 text-purple-400"></i>持续进化</h3>
-                <p class="text-sm text-gray-400 mb-3">完成开发后调用 index_changes 索引变更 + 分析模式，优秀经验自动 promote 为系统最佳实践。</p>
-                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-purple-400">index_changes(task="修复cookie过期", changed_files=[...])</pre>
-            </div>
+        </div>
+    </div>
+
+    <!-- 使用指南内容 -->
+    <div x-show="activeTab==='guide'" class="mt-6 grid grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-plug mr-2 text-green-400"></i>接入 AI Agent</h3>
+            <p class="text-sm text-gray-400 mb-3">在你的 MCP 配置中添加 AIDP Controller 地址，AI Agent 即可调用所有平台能力。需在模型管理页面配置 API Key。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-green-400 overflow-x-auto">{"mcpServers":{"aidp":{"url":"http://192.168.0.100:8883/mcp","headers":{"x-api-key":"your-key"}}}}</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-rocket mr-2 text-blue-400"></i>初始化项目</h3>
+            <p class="text-sm text-gray-400 mb-3">Agent 调用 aidp_init 一键导入：扫描代码 → 索引 → 创建记忆 → 自动生成领域 Agent。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-blue-400">aidp_init(project_name="my-app", tech_stack="Python 3.13+FastAPI", key_files=[{path:"main.py",content:"...",type:"python"}])</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-search mr-2 text-yellow-400"></i>开发工作流</h3>
+            <p class="text-sm text-gray-400 mb-3">每次开发任务必调 aidp_context 加载上下文，系统自动匹配领域 Agent、检索知识和技能。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-yellow-400">aidp_context(project_name="aidp", task="修复登录cookie过期", api_key="...")</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-code-branch mr-2 text-purple-400"></i>知识沉淀</h3>
+            <p class="text-sm text-gray-400 mb-3">完成开发后调 index_changes 索引变更 + 分析模式，优秀经验 promote 为系统级最佳实践。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-purple-400">index_changes(task="修复cookie", changed_files=[{path:"auth.py",content:"...",language:"python"}])</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-shield-alt mr-2 text-red-400"></i>多用户隔离</h3>
+            <p class="text-sm text-gray-400 mb-3">MCP 认证后每个 session 自动绑定用户和项目，后续调用只返回该用户/项目的数据。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-red-400">x-api-key: sk-your-api-key</pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-robot mr-2 text-teal-400"></i>领域 Agent</h3>
+            <p class="text-sm text-gray-400 mb-3">项目初始化时自动根据技术栈生成专属 Agent，aidp_context 根据任务意图自动匹配。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-teal-400">a后端项目自动创建: fastapi-backend / python-security
+前端项目: react-frontend / vue3-frontend</pre>
         </div>
     </div>
 
@@ -77,6 +115,7 @@
 window.homePage = function() {
     return {
         stats: { tools: 0, healthy: 0, models: 0, agents: 0 },
+        activeTab: 'dashboard',
         async init() {
             await Promise.all([this.loadTools(), this.loadModels(), this.loadAgents()])
         },
