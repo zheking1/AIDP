@@ -195,27 +195,14 @@
 
 ---
 
-### 5.3 Evolution Engine 重构 (P1)
+### 5.3 Evolution Engine (P1) ✅ 已完成
 
-**目标**：实现两级进化系统（项目级 + 系统级）
-
-**核心设计**：
-```
-项目级进化（用户私有）
-    ↓ 提交审核
-管理员审核
-    ↓ 批准
-系统级进化（全平台共享）
-    ↓ 版本发布
-Evolution v1.2.3
-```
-
-**关键功能**：
-- 版本管理（创建/发布/回退）
-- 管理员审核工作流
-- 影响范围分析
-- 回退机制（多级）
-- 进化效果追踪
+**已完成**：
+- EvolutionVersion 数据模型：semver 版本号、project/system 双级、审核状态机
+- 项目级进化提案提交 + 管理员审核工作流（批准/拒绝/要求修改）
+- 管理员审核 UI（`/admin/evolution`）+ 项目提交 UI（`/evolution`）
+- 3 个 MCP 工具：`promote_evolution`、`list_evolutions`、`analyze_and_evolve`（LLM 自动模式提取）
+- 与 evolution-engine 的集成：自动分析代码变更 → LLM 提取模式 → 置信度 ≥ 0.5 自动创建提案
 
 **文档**：详见 `docs/plans/EVOLUTION-REFACTOR-PLAN.md`
 
@@ -299,8 +286,9 @@ Evolution v1.2.3
 
 ### 8.2 中优先级 (P1)
 
-- [ ] **Evolution Engine 重构** - 两级进化系统（目前仅骨架）
-- [ ] **三层文件索引 Layer 2** - Agent MCP index_changes 工具（Layer 1/3 已修复）
+- [x] **Evolution Engine 重构** - 两级进化系统 ✅
+- [ ] **三层文件索引 Layer 2** - Agent MCP index_changes 工具 ✅ 已实现
+- [x] Knowledge Tool 分块可视化 ✅
 - [ ] Knowledge Tool 分块可视化
 - [x] Memory Tool 时间轴/上下文包生成器 ✅
 - [x] 模型配置统一管理 ✅
