@@ -904,3 +904,103 @@ async def index_changes(
 
     session_manager.record_tool_call(session_id, "index_changes")
     return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def install_local_scripts(
+    ctx: Context,
+    project_dir: str,
+    project_id: int,
+    layers: str = "all",
+) -> str:
+    """安装本地索引脚本 — 返回 Agent 写入本地文件系统的配置和脚本。
+
+    调用此工具后，Agent 需要将返回的内容写入开发机的对应路径，
+    实现零手动操作的项目初始化。
+
+    Args:
+        project_dir: 项目根目录绝对路径, 如 "/home/dev/projects/my-app"
+        project_id: AIDP 项目 ID
+        layers: 安装哪些层 (默认 all):
+                "all" — 全部安装
+                "git_hook" — 仅 git hook
+                "file_watcher" — 仅 file watcher
+                "watcher_config" — 仅 watcher.json
+
+    Returns:
+        JSON 包含:
+        - watcher_config: .opencode/watcher.json 内容 (Agent 需写入文件)
+        - git_hook_script: .git/hooks/post-commit 脚本 (Agent 需写入并 chmod)
+        - file_watcher_cmd: 启动 file_watcher 的命令行 (Agent 需后台执行)
+
+    Agent 执行指令:
+        1. write_file(response.files.watcher_config.path, response.files.watcher_config.content)
+        2. write_file(response.files.git_hook_script.path, response.files.git_hook_script.content)
+        3. execute(response.files.file_watcher_cmd.command, background=true)
+    """
+    import platform as _platform
+
+    os_name = _platform.system().lower()
+    controller_url = f"http://192.168.0.100:8883"
+    dir_clean = project_dir.rstrip("/").rstrip("\\")
+
+    watcher_config = {
+        "project_id": project_id,
+        "project_name": "",
+        "project_root": dir_clean,
+        "controller_url": controller_url,
+        "created_at": "",
+        "layers": {
+            "git_hook": layers in ("all", "git_hook"),
+            "file_watcher": layers in ("all", "file_watcher"),
+            "agent": True,
+        },
+    }
+
+    # Git hook script (platform-aware)
+    if os_name == "windows":
+        git_hook = (
+            f'@echo off\n'
+            f'python "%~dp0\\..\\..\\scripts\\sync_changes.py" -p {project_id}\n'
+        )
+    else:
+        git_hook = (
+            f'#!/bin/sh\n'
+            f'python "$(dirname "$0")/../../scripts/sync_changes.py" -p {project_id}\n'
+        )
+
+    files = {}
+
+    if layers in ("all", "watcher_config"):
+        files["watcher_config"] = {
+            "path": dir_clean + "/.opencode/watcher.json",
+            "content": watcher_config,
+            "note": "Agent 需创建文件，若目录不存在则 mkdir -p .opencode/",
+        }
+
+    if layers in ("all", "git_hook"):
+        files["git_hook_script"] = {
+            "path": dir_clean + "/.git/hooks/post-commit",
+            "content": git_hook,
+            "os": os_name,
+            "note": "Agent 需创建文件，Linux/Mac 需 chmod +x",
+        }
+
+    if layers in ("all", "file_watcher"):
+        files["file_watcher_cmd"] = {
+            "command": f"python scripts/file_watcher.py -d {dir_clean} -p {project_id}",
+            "os": "cross-platform",
+            "note": "Agent 需以后台进程启动。Windows: Start-Process, Linux/Mac: nohup &",
+        }
+
+    return json.dumps({
+        "success": True,
+        "project_id": project_id,
+        "project_dir": project_dir,
+        "files": files,
+        "agent_actions": [
+            f"创建 {dir_clean}/.opencode/watcher.json",
+            f"创建 {dir_clean}/.git/hooks/post-commit",
+            f"后台启动: {files.get('file_watcher_cmd', {}).get('command', 'N/A')}",
+        ],
+    }, ensure_ascii=False, indent=2)
