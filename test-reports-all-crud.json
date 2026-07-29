@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-28T17:11:39.792Z",
+  "timestamp": "2026-07-29T07:51:09.504Z",
   "testSuite": "全量CRUD测试",
   "summary": {
     "total": 64,
@@ -17,7 +17,7 @@
       "page": "技能",
       "name": "读取API",
       "passed": true,
-      "detail": "name=技能测试-1785258697406"
+      "detail": "name=技能测试-1785311467335"
     },
     {
       "page": "技能",
@@ -131,7 +131,7 @@
       "page": "项目",
       "name": "读取API",
       "passed": true,
-      "detail": "name=项目测试-1785258698384"
+      "detail": "name=项目测试-1785311468383"
     },
     {
       "page": "项目",
@@ -239,7 +239,7 @@
       "page": "流程",
       "name": "列表API",
       "passed": true,
-      "detail": "items=3"
+      "detail": "items=1"
     },
     {
       "page": "流程",
@@ -257,7 +257,7 @@
       "page": "资产",
       "name": "读取API",
       "passed": true,
-      "detail": "title=资产测试-1785258699143"
+      "detail": "title=资产测试-1785311468930"
     },
     {
       "page": "资产",
@@ -335,13 +335,13 @@
       "page": "进化",
       "name": "列表API",
       "passed": true,
-      "detail": "items=4"
+      "detail": "items=5"
     },
     {
       "page": "进化",
       "name": "统计API",
       "passed": true,
-      "detail": "total=7"
+      "detail": "total=8"
     },
     {
       "page": "进化",
@@ -389,7 +389,7 @@
       "page": "质量检查",
       "name": "历史API",
       "passed": true,
-      "detail": "items=7"
+      "detail": "items=9"
     }
   ]
 }

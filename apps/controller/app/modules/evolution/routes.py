@@ -352,37 +352,37 @@ async def analyze_and_propose(req: SmartProposeRequest, db: AsyncSession = Depen
             confidence = analysis.get("confidence", 0)
             if confidence >= 0.5:
                 version = EvolutionVersion(
-                        version="0.1.0",
-                        level="project",
-                        title=analysis.get("success_pattern") or analysis.get("fix_pattern") or req.task[:100],
-                        description=f"任务: {req.task}\n分析: {analysis.get('category', '')}\n模式: {analysis.get('success_pattern') or analysis.get('fix_pattern', '')}",
-                        source_project_id=req.project_id,
-                        changes={
-                            "type": analysis.get("category"),
-                            "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern"),
-                            "root_cause": analysis.get("root_cause"),
-                            "update_type": analysis.get("update_type"),
-                        },
-                        affected_tools=targets,
-                        review_status="pending",
-                        review_log=[],
-                    )
-                    db.add(version)
-                    await db.commit()
-                    await db.refresh(version)
+                    version="0.1.0",
+                    level="project",
+                    title=analysis.get("success_pattern") or analysis.get("fix_pattern") or req.task[:100],
+                    description=f"任务: {req.task}\n分析: {analysis.get('category', '')}\n模式: {analysis.get('success_pattern') or analysis.get('fix_pattern', '')}",
+                    source_project_id=req.project_id,
+                    changes={
+                        "type": analysis.get("category"),
+                        "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern"),
+                        "root_cause": analysis.get("root_cause"),
+                        "update_type": analysis.get("update_type"),
+                    },
+                    affected_tools=targets,
+                    review_status="pending",
+                    review_log=[],
+                )
+                db.add(version)
+                await db.commit()
+                await db.refresh(version)
 
-                    return {
-                        "success": True,
-                        "version_id": version.id,
-                        "title": version.title,
-                        "confidence": confidence,
-                        "analysis": analysis,
-                        "targets": targets,
-                        "status": "pending",
-                        "auto_proposed": True,
-                    }
-                else:
-return {
+                return {
+                    "success": True,
+                    "version_id": version.id,
+                    "title": version.title,
+                    "confidence": confidence,
+                    "analysis": analysis,
+                    "targets": targets,
+                    "status": "pending",
+                    "auto_proposed": True,
+                }
+            else:
+                return {
                     "success": True,
                     "auto_proposed": False,
                     "confidence": confidence,
