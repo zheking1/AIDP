@@ -35,15 +35,10 @@ sidebar:
     order: 5
     items:
       - id: "home-dashboard"
-        label: "仪表盘"
+        label: "首页"
         icon: "tachometer-alt"
-        route: "/dashboard"
-        description: "个人工作台和数据概览"
-      - id: "home-guide"
-        label: "使用指南"
-        icon: "book"
-        route: "/home?tab=guide"
-        description: "系统使用说明"
+        route: "/home"
+        description: "仪表盘和工作概览"
 
   # ==============================
   # 1. 知识中心（Hub）
