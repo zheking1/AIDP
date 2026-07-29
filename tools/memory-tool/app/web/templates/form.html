@@ -1,82 +1,257 @@
 {% extends "base.html" %}
-{% block title %}{{ "编辑记忆" if mode == "edit" else "创建记忆" }}{% endblock %}
+{% block title %}{{ '编辑' if mode == 'edit' else '新建' }}记忆 - Memory Tool{% endblock %}
+
 {% block content %}
-<div x-data="memoryForm()" x-init="init()">
-    <div class="flex items-center space-x-3 mb-4">
-        <a href="/memories" class="text-gray-500 hover:text-blue-600">← 返回</a>
-        <h1 class="text-xl font-bold" x-text="mode === 'edit' ? '编辑记忆' : '创建记忆'"></h1>
+<div x-data="memoryForm()" x-init="init('{{ mode }}', {{ memory_id or 'null' }})" class="max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <a :href="mode === 'edit' ? `/memories/${memoryId}` : '/memories'" class="text-gray-500 hover:text-gray-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-bold text-gray-800" x-text="mode === 'edit' ? '编辑记忆' : '新建记忆'"></h1>
     </div>
-    <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
-        <form @submit.prevent="submit()">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Project ID <span class="text-red-500">*</span></label>
-                    <input x-model="form.project_id" type="text" required class="w-full border rounded px-3 py-2 text-sm">
+
+    <!-- Form -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 space-y-6">
+            <!-- Title -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    标题 <span class="text-red-500">*</span>
+                </label>
+                <input x-model="form.title" type="text" 
+                       class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       :class="{ 'border-red-300': errors.title }"
+                       placeholder="输入记忆标题...">
+                <p x-show="errors.title" class="mt-1 text-sm text-red-600" x-text="errors.title"></p>
+            </div>
+
+            <!-- Content -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    内容 <span class="text-red-500">*</span>
+                </label>
+                <textarea x-model="form.content" rows="10" 
+                          class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          :class="{ 'border-red-300': errors.content }"
+                          placeholder="输入记忆内容..."></textarea>
+                <p x-show="errors.content" class="mt-1 text-sm text-red-600" x-text="errors.content"></p>
+                <p class="mt-1 text-xs text-gray-500 text-right">
+                    <span x-text="form.content?.length || 0"></span> 字符
+                </p>
+            </div>
+
+            <!-- Category -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    分类 <span class="text-red-500">*</span>
+                </label>
+                <select x-model="form.category" 
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        :class="{ 'border-red-300': errors.category }">
+                    <option value="">请选择分类</option>
+                    <option value="architecture">🏗️ 架构</option>
+                    <option value="decision">🤔 决策</option>
+                    <option value="pattern">📐 模式</option>
+                    <option value="issue">⚠️ 问题</option>
+                    <option value="bug">🐛 缺陷</option>
+                    <option value="other">📦 其他</option>
+                </select>
+                <p x-show="errors.category" class="mt-1 text-sm text-red-600" x-text="errors.category"></p>
+            </div>
+
+            <!-- Tags -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    标签
+                </label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                    <template x-for="(tag, index) in form.tags" :key="index">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
+                            <span x-text="tag"></span>
+                            <button @click="removeTag(index)" class="hover:text-blue-900">×</button>
+                        </span>
+                    </template>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">标题 <span class="text-red-500">*</span></label>
-                    <input x-model="form.title" type="text" required class="w-full border rounded px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">内容 <span class="text-red-500">*</span></label>
-                    <textarea x-model="form.content" required rows="8" class="w-full border rounded px-3 py-2 text-sm"></textarea>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">类型</label>
-                        <select x-model="form.memory_type" class="w-full border rounded px-3 py-2 text-sm">
-                            <option value="decision">决策</option>
-                            <option value="pattern">模式</option>
-                            <option value="bug">Bug</option>
-                            <option value="workflow">工作流</option>
-                            <option value="fact">事实</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">重要性 (1-5)</label>
-                        <input x-model="form.importance" type="range" min="1" max="5" class="w-full">
-                        <div class="text-center text-sm text-gray-500" x-text="form.importance"></div>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">标签 (逗号分隔)</label>
-                    <input x-model="form.tags" type="text" class="w-full border rounded px-3 py-2 text-sm">
-                </div>
-                <div class="flex space-x-3">
-                    <button type="submit" :disabled="loading" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">保存</button>
-                    <a href="/memories" class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded text-sm">取消</a>
+                <div class="flex gap-2">
+                    <input x-model="newTag" @keydown.enter.prevent="addTag()" type="text" 
+                           class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="输入标签按回车添加...">
+                    <button @click="addTag()" 
+                            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                        添加
+                    </button>
                 </div>
             </div>
-        </form>
+
+            <!-- Advanced Options -->
+            <div x-data="{ showAdvanced: false }" class="border-t pt-4">
+                <button @click="showAdvanced = !showAdvanced" 
+                        class="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
+                    <span x-text="showAdvanced ? '▼' : '▶'"></span>
+                    <span>高级选项</span>
+                </button>
+                <div x-show="showAdvanced" class="mt-4 space-y-4" x-transition>
+                    <!-- AI Suggested -->
+                    <div class="flex items-center gap-3">
+                        <input x-model="form.ai_suggested" type="checkbox" id="ai_suggested" 
+                               class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        <label for="ai_suggested" class="text-sm text-gray-700">
+                            AI 生成的记忆
+                        </label>
+                    </div>
+                    
+                    <!-- Parent Memory -->
+                    <div x-show="mode === 'new'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            父记忆（可选）
+                        </label>
+                        <select x-model="form.parent_id" 
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">无</option>
+                            <!-- 这里可以加载现有记忆列表 -->
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">将此记忆作为已有记忆的子节点</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="p-6 border-t bg-gray-50 flex justify-end gap-3">
+            <a :href="mode === 'edit' ? `/memories/${memoryId}` : '/memories'" 
+               class="px-6 py-2 text-gray-600 hover:text-gray-800">
+                取消
+            </a>
+            <button @click="save()" 
+                    :disabled="saving"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <span x-show="saving" class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                <span x-text="saving ? '保存中...' : '保存'"></span>
+            </button>
+        </div>
     </div>
 </div>
-{% endblock %}
-{% block scripts %}
+
 <script>
 function memoryForm() {
     return {
-        mode: '{{ mode }}',
-        memoryId: '{{ memory_id | default(0) }}',
-        loading: false,
-        form: { project_id: '', title: '', content: '', memory_type: 'decision', importance: 3, tags: '' },
-        async init() {
-            if (this.mode === 'edit' && this.memoryId) {
-                const resp = await fetch('/api/memory/' + this.memoryId);
-                const data = await resp.json();
-                this.form = { ...data, tags: (data.tags || []).join(', ') };
+        mode: 'new',
+        memoryId: null,
+        form: {
+            title: '',
+            content: '',
+            category: '',
+            tags: [],
+            ai_suggested: false,
+            parent_id: null,
+        },
+        newTag: '',
+        errors: {},
+        saving: false,
+
+        async init(mode, memoryId) {
+            this.mode = mode;
+            this.memoryId = memoryId;
+            
+            if (mode === 'edit' && memoryId) {
+                await this.loadMemory(memoryId);
             }
         },
-        async submit() {
-            this.loading = true;
+
+        async loadMemory(id) {
             try {
-                const body = { ...this.form, tags: this.form.tags ? this.form.tags.split(',').map(t => t.trim()) : [] };
-                const url = this.mode === 'edit' ? '/api/memory/' + this.memoryId : '/api/memory';
+                const response = await fetch(`/api/memories/${id}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const memory = result.data;
+                    this.form = {
+                        title: memory.title || '',
+                        content: memory.content || '',
+                        category: memory.category || '',
+                        tags: memory.tags || [],
+                        ai_suggested: memory.ai_suggested || false,
+                        parent_id: memory.parent_id,
+                    };
+                } else {
+                    alert('记忆不存在');
+                    window.location.href = '/memories';
+                }
+            } catch (error) {
+                console.error('Failed to load memory:', error);
+                alert('加载失败');
+            }
+        },
+
+        addTag() {
+            const tag = this.newTag.trim();
+            if (tag && !this.form.tags.includes(tag)) {
+                this.form.tags.push(tag);
+                this.newTag = '';
+            }
+        },
+
+        removeTag(index) {
+            this.form.tags.splice(index, 1);
+        },
+
+        validate() {
+            this.errors = {};
+            
+            if (!this.form.title?.trim()) {
+                this.errors.title = '标题不能为空';
+            }
+            
+            if (!this.form.content?.trim()) {
+                this.errors.content = '内容不能为空';
+            }
+            
+            if (!this.form.category) {
+                this.errors.category = '请选择分类';
+            }
+            
+            return Object.keys(this.errors).length === 0;
+        },
+
+        async save() {
+            if (!this.validate()) return;
+            
+            this.saving = true;
+            
+            try {
+                const url = this.mode === 'edit' 
+                    ? `/api/memories/${this.memoryId}`
+                    : '/api/memories';
+                
                 const method = this.mode === 'edit' ? 'PUT' : 'POST';
-                const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                if (resp.ok) { window.location.href = '/memories'; } else { alert('保存失败'); }
-            } finally { this.loading = false; }
-        }
-    };
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.form),
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const memoryId = this.mode === 'edit' 
+                        ? this.memoryId 
+                        : result.data?.id;
+                    window.location.href = `/memories/${memoryId}`;
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || '保存失败');
+                }
+            } catch (error) {
+                console.error('Failed to save:', error);
+                alert('保存失败，请稍后重试');
+            } finally {
+                this.saving = false;
+            }
+        },
+    }
 }
 </script>
 {% endblock %}

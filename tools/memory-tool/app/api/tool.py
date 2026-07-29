@@ -4,9 +4,12 @@ from typing import Any, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.config import settings
-from app.services.memory_service import create_memory, search_memory, get_memory, update_memory, delete_memory, get_context_package
+from app.services.memory_service import create_memory, search_memory, get_memory, update_memory, delete_memory, get_context_package, hybrid_search
+from app.services.semantic_contradiction import SemanticContradictionDetector, ContradictionHandler
+from app.services.memory_consolidation import MemoryConsolidator
 
 router = APIRouter(tags=["tool"])
 
@@ -60,6 +63,27 @@ async def get_manifest():
                 "endpoint": "GET /api/memory/search",
                 "timeoutMs": 3000,
                 "permission": "memory:read",
+            },
+            {
+                "name": "memory.search.hybrid",
+                "description": "Hybrid search (BM25 + TF-IDF + Vector) for memory entries.",
+                "endpoint": "POST /api/memory/search/hybrid",
+                "timeoutMs": 5000,
+                "permission": "memory:read",
+            },
+            {
+                "name": "memory.contradiction.check",
+                "description": "Check for contradictions before creating a memory.",
+                "endpoint": "POST /api/memory/check-contradictions",
+                "timeoutMs": 5000,
+                "permission": "memory:write",
+            },
+            {
+                "name": "memory.consolidate",
+                "description": "Consolidate similar memories.",
+                "endpoint": "POST /api/memory/consolidate",
+                "timeoutMs": 10000,
+                "permission": "memory:write",
             },
             {
                 "name": "memory.context",
@@ -140,6 +164,61 @@ async def get_capabilities():
                     "properties": {
                         "items": {"type": "array"},
                         "count": {"type": "integer"},
+                    },
+                },
+            },
+            {
+                "name": "memory.search.hybrid",
+                "description": "Hybrid search (BM25 + TF-IDF + Vector) for memory entries.",
+                "permission": "memory:read",
+                "endpoint": "POST /api/memory/search/hybrid",
+                "timeout_ms": 5000,
+                "input_schema": {
+                    "type": "object",
+                    "required": ["project", "query"],
+                    "properties": {
+                        "project": {"type": "string"},
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "default": 10},
+                        "weights": {
+                            "type": "object",
+                            "properties": {
+                                "vector": {"type": "number"},
+                                "tfidf": {"type": "number"},
+                                "bm25": {"type": "number"},
+                            },
+                        },
+                    },
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "items": {"type": "array"},
+                        "total": {"type": "integer"},
+                        "search_type": {"type": "string"},
+                    },
+                },
+            },
+            {
+                "name": "memory.contradiction.check",
+                "description": "Check for contradictions before creating a memory.",
+                "permission": "memory:write",
+                "endpoint": "POST /api/memory/check-contradictions",
+                "timeout_ms": 5000,
+                "input_schema": {
+                    "type": "object",
+                    "required": ["project", "title", "content"],
+                    "properties": {
+                        "project": {"type": "string"},
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "has_contradictions": {"type": "boolean"},
+                        "contradictions": {"type": "array"},
                     },
                 },
             },
@@ -242,6 +321,45 @@ async def invoke_tool(req: ToolInvokeRequest):
                 category=inp.get("category"),
                 limit=inp.get("limit", 50),
                 user_id=req.context.get("user_id"),
+            )
+        elif req.capability == "memory.search.hybrid":
+            weights = inp.get("weights", {})
+            output = await hybrid_search(
+                project=inp.get("project", ""),
+                query=inp.get("query", ""),
+                vector_weight=weights.get("vector", 0.5),
+                text_weight=weights.get("tfidf", 0.3),
+                bm25_weight=weights.get("bm25", 0.2),
+                top_k=inp.get("top_k", 10),
+                user_id=req.context.get("user_id"),
+            )
+        elif req.capability == "memory.contradiction.check":
+            from app.db.models import MemoryEntry, async_session as mem_async_session
+            async with mem_async_session() as session:
+                q = select(MemoryEntry).where(MemoryEntry.project == inp.get("project", ""))
+                existing = await session.execute(q.limit(100))
+                existing_list = existing.scalars().all()
+            detector = SemanticContradictionDetector()
+            contradictions = detector.detect(
+                {"title": inp.get("title", ""), "content": inp.get("content", "")},
+                [{"id": e.id, "title": e.title, "content": e.content, "createdAt": str(e.created_at)} for e in existing_list]
+            )
+            handler = ContradictionHandler()
+            results = []
+            for c in contradictions:
+                action = handler.handle(
+                    {"title": inp.get("title", ""), "content": inp.get("content", "")},
+                    c["existing_memory"],
+                    c["contradiction_type"],
+                    c["confidence"],
+                )
+                results.append({"contradiction": c, "action": action})
+            output = {"has_contradictions": len(results) > 0, "contradictions": results}
+        elif req.capability == "memory.consolidate":
+            consolidator = MemoryConsolidator()
+            output = await consolidator.consolidate(
+                project=inp.get("project", ""),
+                similarity_threshold=inp.get("similarity_threshold", 0.85),
             )
         elif req.capability == "memory.context":
             output = await get_context_package(

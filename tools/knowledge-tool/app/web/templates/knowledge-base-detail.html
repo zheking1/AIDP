@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}知识库详情 — Knowledge Tool{% endblock %}
+
+{% block content %}
+<div x-data="kbDetail()" x-init="load('{{ kb_id }}')">
+    <div x-show="loading" class="text-center py-12 text-gray-400">加载中...</div>
+    
+    <div x-show="!loading && !kb" class="text-center py-12 text-gray-400">
+        <p>知识库不存在或无法加载</p>
+        <a href="/knowledge-bases" class="text-blue-600 hover:underline mt-2 inline-block">返回列表</a>
+    </div>
+
+    <div x-show="!loading && kb" class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                              :class="levelBadgeClass(kb?.kb_level)" x-text="kb?.kb_level || '-'"></span>
+                        <span class="px-2 py-0.5 bg-gray-100 rounded text-xs" x-text="kb?.visibility || '-'"></span>
+                    </div>
+                    <h1 class="text-2xl font-bold" x-text="kb?.name || '未知'"></h1>
+                    <p class="text-sm text-gray-500 mt-1" x-text="'slug: ' + (kb?.slug || '-')" ></p>
+                    <p class="text-gray-600 mt-2" x-text="kb?.description || '暂无描述'"></p>
+                </div>
+                <div class="flex gap-2" x-show="kb?.id">
+                    <a :href="'/documents?kb_id=' + (kb?.id || '')" class="text-sm px-3 py-1 border rounded hover:bg-gray-50">查看文档</a>
+                    <button @click="openEditModal()" class="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">编辑</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-4 gap-4 mt-4 pt-4 border-t text-sm">
+<div class="text-center"><div class="text-2xl font-bold text-blue-600" x-text="kb?.document_count || 0"></div><div class="text-gray-500">文档数</div></div>
+                <div class="text-center"><div class="text-2xl font-bold" x-text="kb?.chunk_size || 512"></div><div class="text-gray-500">块大小 (tokens)</div></div>
+                <div class="text-center"><div class="text-2xl font-bold" x-text="kb?.embedding_model || '-'"></div><div class="text-gray-500">嵌入模型</div></div>
+                <div class="text-center"><div class="text-2xl font-bold" x-text="(kb?.children || []).length"></div><div class="text-gray-500">子知识库</div></div>
+            </div>
+        </div>
+
+        <!-- Inheritance Chain -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4" x-show="kb?.ancestors && kb?.ancestors?.length > 0">
+            <h3 class="text-sm font-semibold text-gray-500 mb-2">继承链</h3>
+            <div class="flex items-center flex-wrap text-sm">
+                <template x-for="(anc, i) in (kb?.ancestors || [])" :key="i">
+                    <span class="inline-flex items-center" x-show="anc">
+                        <a :href="'/knowledge-bases/' + (anc?.id || '')" class="px-2 py-1 bg-gray-100 rounded hover:bg-gray-200" x-text="anc?.name || '-'" ></a>
+                        <span class="mx-2 text-gray-400">→</span>
+                    </span>
+                </template>
+                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded font-semibold" x-text="kb?.name || '-'"></span>
+            </div>
+        </div>
+
+        <!-- Tags Management -->
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <!-- Domains -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-500">领域标签</h3>
+                    <button @click="addTag('domains')" class="text-xs text-blue-600 hover:text-blue-800">+ 添加</button>
+                </div>
+                <div class="flex flex-wrap gap-1 min-h-[32px]" x-ref="domainsBox">
+                    <template x-for="(d, i) in (kb?.domains || [])" :key="i">
+                        <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded group">
+                            <span x-text="d"></span>
+                            <button @click="removeTag('domains', i)" class="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-700">&times;</button>
+                        </span>
+                    </template>
+                    <span x-show="!(kb?.domains) || (kb?.domains?.length === 0)" class="text-xs text-gray-400">无标签</span>
+                </div>
+                <div x-show="tagInput.domains" class="mt-2 flex gap-1">
+                    <input x-model="tagValue" @keydown.enter="saveTag('domains')" class="flex-1 px-2 py-1 border rounded text-xs" placeholder="输入领域标签...">
+                    <button @click="saveTag('domains')" class="text-xs px-2 py-1 bg-green-600 text-white rounded">确定</button>
+                    <button @click="tagInput.domains = false" class="text-xs px-2 py-1 border rounded">取消</button>
+                </div>
+            </div>
+
+            <!-- Keywords -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-500">关键词</h3>
+                    <button @click="addTag('keywords')" class="text-xs text-blue-600 hover:text-blue-800">+ 添加</button>
+                </div>
+                <div class="flex flex-wrap gap-1 min-h-[32px]">
+                    <template x-for="(k, i) in (kb?.keywords || [])" :key="i">
+                        <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded group">
+                            <span x-text="k"></span>
+                            <button @click="removeTag('keywords', i)" class="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-indigo-700">&times;</button>
+                        </span>
+                    </template>
+                    <span x-show="!(kb?.keywords) || (kb?.keywords?.length === 0)" class="text-xs text-gray-400">无标签</span>
+                </div>
+                <div x-show="tagInput.keywords" class="mt-2 flex gap-1">
+                    <input x-model="tagValue" @keydown.enter="saveTag('keywords')" class="flex-1 px-2 py-1 border rounded text-xs" placeholder="输入关键词...">
+                    <button @click="saveTag('keywords')" class="text-xs px-2 py-1 bg-green-600 text-white rounded">确定</button>
+                    <button @click="tagInput.keywords = false" class="text-xs px-2 py-1 border rounded">取消</button>
+                </div>
+            </div>
+
+            <!-- Tech Stack -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-500">技术栈</h3>
+                    <button @click="addTag('tech_stack')" class="text-xs text-blue-600 hover:text-blue-800">+ 添加</button>
+                </div>
+                <div class="flex flex-wrap gap-1 min-h-[32px]">
+                    <template x-for="(t, i) in (kb?.tech_stack || [])" :key="i">
+                        <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded group">
+                            <span x-text="t"></span>
+                            <button @click="removeTag('tech_stack', i)" class="opacity-0 group-hover:opacity-100 text-teal-400 hover:text-teal-700">&times;</button>
+                        </span>
+                    </template>
+                    <span x-show="!(kb?.tech_stack) || (kb?.tech_stack?.length === 0)" class="text-xs text-gray-400">无标签</span>
+                </div>
+                <div x-show="tagInput.tech_stack" class="mt-2 flex gap-1">
+                    <input x-model="tagValue" @keydown.enter="saveTag('tech_stack')" class="flex-1 px-2 py-1 border rounded text-xs" placeholder="输入技术栈...">
+                    <button @click="saveTag('tech_stack')" class="text-xs px-2 py-1 bg-green-600 text-white rounded">确定</button>
+                    <button @click="tagInput.tech_stack = false" class="text-xs px-2 py-1 border rounded">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Children -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4" x-show="kb?.children && kb?.children?.length > 0">
+            <h3 class="text-sm font-semibold text-gray-500 mb-2">子知识库</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <template x-for="child in (kb?.children || [])" :key="child?.id">
+                    <a x-show="child" :href="'/knowledge-bases/' + (child?.id || '')" class="flex items-center justify-between px-3 py-2 border rounded hover:bg-gray-50 text-sm">
+                        <span x-text="child?.name || '-'"></span>
+                        <span class="text-xs text-gray-400" x-text="child?.kb_level || '-'"></span>
+                    </a>
+                </template>
+            </div>
+        </div>
+
+        <!-- Bindings -->
+        <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="text-sm font-semibold text-gray-500 mb-2">绑定项目</h3>
+            <div x-show="(!bindings || bindings?.length === 0) && !bindingsLoading" class="text-xs text-gray-400">暂无项目绑定</div>
+            <div x-show="bindingsLoading" class="text-xs text-gray-400">加载中...</div>
+            <table x-show="bindings && bindings?.length > 0" class="w-full text-sm">
+                <thead><tr class="text-left text-gray-500 border-b"><th class="py-1">项目</th><th class="py-1">类型</th><th class="py-1">优先级</th><th class="py-1">操作</th></tr></thead>
+                <tbody>
+                    <template x-for="b in (bindings || [])" :key="b?.id">
+                        <tr x-show="b" class="border-b last:border-0">
+                            <td class="py-1" x-text="b?.project_id || '-'"></td>
+                            <td class="py-1"><span class="text-xs px-1.5 py-0.5 rounded" :class="bindingClass(b?.binding_type)" x-text="b?.binding_type || '-'"></span></td>
+                            <td class="py-1" x-text="b?.priority || 0"></td>
+                            <td class="py-1"><button @click="b?.id && deleteBinding(b.id)" class="text-red-500 hover:text-red-700 text-xs">解除</button></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div x-show="editOpen" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="editOpen = false">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4" @click.stop>
+            <h2 class="text-lg font-bold mb-4">编辑知识库</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">名称</label>
+                    <input x-model="editForm.name" class="w-full px-3 py-2 border rounded text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">描述</label>
+                    <textarea x-model="editForm.description" rows="2" class="w-full px-3 py-2 border rounded text-sm"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">可见性</label>
+                    <select x-model="editForm.visibility" class="w-full px-3 py-2 border rounded text-sm">
+                        <option value="private">private</option>
+                        <option value="workspace">workspace</option>
+                        <option value="public">public</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">分块大小</label>
+                    <input type="number" x-model="editForm.chunk_size" class="w-full px-3 py-2 border rounded text-sm">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="editOpen = false" class="px-4 py-2 border rounded text-sm">取消</button>
+                <button @click="saveEdit()" class="px-4 py-2 bg-blue-600 text-white rounded text-sm" :disabled="saving">
+                    <span x-show="!saving">保存</span><span x-show="saving">保存中...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function kbDetail() {
+    return {
+        kb: null, loading: true, bindings: [], bindingsLoading: false,
+        editOpen: false, saving: false,
+        tagInput: { domains: false, keywords: false, tech_stack: false },
+        tagValue: '',
+        editForm: { name: '', description: '', visibility: 'private', chunk_size: 512 },
+
+        levelBadgeClass(level) {
+            if (!level) return 'bg-gray-100 text-gray-700';
+            if (level === 'framework') return 'bg-purple-100 text-purple-700';
+            if (level === 'template') return 'bg-indigo-100 text-indigo-700';
+            return 'bg-teal-100 text-teal-700';
+        },
+        bindingClass(t) {
+            if (!t) return 'bg-gray-100 text-gray-600';
+            if (t === 'explicit') return 'bg-green-100 text-green-700';
+            if (t === 'inherited') return 'bg-blue-100 text-blue-700';
+            return 'bg-gray-100 text-gray-600';
+        },
+
+        async load(id) {
+            try {
+                const r = await fetch(`/api/knowledge-bases/${id}`);
+                const d = await r.json();
+                if (d?.data) {
+                    this.kb = d.data;
+                    this.editForm = {
+                        name: this.kb?.name || '',
+                        description: this.kb?.description || '',
+                        visibility: this.kb?.visibility || 'private',
+                        chunk_size: this.kb?.chunk_size || 512,
+                    };
+                    this.loadBindings(id);
+                } else {
+                    console.error('KB not found');
+                    this.kb = null;
+                }
+            } catch (e) { 
+                console.error('Failed to load KB:', e);
+                this.kb = null;
+            }
+            this.loading = false;
+        },
+
+        async loadBindings(kbId) {
+            this.bindingsLoading = true;
+            try {
+                const r = await fetch(`/api/knowledge-bases/${kbId}/bindings`);
+                const d = await r.json();
+                this.bindings = d.data?.items || [];
+            } catch (e) { console.error(e); }
+            this.bindingsLoading = false;
+        },
+
+        addTag(field) { this.tagInput[field] = true; this.tagValue = ''; this.$nextTick(() => { const el = this.$el.querySelector('input'); if (el) el.focus(); }); },
+        async saveTag(field) {
+            if (!this.tagValue.trim()) return;
+            const updated = [...(this.kb[field] || []), this.tagValue.trim()];
+            await this.updateTags(field, updated);
+            this.tagInput[field] = false;
+        },
+        async removeTag(field, idx) {
+            const updated = [...(this.kb[field] || [])];
+            updated.splice(idx, 1);
+            await this.updateTags(field, updated);
+        },
+        async updateTags(field, values) {
+            const body = {};
+            if (field === 'domains') body.domains = values;
+            else if (field === 'keywords') body.keywords = values;
+            else if (field === 'tech_stack') body.tech_stack = values;
+
+            try {
+                await fetch(`/api/knowledge-bases/${this.kb.id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+                });
+                this.kb[field] = values;
+            } catch (e) { console.error(e); }
+        },
+
+        openEditModal() { this.editOpen = true; },
+        async saveEdit() {
+            this.saving = true;
+            try {
+                await fetch(`/api/knowledge-bases/${this.kb.id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.editForm),
+                });
+                this.kb.name = this.editForm.name;
+                this.kb.description = this.editForm.description;
+                this.kb.visibility = this.editForm.visibility;
+                this.kb.chunk_size = this.editForm.chunk_size;
+                this.editOpen = false;
+            } catch (e) { console.error(e); }
+            this.saving = false;
+        },
+
+        async deleteBinding(id) {
+            if (!confirm('解除绑定？')) return;
+            try {
+                await fetch(`/api/projects/bindings/${id}`, { method: 'DELETE' });
+                this.bindings = this.bindings.filter(b => b.id !== id);
+            } catch (e) { console.error(e); }
+        },
+    };
+}
+</script>
+{% endblock %}

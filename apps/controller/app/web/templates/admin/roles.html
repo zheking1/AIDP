@@ -1,9 +1,9 @@
-{% extends "layouts/base.html" %}
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/base.html" %}{% endif %}
 {% set active_page = 'roles' %}
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="animate-fade-in">
+<div class="animate-fade-in max-w-7xl mx-auto px-4">
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-white">角色管理</h1>
@@ -57,5 +57,5 @@
             </tbody>
         </table>
     </div>
-</div>
+</div></div>
 {% endblock %}

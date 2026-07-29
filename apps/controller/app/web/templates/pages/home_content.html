@@ -1,0 +1,347 @@
+<div x-data="homePage()" x-init="init()">
+    <!-- 页头（自动获得 pt-5 pb-4 border-b 样式） -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">
+                <i class="fas fa-home text-indigo-400 mr-2"></i>首页
+            </h1>
+            <p class="text-gray-400 mt-1">你的个人工作台</p>
+        </div>
+        <div class="flex gap-2">
+            <button @click="activeTab='dashboard'"
+                    :class="activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium transition">
+                <i class="fas fa-chart-pie mr-1"></i>仪表盘
+            </button>
+            <button @click="activeTab='guide'"
+                    :class="activeTab === 'guide' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium transition">
+                <i class="fas fa-book mr-1"></i>使用指南
+            </button>
+        </div>
+    </div>
+
+    <!-- ======================== 仪表盘 TAB ======================== -->
+    <div x-show="activeTab === 'dashboard'" x-cloak>
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-gray-400 text-sm">个人技能</span>
+                    <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-blue-400"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-white" x-text="stats.skills">-</div>
+                <div class="text-xs text-gray-500 mt-1">我的技能</div>
+            </div>
+
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-gray-400 text-sm">个人规则</span>
+                    <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-gavel text-green-400"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-white" x-text="stats.rules">-</div>
+                <div class="text-xs text-gray-500 mt-1">我的规则</div>
+            </div>
+
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-gray-400 text-sm">知识库</span>
+                    <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-database text-purple-400"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-white" x-text="stats.bases">-</div>
+                <div class="text-xs text-gray-500 mt-1">知识库数量</div>
+            </div>
+
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-gray-400 text-sm">文档</span>
+                    <div class="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-file-alt text-orange-400"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-white" x-text="stats.documents">-</div>
+                <div class="text-xs text-gray-500 mt-1">文档数量</div>
+            </div>
+        </div>
+
+        <!-- 快速入口 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button @click="openHub('knowledge')" class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-indigo-500 transition group text-left">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-database text-purple-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white">知识中心</h3>
+                        <p class="text-xs text-gray-500">管理和搜索文档</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition">
+                    进入 <i class="fas fa-arrow-right ml-1"></i>
+                </div>
+            </button>
+
+            <button @click="openHub('skills')" class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-indigo-500 transition group text-left">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-blue-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white">技能管理</h3>
+                        <p class="text-xs text-gray-500">创建和管理 AI 技能</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition">
+                    进入 <i class="fas fa-arrow-right ml-1"></i>
+                </div>
+            </button>
+
+            <button @click="openHub('memory')" class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-indigo-500 transition group text-left">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-brain text-green-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white">记忆中心</h3>
+                        <p class="text-xs text-gray-500">管理和检索记忆</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition">
+                    进入 <i class="fas fa-arrow-right ml-1"></i>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- ======================== 使用指南 TAB ======================== -->
+    <div x-show="activeTab === 'guide'" x-cloak class="max-w-4xl">
+        <!-- 1. 系统简介 -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-4">
+                <i class="fas fa-info-circle text-indigo-400 mr-2"></i>系统简介
+            </h2>
+            <div class="text-gray-300 text-sm space-y-3 leading-relaxed">
+                <p>AIDP (AI DevOps Platform) 是一个统一的 AI 编程工具管理平台，帮助你管理和组织各种 AI 开发工具和能力。</p>
+                <p>核心功能包括：</p>
+                <ul class="list-disc list-inside space-y-1 text-gray-400 ml-2">
+                    <li><span class="text-gray-300">工具管理</span> — 注册、发现和监控 AI 编程工具</li>
+                    <li><span class="text-gray-300">知识中心</span> — 文档管理、搜索和知识库</li>
+                    <li><span class="text-gray-300">AI 技能</span> — 创建和管理 AI 助手技能</li>
+                    <li><span class="text-gray-300">规则引擎</span> — 代码风格和审查规则</li>
+                    <li><span class="text-gray-300">MCP 集成</span> — 通过 Model Context Protocol 与 AI 编辑器集成</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 2. MCP 配置 -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-4">
+                <i class="fas fa-plug text-green-400 mr-2"></i>MCP 配置
+            </h2>
+            <div class="text-gray-300 text-sm space-y-3 leading-relaxed">
+                <p>MCP (Model Context Protocol) 是 AI 编辑器与 AIDP 平台之间的通信协议。通过 MCP，你可以在 VS Code、Cursor 等编辑器中直接调用 AIDP 的功能。</p>
+
+                <h3 class="text-white font-medium mt-4">MCP 服务器地址</h3>
+                <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-300 select-all">
+                    http://&lt;your-server&gt;:8883/mcp
+                </div>
+
+                <h3 class="text-white font-medium mt-4">VS Code 配置示例</h3>
+                <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-300 select-all whitespace-pre-wrap">{
+  "mcpServers": {
+    "aidp": {
+      "url": "http://localhost:8883/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}</div>
+
+                <h3 class="text-white font-medium mt-4">Cursor 配置示例</h3>
+                <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-300 select-all whitespace-pre-wrap">{
+  "mcpServers": {
+    "aidp": {
+      "type": "http",
+      "url": "http://localhost:8883/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}</div>
+
+                <div class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-300">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    请先获取 API Key 并在配置中替换 <code class="bg-gray-900 px-1 rounded">YOUR_API_KEY</code>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. API Key -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-4">
+                <i class="fas fa-key text-yellow-400 mr-2"></i>获取 API Key
+            </h2>
+            <div class="text-gray-300 text-sm space-y-3 leading-relaxed">
+                <p>API Key 用于身份认证，确保只有授权的用户和应用可以访问 AIDP 平台。</p>
+
+                <h3 class="text-white font-medium mt-4">操作步骤</h3>
+                <ol class="list-decimal list-inside space-y-2 text-gray-400 ml-2">
+                    <li>点击右上角用户头像，选择 <span class="text-gray-300">「API 密钥」</span></li>
+                    <li>点击 <span class="text-gray-300">「创建密钥」</span> 按钮</li>
+                    <li>为密钥输入一个名称（如 "VS Code MCP"）</li>
+                    <li>选择过期时间（建议选择不过期或 90 天）</li>
+                    <li>点击创建，<span class="text-yellow-300">立即复制并保存密钥</span></li>
+                </ol>
+
+                <div class="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    密钥关闭后将无法再次查看，请妥善保管。
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. 模型配置 -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-4">
+                <i class="fas fa-brain text-purple-400 mr-2"></i>模型配置
+            </h2>
+            <div class="text-gray-300 text-sm space-y-3 leading-relaxed">
+                <p>AI 模型配置决定了 AI 审查、分类等功能使用的模型。你可以在用户配置中设置偏好的模型参数。</p>
+
+                <h3 class="text-white font-medium mt-4">支持的模型提供商</h3>
+                <ul class="list-disc list-inside space-y-1 text-gray-400 ml-2">
+                    <li><span class="text-gray-300">OpenAI</span> — GPT-4o, GPT-4o-mini, o3-mini 等</li>
+                    <li><span class="text-gray-300">DeepSeek</span> — DeepSeek-V3, DeepSeek-R1 等</li>
+                    <li><span class="text-gray-300">通义千问</span> — Qwen 系列</li>
+                    <li><span class="text-gray-300">兼容 OpenAI API</span> — 任何兼容 OpenAI 接口的服务</li>
+                </ul>
+
+                <h3 class="text-white font-medium mt-4">配置参数说明</h3>
+                <div class="bg-gray-900 rounded-lg overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-700/50 text-gray-400">
+                            <tr>
+                                <th class="px-4 py-2 text-left font-medium">参数</th>
+                                <th class="px-4 py-2 text-left font-medium">说明</th>
+                                <th class="px-4 py-2 text-left font-medium">默认值</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700 text-gray-300">
+                            <tr><td class="px-4 py-2 font-mono text-xs">provider</td><td class="px-4 py-2">模型提供商</td><td class="px-4 py-2 text-gray-500">openai</td></tr>
+                            <tr><td class="px-4 py-2 font-mono text-xs">api_base</td><td class="px-4 py-2">API 地址</td><td class="px-4 py-2 text-gray-500">https://api.openai.com/v1</td></tr>
+                            <tr><td class="px-4 py-2 font-mono text-xs">model_name</td><td class="px-4 py-2">模型名称</td><td class="px-4 py-2 text-gray-500">gpt-4o</td></tr>
+                            <tr><td class="px-4 py-2 font-mono text-xs">api_key</td><td class="px-4 py-2">API 密钥</td><td class="px-4 py-2 text-gray-500">—</td></tr>
+                            <tr><td class="px-4 py-2 font-mono text-xs">max_tokens</td><td class="px-4 py-2">最大输出 Token 数</td><td class="px-4 py-2 text-gray-500">4096</td></tr>
+                            <tr><td class="px-4 py-2 font-mono text-xs">temperature</td><td class="px-4 py-2">生成温度 (0-2)</td><td class="px-4 py-2 text-gray-500">0.3</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="text-white font-medium mt-4">配置 DeepSeek 示例</h3>
+                <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-300 select-all whitespace-pre-wrap">{
+  "provider": "deepseek",
+  "api_base": "https://api.deepseek.com/v1",
+  "model_name": "deepseek-chat",
+  "api_key": "sk-xxxxxxxxxxxxxxxx",
+  "max_tokens": 8192,
+  "temperature": 0.3
+}</div>
+            </div>
+        </section>
+
+        <!-- 5. 快速提示 -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-4">
+                <i class="fas fa-lightbulb text-yellow-400 mr-2"></i>快速提示
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div class="p-4 bg-indigo-500/5 rounded-lg border border-indigo-500/20">
+                    <h4 class="text-white font-medium mb-1"><i class="fas fa-search text-indigo-400 mr-1"></i>知识搜索</h4>
+                    <p class="text-gray-400">在知识中心搜索时，可以使用引号精确匹配，使用减号排除关键词。</p>
+                </div>
+                <div class="p-4 bg-green-500/5 rounded-lg border border-green-500/20">
+                    <h4 class="text-white font-medium mb-1"><i class="fas fa-robot text-green-400 mr-1"></i>技能测试</h4>
+                    <p class="text-gray-400">创建技能后，可以在沙箱环境中测试技能的效果和表现。</p>
+                </div>
+                <div class="p-4 bg-purple-500/5 rounded-lg border border-purple-500/20">
+                    <h4 class="text-white font-medium mb-1"><i class="fas fa-gavel text-purple-400 mr-1"></i>规则优先级</h4>
+                    <p class="text-gray-400">规则的 priority 值越高，在审查时优先级越高，会优先被应用。</p>
+                </div>
+                <div class="p-4 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                    <h4 class="text-white font-medium mb-1"><i class="fas fa-shield-alt text-orange-400 mr-1"></i>安全审查</h4>
+                    <p class="text-gray-400">全局技能和规则会经过 AI 审查和脱敏处理，确保内容安全。</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 加载中 -->
+    <div x-show="loading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-400">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+window.homePage = function() {
+    return {
+        activeTab: new URLSearchParams(window.location.search).get('tab') || 'dashboard',
+        loading: true,
+        stats: {
+            skills: 0,
+            rules: 0,
+            bases: 0,
+            documents: 0,
+        },
+
+        async init() {
+            await this.loadStats();
+            this.loading = false;
+        },
+
+        async loadStats() {
+            try {
+                var [skillsRes, rulesRes, basesRes, docsRes] = await Promise.all([
+                    fetch('/api/skills/list?scope=personal&limit=1'),
+                    fetch('/api/rules/list?scope=personal&limit=1'),
+                    fetch('/api/knowledge/bases'),
+                    fetch('/api/knowledge/documents-list?limit=1'),
+                ]);
+                var skillsData = await skillsRes.json();
+                var rulesData = await rulesRes.json();
+                var basesData = await basesRes.json();
+                var docsData = await docsRes.json();
+
+                this.stats.skills = skillsData.total || 0;
+                this.stats.rules = rulesData.total || 0;
+                this.stats.bases = basesData.total || basesData.items?.length || 0;
+                this.stats.documents = docsData.total || 0;
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        },
+
+        openHub(type) {
+            var routes = {
+                'knowledge': { id: 'knowledge-hub', name: '知识中心', icon: 'fa-book-open', url: '/hub/knowledge' },
+                'skills': { id: 'skills-hub', name: '技能库', icon: 'fa-zap', url: '/hub/skills' },
+                'memory': { id: 'memory-hub', name: '记忆中心', icon: 'fa-brain', url: '/hub/memory' }
+            };
+            var r = routes[type];
+            if (r && window.workspaceInstance) {
+                window.workspaceInstance.openTab(r.id, r.name, r.icon, r.url);
+            }
+        }
+    };
+};
+</script>

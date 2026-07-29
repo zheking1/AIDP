@@ -19,20 +19,22 @@
 - Tailwind CSS
 - PostgreSQL/SQLite
 
-### 1.2 核心工具（已完成基础版）
+### 1.2 核心工具（已完成）
 
-| 工具 | 状态 | 端口 | Web UI |
+| 工具 | 状态 | 端口 | Web UI (统一 Controller 内) |
 |------|------|------|--------|
 | **SkillRouter** | ✅ 生产级 | 8788 | 完整 |
 | **Controller** | ✅ 生产级 | 8883 | 完整 |
 | **Sandbox** | ✅ 完整 | 18083 | 完整 |
-| **Knowledge** | ✅ 基础版 | 18081 | 列表+上传 |
-| **Memory** | ✅ 基础版 | 18085 | 基础CRUD |
-| **Asset** | ✅ 基础版 | 18082 | 列表 |
-| **Quality** | ✅ 基础版 | 18084 | 表单 |
+| **Knowledge** | ✅ 较完整 | 18081 | stats/层级树/文档CRUD/搜索/导入 |
+| **Memory** | ✅ 较完整 | 18085 | CRUD/stats/D3.js图谱/搜索 |
+| **Asset** | ✅ 基础版 | 18082 | 列表/stats/搜索/创建 |
+| **Quality** | ✅ 基础版 | 18084 | 表单/执行/结果 |
 | **FileWatcher** | ✅ 后台 | 18091 | 无 |
 | **CodeIndex** | ✅ 后台 | 18086 | 无 |
-| **Evolution** | ✅ 基础版 | 18089 | 无 |
+| **Evolution** | ⚠️ 骨架 | 18089 | 无 |
+
+> 注：所有工具 Web UI 已整合至 Controller 统一 UI，不再维护独立工具的前端。
 
 ### 1.3 基础设施（已完成）
 
@@ -57,56 +59,54 @@
 
 ## 2. 待开发工作汇总 🚧
 
-### 2.1 高优先级 (P0)
+### 2.1 高优先级 (P0) - 已完成 ✅
 
-#### 2.1.1 Knowledge Tool Web UI（3周）
+#### 2.1.1 Knowledge Tool Web UI（3周）✅
 **详细计划**: `docs/plans/KNOWLEDGE-WEB-UI-PLAN.md`
 
-**核心任务**：
-- [ ] 知识库管理（层级结构）
-- [ ] 文档预览（Markdown/PDF/文本）
+**已完成**：
+- [x] 知识库管理（层级结构）
+- [x] 文档预览
+- [x] 搜索中心
+- [x] 上传导入队列
+- [x] 统计仪表盘
+
+**待完善**：
 - [ ] 分块可视化（核心功能）
-- [ ] 高级搜索中心（语义+关键词）
-- [ ] 上传导入队列
-- [ ] 统计仪表盘
 - [ ] 知识图谱（可选）
 
-**关键设计**：
-- 参考 SkillRouter 的界面风格
-- 文档分块可视化（展示索引过程）
-- 类似 Google 的搜索界面
-
-#### 2.1.2 Memory Tool Web UI（2周）
+#### 2.1.2 Memory Tool Web UI（2周）✅
 **详细计划**: `docs/plans/MEMORY-WEB-UI-PLAN.md`
 
-**核心任务**：
-- [ ] D3.js 记忆图谱可视化（力导向图）
+**已完成**：
+- [x] D3.js 记忆图谱可视化（力导向图）
+- [x] 记忆条目 CRUD
+- [x] 统计仪表盘
+
+**待完善**：
 - [ ] 向量搜索（pgvector）
 - [ ] 时间轴视图
 - [ ] 上下文包生成器（交互式）
 - [ ] 记忆审核队列
 - [ ] 记忆合并算法
 
-**关键设计**：
-- 参考 AgentMemory/MemGPT 的记忆分层
-- 图谱可视化展示记忆关联
-
-#### 2.1.3 Agent Instructions 系统（1周）
+#### 2.1.3 Agent Instructions 系统（1周）✅ 已完成
 **详细计划**: `docs/DEV-PLAN-V3.md`
 
-**核心任务**：
-- [ ] Stage 0: Instructions 存储与加载
-- [ ] Stage 1: 意图分析增强
-- [ ] Stage 2: 分段检索管线
-- [ ] Stage 3: 技能匹配
-- [ ] Stage 4: 上下文组装
+**已完成**：
+- [x] Stage 0: Instructions 存储与加载
+- [x] Stage 1: 意图分析增强
+- [x] Stage 2: 分段检索管线
+- [x] Stage 3: 技能匹配
+- [x] Stage 4: 上下文组装
+- [x] MCP aidp_context / aidp_instructions 工具
 
 ### 2.2 中优先级 (P1)
 
-#### 2.2.1 Evolution Engine 重构（2周）
+#### 2.2.1 Evolution Engine 重构（2周）⚠️ 骨架阶段
 **详细计划**: `docs/plans/EVOLUTION-REFACTOR-PLAN.md`
 
-**核心任务**：
+**核心任务**（均未开始）：
 - [ ] 两级进化系统（项目级 + 系统级）
 - [ ] 版本管理（创建/发布/回退）
 - [ ] 管理员审核工作流
@@ -114,15 +114,16 @@
 - [ ] 多级回退机制
 - [ ] 管理员 Web UI
 
-#### 2.2.2 Asset Tool Web UI（1周）
-**核心任务**：
-- [ ] 资产浏览器
+#### 2.2.2 Asset Tool Web UI 完善
+**已完成**：列表、stats、搜索、创建
+**待完善**：
+- [ ] 详情弹窗
 - [ ] 模板预览
 - [ ] 变量配置界面
-- [ ] 资产使用统计
 
-#### 2.2.3 Quality Tool Web UI（3天）
-**核心任务**：
+#### 2.2.3 Quality Tool Web UI 完善
+**已完成**：表单、执行、结果
+**待完善**：
 - [ ] 质量报告仪表盘
 - [ ] 历史趋势图表
 - [ ] 规则配置界面
@@ -239,6 +240,11 @@ Week 11+: 根据实际需求排期
 ### 7.2 设计文档
 - `docs/UNIFIED_WEB_UI_DESIGN.md` - Web UI 设计
 - `docs/DEV-PLAN-V3.md` - 上下文管线
+- `docs/web/` - Web UI 详细设计文档
+  - `01-architecture-design.md` - 架构设计
+  - `02-menu-configuration.md` - 菜单配置
+  - `03-permission-system.md` - 权限系统
+  - `04-implementation-plan.md` - 实施计划
 
 ### 7.3 工具文档
 - `docs/ai-dev-platform/tools/*/01-requirements.md`
@@ -247,4 +253,4 @@ Week 11+: 根据实际需求排期
 
 **文档结束**
 
-*最后更新: 2026-07-07*
+*最后更新: 2026-07-28*

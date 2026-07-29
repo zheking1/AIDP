@@ -196,7 +196,7 @@ IMPORTANT: Return ONLY valid JSON, no preamble or extra text."""
             }
             
             response = await self.client.post(
-                config.endpoint,
+                config.endpoint + "/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=config.timeout_secs or 30,

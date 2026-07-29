@@ -8,6 +8,7 @@
 
 | 工具 | 优先级 | 用途 |
 |---|---:|---|
+| [importer-tool](./importer-tool/README.md) | P0 | 对话式内容导入，自动分类/检查/持久化 |
 | [knowledge-tool](./knowledge-tool/README.md) / [AI实施包](./knowledge-tool/AI_IMPLEMENTATION.md) | P0 | 文档入库、切片、向量化、检索 |
 | [asset-tool](./asset-tool/README.md) / [AI实施包](./asset-tool/AI_IMPLEMENTATION.md) | P0 | 代码片段、模板、历史方案检索 |
 | [sandbox-tool](./sandbox-tool/README.md) / [AI实施包](./sandbox-tool/AI_IMPLEMENTATION.md) | P0 | 代码执行、项目编译、SQL 验证 |

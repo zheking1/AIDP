@@ -128,9 +128,12 @@ async def staged_retrieve(request: Request):
     required_tools = body.get("required_tools", [])
     search_queries = body.get("search_queries", {})
     budget_hints = body.get("budget_hints", {})
+    task_context = body.get("task_context", {})
 
     retriever = StagedRetriever()
-    results = await retriever.retrieve(required_tools, search_queries, budget_hints)
+    results = await retriever.retrieve(
+        required_tools, search_queries, budget_hints, task_context
+    )
     return JSONResponse(content=results)
 
 

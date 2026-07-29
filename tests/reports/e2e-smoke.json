@@ -1,0 +1,112 @@
+[
+  {
+    "n": "hub knowledge",
+    "s": "PASS",
+    "d": "4707b"
+  },
+  {
+    "n": "hub skills",
+    "s": "PASS",
+    "d": "4482b"
+  },
+  {
+    "n": "hub memory",
+    "s": "PASS",
+    "d": "4121b"
+  },
+  {
+    "n": "knowledge bases",
+    "s": "PASS",
+    "d": "13190b"
+  },
+  {
+    "n": "knowledge documents",
+    "s": "PASS",
+    "d": "12978b"
+  },
+  {
+    "n": "knowledge search",
+    "s": "PASS",
+    "d": "7474b"
+  },
+  {
+    "n": "knowledge templates",
+    "s": "PASS",
+    "d": "6784b"
+  },
+  {
+    "n": "skills global",
+    "s": "PASS",
+    "d": "6040b"
+  },
+  {
+    "n": "skills personal",
+    "s": "PASS",
+    "d": "8580b"
+  },
+  {
+    "n": "rules global",
+    "s": "PASS",
+    "d": "4487b"
+  },
+  {
+    "n": "rules personal",
+    "s": "PASS",
+    "d": "6204b"
+  },
+  {
+    "n": "agents",
+    "s": "PASS",
+    "d": "7167b"
+  },
+  {
+    "n": "workflows",
+    "s": "PASS",
+    "d": "9662b"
+  },
+  {
+    "n": "memory memories",
+    "s": "PASS",
+    "d": "15447b"
+  },
+  {
+    "n": "memory graph",
+    "s": "PASS",
+    "d": "13426b"
+  },
+  {
+    "n": "memory search",
+    "s": "PASS",
+    "d": "15447b"
+  },
+  {
+    "n": "assets",
+    "s": "PASS",
+    "d": "8750b"
+  },
+  {
+    "n": "sandbox",
+    "s": "PASS",
+    "d": "8083b"
+  },
+  {
+    "n": "quality",
+    "s": "PASS",
+    "d": "5654b"
+  },
+  {
+    "n": "admin projects",
+    "s": "PASS",
+    "d": "7289b"
+  },
+  {
+    "n": "admin skills",
+    "s": "PASS",
+    "d": "7279b"
+  },
+  {
+    "n": "admin rules",
+    "s": "PASS",
+    "d": "4487b"
+  }
+]

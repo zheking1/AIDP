@@ -152,6 +152,17 @@ async def init_database():
                 if not result.fetchone():
                     await conn.execute(text(f"ALTER TABLE rule_groups ADD COLUMN {col} {coltype}"))
 
+        # Migration: alter embedding column from Vector(384) to Vector(1024)
+        try:
+            await conn.execute(text(
+                "ALTER TABLE skills ALTER COLUMN embedding TYPE vector(1024)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE rules ALTER COLUMN embedding TYPE vector(1024)"
+            ))
+        except Exception:
+            pass  # Column already correct or doesn't exist
+        
         # ensure HNSW indexes exist with optimized parameters (P3优化)
         result = await conn.execute(text(
             "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_skill_embedding_hnsw')"

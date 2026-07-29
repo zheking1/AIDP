@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+{% block title %}记忆图谱 - Memory Tool{% endblock %}
+
+{% block extra_head %}
+<style>
+    .graph-container {
+        width: 100%;
+        height: calc(100vh - 200px);
+        min-height: 500px;
+    }
+    .graph-node {
+        cursor: pointer;
+    }
+    .graph-node:hover {
+        stroke: #000;
+        stroke-width: 2px;
+    }
+    .graph-link {
+        stroke-opacity: 0.6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="memoryGraph()" x-init="init()" class="space-y-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-800">🕸️ 记忆图谱</h1>
+        <div class="flex items-center gap-2">
+            <button @click="autoGenerateRelations()" 
+                    :disabled="generating"
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm">
+                <span x-show="!generating">自动生成关系</span>
+                <span x-show="generating">生成中...</span>
+            </button>
+            <button @click="resetZoom()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
+                重置视图
+            </button>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex flex-wrap gap-4 items-end">
+            <div class="w-48">
+                <label class="block text-sm font-medium text-gray-700 mb-1">分类筛选</label>
+                <select x-model="filterCategory" @change="loadGraphData()" 
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">所有分类</option>
+                    <option value="architecture">架构</option>
+                    <option value="decision">决策</option>
+                    <option value="pattern">模式</option>
+                    <option value="issue">问题</option>
+                    <option value="bug">Bug</option>
+                </select>
+            </div>
+            <div class="w-32">
+                <label class="block text-sm font-medium text-gray-700 mb-1">最大节点数</label>
+                <select x-model="maxNodes" @change="loadGraphData()" 
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </select>
+            </div>
+            <div class="text-sm text-gray-500">
+                节点: <span x-text="stats.nodes"></span> | 
+                关系: <span x-text="stats.links"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Container -->
+    <div class="bg-white rounded-lg shadow">
+        <div x-show="loading" class="graph-container flex items-center justify-center">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p class="text-gray-500">加载图谱...</p>
+            </div>
+        </div>
+
+        <div x-show="!loading && stats.nodes === 0" class="graph-container flex items-center justify-center">
+            <div class="text-center text-gray-500">
+                <div class="text-4xl mb-2">🕸️</div>
+                <p>暂无数据，请先<a href="/memories" class="text-blue-600 hover:underline">创建记忆</a></p>
+            </div>
+        </div>
+
+        <div x-show="!loading && stats.nodes > 0" class="graph-container relative">
+            <svg id="graph-svg" class="w-full h-full"></svg>
+            
+            <!-- Selected Node Panel -->
+            <div x-show="selectedNode" 
+                 class="absolute top-4 right-4 w-80 bg-white rounded-lg shadow-lg border p-4"
+                 x-transition>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-lg" x-text="selectedNode?.title"></h3>
+                    <button @click="selectedNode = null" class="text-gray-400 hover:text-gray-600">&times;</button>
+                </div>
+                <div class="space-y-2 text-sm">
+                    <div>
+                        <span class="text-gray-500">分类:</span>
+                        <span class="px-2 py-0.5 rounded text-xs ml-1" 
+                              :class="getCategoryClass(selectedNode?.category)"
+                              x-text="getCategoryLabel(selectedNode?.category)"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">层级:</span>
+                        <span x-text="getTierLabel(selectedNode?.memory_tier)"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">访问次数:</span>
+                        <span x-text="selectedNode?.access_count || 0"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">置信度:</span>
+                        <span x-text="(selectedNode?.confidence_score * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="pt-2 flex gap-2">
+                        <a :href="'/memories/' + selectedNode?.id" 
+                           class="flex-1 px-3 py-1.5 bg-blue-600 text-white text-center rounded text-sm hover:bg-blue-700">
+                            查看详情
+                        </a>
+                        <button @click="expandNode(selectedNode?.id)" 
+                                class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                            展开
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-sm font-medium text-gray-700 mb-2">图例</h3>
+        <div class="flex flex-wrap gap-4 text-sm">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                <span>架构</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                <span>决策</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                <span>模式</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                <span>问题/Bug</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function memoryGraph() {
+    return {
+        loading: true,
+        nodes: [],
+        links: [],
+        stats: { nodes: 0, links: 0 },
+        filterCategory: '',
+        maxNodes: 100,
+        selectedNode: null,
+        generating: false,
+        simulation: null,
+        svg: null,
+        g: null,
+        zoom: null,
+
+        async init() {
+            await this.loadGraphData();
+        },
+
+        async loadGraphData() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams();
+                params.append('max_nodes', this.maxNodes);
+                if (this.filterCategory) params.append('category', this.filterCategory);
+
+                const resp = await fetch(`/api/memories/graph/data?${params}`);
+                const data = await resp.json();
+
+                if (data.success !== false && data.data) {
+                    this.nodes = data.data.nodes || [];
+                    this.links = data.data.links || [];
+                    this.stats = {
+                        nodes: data.data.total_nodes || 0,
+                        links: data.data.total_links || 0,
+                    };
+                    
+                    if (this.nodes.length > 0) {
+                        this.$nextTick(() => this.renderGraph());
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load graph data:', e);
+            }
+            this.loading = false;
+        },
+
+        renderGraph() {
+            const container = document.getElementById('graph-svg');
+            if (!container) return;
+
+            // Clear previous
+            container.innerHTML = '';
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Create SVG
+            this.svg = d3.select('#graph-svg')
+                .attr('viewBox', [0, 0, width, height]);
+
+            // Add zoom behavior
+            this.zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    this.g.attr('transform', event.transform);
+                });
+
+            this.svg.call(this.zoom);
+
+            // Create container for zoom
+            this.g = this.svg.append('g');
+
+            // Create simulation
+            this.simulation = d3.forceSimulation(this.nodes)
+                .force('link', d3.forceLink(this.links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => (d.radius || 5) + 5));
+
+            // Draw links
+            const link = this.g.append('g')
+                .selectAll('line')
+                .data(this.links)
+                .join('line')
+                .attr('class', 'graph-link')
+                .attr('stroke', d => d.color || '#94a3b8')
+                .attr('stroke-width', d => Math.sqrt(d.strength || 0.5) * 2);
+
+            // Draw nodes
+            const node = this.g.append('g')
+                .selectAll('circle')
+                .data(this.nodes)
+                .join('circle')
+                .attr('class', 'graph-node')
+                .attr('r', d => d.radius || 5)
+                .attr('fill', d => d.color || '#3b82f6')
+                .call(d3.drag()
+                    .on('start', (event, d) => {
+                        if (!event.active) this.simulation.alphaTarget(0.3).restart();
+                        d.fx = d.x;
+                        d.fy = d.y;
+                    })
+                    .on('drag', (event, d) => {
+                        d.fx = event.x;
+                        d.fy = event.y;
+                    })
+                    .on('end', (event, d) => {
+                        if (!event.active) this.simulation.alphaTarget(0);
+                        d.fx = null;
+                        d.fy = null;
+                    }))
+                .on('click', (event, d) => {
+                    event.stopPropagation();
+                    this.selectedNode = d;
+                });
+
+            // Add labels
+            const label = this.g.append('g')
+                .selectAll('text')
+                .data(this.nodes)
+                .join('text')
+                .text(d => d.title?.substring(0, 20) || '')
+                .attr('font-size', '10px')
+                .attr('fill', '#374151')
+                .attr('dx', 8)
+                .attr('dy', 3);
+
+            // Update positions on tick
+            this.simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+
+            // Click background to deselect
+            this.svg.on('click', () => {
+                this.selectedNode = null;
+            });
+        },
+
+        resetZoom() {
+            if (this.svg && this.zoom) {
+                this.svg.transition().duration(750).call(
+                    this.zoom.transform,
+                    d3.zoomIdentity
+                );
+            }
+        },
+
+        async autoGenerateRelations() {
+            this.generating = true;
+            try {
+                const resp = await fetch('/api/memories/relations/auto-generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        similarity_threshold: 0.8,
+                        max_relations_per_memory: 5,
+                    }),
+                });
+                
+                const data = await resp.json();
+                if (data.success !== false) {
+                    alert(`生成了 ${data.data?.created_count || 0} 个关系`);
+                    await this.loadGraphData();
+                }
+            } catch (e) {
+                alert('生成失败: ' + e.message);
+            }
+            this.generating = false;
+        },
+
+        async expandNode(nodeId) {
+            try {
+                const resp = await fetch(`/api/memories/graph/neighbors/${nodeId}`);
+                const data = await resp.json();
+                
+                if (data.success !== false && data.data) {
+                    // Add new nodes and links
+                    const newNeighbors = data.data.neighbors || [];
+                    // This would need more complex logic to merge with existing graph
+                    console.log('Neighbors:', newNeighbors);
+                }
+            } catch (e) {
+                console.error('Failed to expand node:', e);
+            }
+        },
+
+        getCategoryClass(category) {
+            const map = {
+                'architecture': 'bg-blue-100 text-blue-700',
+                'decision': 'bg-green-100 text-green-700',
+                'pattern': 'bg-amber-100 text-amber-700',
+                'issue': 'bg-red-100 text-red-700',
+                'bug': 'bg-red-100 text-red-800',
+            };
+            return map[category] || 'bg-gray-100 text-gray-700';
+        },
+
+        getCategoryLabel(category) {
+            const map = {
+                'architecture': '架构',
+                'decision': '决策',
+                'pattern': '模式',
+                'issue': '问题',
+                'bug': 'Bug',
+            };
+            return map[category] || category;
+        },
+
+        getTierLabel(tier) {
+            const map = {
+                'episodic': '情景',
+                'semantic': '语义',
+                'procedural': '程序',
+            };
+            return map[tier] || tier;
+        },
+    };
+}
+</script>
+{% endblock %}

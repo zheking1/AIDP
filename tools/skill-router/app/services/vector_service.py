@@ -1,30 +1,55 @@
 from typing import Optional
-
 import httpx
-
 from app.config import settings
+
+
+async def _get_chat_config():
+    from app.model_client import get_chat_model
+    model = await get_chat_model()
+    if model:
+        return {
+            "endpoint": model.get("api_base", ""),
+            "model": model.get("model_name", ""),
+            "api_key": model.get("api_key", ""),
+        }
+    raise RuntimeError("No chat model configured in Controller")
+
+
+async def _get_embed_config():
+    from app.model_client import get_embedding_model
+    model = await get_embedding_model()
+    if model:
+        ep = model.get("api_base") or model.get("endpoint")
+        if not ep or ep == "none":
+            return None
+        return {
+            "endpoint": ep,
+            "model": model.get("model_name", ""),
+            "api_key": model.get("api_key", ""),
+        }
+    return None
 
 
 async def generate_embedding(text: str) -> Optional[list[float]]:
     try:
+        cfg = await _get_embed_config()
+        if not cfg:
+            return None
         async with httpx.AsyncClient(timeout=settings.embedding_timeout) as client:
             resp = await client.post(
-                f"{settings.embedding_endpoint}/embeddings",
-                json={
-                    "model": settings.embedding_model,
-                    "input": text,
-                },
-                headers={"Authorization": f"Bearer {settings.embedding_api_key}"},
+                f"{cfg['endpoint']}/embeddings",
+                json={"model": cfg["model"], "input": text},
+                headers={"Authorization": f"Bearer {cfg['api_key']}"},
             )
             resp.raise_for_status()
-            data = resp.json()
-            return data["data"][0]["embedding"]
+            return resp.json()["data"][0]["embedding"]
     except Exception:
         return None
 
 
 async def analyze_intent(task: str, chat_history: Optional[list] = None) -> Optional[dict]:
     try:
+        cfg = await _get_chat_config()
         messages = []
         if chat_history:
             for msg in chat_history:
@@ -38,20 +63,16 @@ async def analyze_intent(task: str, chat_history: Optional[list] = None) -> Opti
             "is_compound (bool). "
             "If the task has multiple distinct goals, set is_compound=true and provide secondary_intent and secondary_tags."
         )
-
         async with httpx.AsyncClient(timeout=settings.llm_timeout) as client:
             resp = await client.post(
-                f"{settings.llm_endpoint}/chat/completions",
+                f"{cfg['endpoint']}/chat/completions",
                 json={
-                    "model": settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        *messages,
-                    ],
+                    "model": cfg["model"],
+                    "messages": [{"role": "system", "content": system_prompt}, *messages],
                     "temperature": 0.3,
                     "max_tokens": 500,
                 },
-                headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                headers={"Authorization": f"Bearer {cfg['api_key']}"},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -72,16 +93,59 @@ RE_RANK_PROMPT = (
 
 
 async def rerank_skills(task: str, skills: list[dict], intent: Optional[dict] = None) -> Optional[list[dict]]:
+    # 优先使用 Controller 重排模型 API (cross-encoder)
+    result = await _rerank_with_api(task, skills, intent)
+    if result:
+        return result
+    # 降级为 LLM prompt 重排
+    return await _rerank_with_llm(task, skills, intent)
+
+
+async def _rerank_with_api(task: str, skills: list[dict], intent: Optional[dict] = None) -> Optional[list[dict]]:
+    try:
+        from app.model_client import get_rerank_model
+        model = await get_rerank_model()
+        if not model:
+            return None
+        ep = model.get("api_base", "")
+        docs = [f"[{s.get('name','')}] {s.get('content','')[:500]}" for s in skills]
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                ep,
+                json={
+                    "model": model.get("model_name", ""),
+                    "query": task,
+                    "documents": docs,
+                },
+                headers={"Authorization": f"Bearer {model.get('api_key', '')}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            return [
+                {"id": str(skills[r["index"]]["id"]),
+                 "name": skills[r["index"]]["name"],
+                 "relevance": r.get("relevance_score", 0),
+                 "is_primary": r.get("relevance_score", 0) > 0.5}
+                for r in sorted(results, key=lambda x: x.get("relevance_score", 0), reverse=True)
+            ]
+    except Exception:
+        return None
+
+
+async def _rerank_with_llm(task: str, skills: list[dict], intent: Optional[dict] = None) -> Optional[list[dict]]:
     from app.db.init_db import get_session
     from app.db.models import LLMConfig
     from sqlalchemy import select
     async with get_session() as db:
         result = await db.execute(
-            select(LLMConfig).where(LLMConfig.role == "reranker", LLMConfig.is_healthy == True)
+            select(LLMConfig).where(LLMConfig.role == "ranker", LLMConfig.is_healthy == True)
         )
         model = result.scalars().first()
     if not model:
-        return None
+        cfg = await _get_chat_config()
+    else:
+        cfg = {"endpoint": model.endpoint, "model": model.model_name, "api_key": model.api_key}
     try:
         skills_input = [{"id": str(s["id"]), "name": s["name"], "tags": s.get("tags", []), "content": s["content"][:500]} for s in skills]
         intent_summary = ""
@@ -94,11 +158,11 @@ async def rerank_skills(task: str, skills: list[dict], intent: Optional[dict] = 
                 intent_summary += f"Secondary intent: {secondary} (compound task)\n"
             intent_summary += f"Domain: {intent.get('domain', '')}\n"
             intent_summary += f"Complexity: {intent.get('complexity', 'medium')}\n"
-        async with httpx.AsyncClient(timeout=model.timeout_secs or 30) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                f"{model.endpoint}/chat/completions",
+                f"{cfg['endpoint']}/chat/completions",
                 json={
-                    "model": model.model_name,
+                    "model": cfg["model"],
                     "messages": [
                         {"role": "system", "content": RE_RANK_PROMPT},
                         {"role": "user", "content": f"Task: {task}\n\n{intent_summary}Skills:\n{skills_input}"},
@@ -106,16 +170,14 @@ async def rerank_skills(task: str, skills: list[dict], intent: Optional[dict] = 
                     "temperature": 0.1,
                     "max_tokens": 2000,
                 },
-                headers={"Authorization": f"Bearer {model.api_key}"},
+                headers={"Authorization": f"Bearer {cfg['api_key']}"},
             )
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
             import json as _json
             rerank_result = _json.loads(content)
-            if isinstance(rerank_result, list):
-                return rerank_result
-            return None
+            return rerank_result if isinstance(rerank_result, list) else None
     except Exception:
         return None
 
@@ -129,8 +191,6 @@ async def detect_embedding_dim(endpoint: str, api_key: str, model: str) -> Optio
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             resp.raise_for_status()
-            data = resp.json()
-            emb = data["data"][0]["embedding"]
-            return len(emb)
+            return len(resp.json()["data"][0]["embedding"])
     except Exception:
         return None

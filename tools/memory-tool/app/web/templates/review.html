@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+{% block title %}审核队列 - Memory Tool{% endblock %}
+
+{% block content %}
+<div x-data="reviewQueue()" x-init="init()" class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">🔍 审核队列</h1>
+            <p class="text-sm text-gray-500 mt-1">审核 AI 生成的记忆建议</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <button @click="loadStats()" class="px-3 py-2 text-gray-600 hover:text-gray-800">
+                <span>🔄</span>
+            </button>
+            <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium" 
+                  x-text="stats.pending_count + ' 待审核'"></span>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-yellow-600" x-text="stats.pending_count || 0"></div>
+            <div class="text-sm text-gray-500">待审核</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-green-600" x-text="stats.approved_count || 0"></div>
+            <div class="text-sm text-gray-500">已通过</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-red-600" x-text="stats.rejected_count || 0"></div>
+            <div class="text-sm text-gray-500">已拒绝</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-blue-600" x-text="stats.edited_count || 0"></div>
+            <div class="text-sm text-gray-500">已编辑</div>
+        </div>
+    </div>
+
+    <!-- Batch Actions -->
+    <div class="bg-white rounded-lg shadow p-4" x-show="selectedItems.length > 0" x-transition>
+        <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600">
+                已选择 <span class="font-medium" x-text="selectedItems.length"></span> 项
+            </span>
+            <div class="flex gap-2">
+                <button @click="batchApprove()" 
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+                    批量通过
+                </button>
+                <button @click="batchReject()" 
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                    批量拒绝
+                </button>
+                <button @click="selectedItems = []" 
+                        class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm">
+                    取消选择
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Queue List -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-4 border-b">
+            <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-gray-800">待审核记忆</h2>
+                <div class="flex gap-2">
+                    <select x-model="filters.status" @change="loadQueue()" 
+                            class="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="pending">待审核</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已拒绝</option>
+                        <option value="edited">已编辑</option>
+                    </select>
+                    <select x-model="filters.priority" @change="loadQueue()" 
+                            class="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">所有优先级</option>
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="divide-y">
+            <template x-for="item in queue" :key="item.id">
+                <div class="p-4 hover:bg-gray-50 transition-colors" 
+                     :class="{ 'bg-blue-50': selectedItems.includes(item.id) }">
+                    <div class="flex items-start gap-4">
+                        <input type="checkbox" 
+                               :value="item.id" 
+                               x-model="selectedItems"
+                               class="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <h3 class="font-medium text-gray-900" x-text="item.title"></h3>
+                                    <p class="text-sm text-gray-600 mt-1 line-clamp-2" x-text="item.content_preview || item.content"></p>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <span class="px-2 py-1 text-xs rounded-full"
+                                          :class="{
+                                              'bg-yellow-100 text-yellow-800': item.ai_review_status === 'pending',
+                                              'bg-green-100 text-green-800': item.ai_review_status === 'approved',
+                                              'bg-red-100 text-red-800': item.ai_review_status === 'rejected',
+                                              'bg-blue-100 text-blue-800': item.ai_review_status === 'edited'
+                                          }"
+                                          x-text="getStatusText(item.ai_review_status)">
+                                    </span>
+                                    <span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full"
+                                          x-text="item.category"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                                <span>🤖 AI 生成</span>
+                                <span x-text="'置信度: ' + (item.confidence_score * 100).toFixed(0) + '%'"></span>
+                                <span x-text="formatDate(item.created_at)"></span>
+                                <template x-if="item.tags && item.tags.length">
+                                    <div class="flex gap-1">
+                                        <template x-for="tag in item.tags.slice(0, 3)" :key="tag">
+                                            <span class="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs" x-text="tag"></span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="flex items-center gap-2 mt-3" x-show="item.ai_review_status === 'pending'">
+                                <button @click="approve(item.id)" 
+                                        class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
+                                    ✓ 通过
+                                </button>
+                                <button @click="editItem(item)" 
+                                        class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                                    ✏️ 编辑
+                                </button>
+                                <button @click="reject(item.id)" 
+                                        class="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700">
+                                    ✗ 拒绝
+                                </button>
+                                <button @click="viewDetails(item)" 
+                                        class="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm">
+                                    详情
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            
+            <div x-show="queue.length === 0 && !loading" class="p-8 text-center text-gray-500">
+                <div class="text-4xl mb-2">✅</div>
+                <p>审核队列为空</p>
+            </div>
+            
+            <div x-show="loading" class="p-8 text-center text-gray-500">
+                <div class="animate-spin inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                <p class="mt-2">加载中...</p>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="p-4 border-t flex items-center justify-between" x-show="pagination.total > pagination.page_size">
+            <div class="text-sm text-gray-600">
+                显示 <span x-text="(pagination.page - 1) * pagination.page_size + 1"></span> - 
+                <span x-text="Math.min(pagination.page * pagination.page_size, pagination.total)"></span> 
+                共 <span x-text="pagination.total"></span> 条
+            </div>
+            <div class="flex gap-2">
+                <button @click="changePage(pagination.page - 1)" 
+                        :disabled="pagination.page <= 1"
+                        class="px-3 py-1 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                    上一页
+                </button>
+                <button @click="changePage(pagination.page + 1)" 
+                        :disabled="pagination.page >= pagination.pages"
+                        class="px-3 py-1 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                    下一页
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div x-show="showEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" @click.away="showEditModal = false">
+            <div class="p-6 border-b">
+                <h3 class="text-lg font-semibold">编辑记忆</h3>
+            </div>
+            <div class="p-6 space-y-4" x-show="editingItem">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                    <input x-model="editingItem.title" type="text" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">内容</label>
+                    <textarea x-model="editingItem.content" rows="6" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                        <select x-model="editingItem.category" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="architecture">架构</option>
+                            <option value="decision">决策</option>
+                            <option value="pattern">模式</option>
+                            <option value="issue">问题</option>
+                            <option value="bug">缺陷</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">标签 (逗号分隔)</label>
+                        <input x-model="editingItem.tagsInput" type="text" placeholder="tag1, tag2, tag3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">审核备注</label>
+                    <textarea x-model="editingItem.review_notes" rows="2" placeholder="编辑原因或其他备注..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+            </div>
+            <div class="p-6 border-t flex justify-end gap-3">
+                <button @click="showEditModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                    取消
+                </button>
+                <button @click="saveEdit()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    保存并审核
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" @click.away="showDetailModal = false">
+            <div class="p-6 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold" x-text="detailItem?.title"></h3>
+                <button @click="showDetailModal = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4" x-show="detailItem">
+                <div class="flex items-center gap-2">
+                    <span class="px-2 py-1 text-xs rounded-full"
+                          :class="{
+                              'bg-yellow-100 text-yellow-800': detailItem?.ai_review_status === 'pending',
+                              'bg-green-100 text-green-800': detailItem?.ai_review_status === 'approved',
+                              'bg-red-100 text-red-800': detailItem?.ai_review_status === 'rejected',
+                              'bg-blue-100 text-blue-800': detailItem?.ai_review_status === 'edited'
+                          }"
+                          x-text="getStatusText(detailItem?.ai_review_status)">
+                    </span>
+                    <span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full" x-text="detailItem?.category"></span>
+                    <span class="text-sm text-gray-500" x-text="formatDate(detailItem?.created_at)"></span>
+                </div>
+                <div class="prose max-w-none">
+                    <p class="text-gray-700 whitespace-pre-wrap" x-text="detailItem?.content"></p>
+                </div>
+                <div x-show="detailItem?.tags?.length">
+                    <label class="text-sm font-medium text-gray-700">标签</label>
+                    <div class="flex gap-2 mt-1">
+                        <template x-for="tag in detailItem?.tags || []" :key="tag">
+                            <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm" x-text="tag"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t flex justify-end gap-3" x-show="detailItem?.ai_review_status === 'pending'">
+                <button @click="reject(detailItem.id); showDetailModal = false" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    拒绝
+                </button>
+                <button @click="editItem(detailItem); showDetailModal = false" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    编辑
+                </button>
+                <button @click="approve(detailItem.id); showDetailModal = false" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    通过
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function reviewQueue() {
+    return {
+        queue: [],
+        stats: {},
+        selectedItems: [],
+        loading: false,
+        filters: {
+            status: 'pending',
+            priority: '',
+        },
+        pagination: {
+            page: 1,
+            page_size: 20,
+            total: 0,
+            pages: 1,
+        },
+        showEditModal: false,
+        showDetailModal: false,
+        editingItem: null,
+        detailItem: null,
+
+        init() {
+            this.loadQueue();
+            this.loadStats();
+        },
+
+        async loadQueue() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.pagination.page,
+                    page_size: this.pagination.page_size,
+                });
+                
+                if (this.filters.status) {
+                    params.append('status', this.filters.status);
+                }
+                if (this.filters.priority) {
+                    params.append('priority', this.filters.priority);
+                }
+
+                const response = await fetch(`/api/memories/review/queue?${params}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.queue = result.data.items || [];
+                    this.pagination = {
+                        page: result.data.page,
+                        page_size: result.data.page_size,
+                        total: result.data.total,
+                        pages: result.data.pages,
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to load queue:', error);
+                alert('加载审核队列失败');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async loadStats() {
+            try {
+                const response = await fetch('/api/memories/review/stats');
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.stats = result.data;
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        },
+
+        async approve(id) {
+            try {
+                const response = await fetch(`/api/memories/review/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'approve' }),
+                });
+                
+                if (response.ok) {
+                    this.loadQueue();
+                    this.loadStats();
+                } else {
+                    alert('审核失败');
+                }
+            } catch (error) {
+                console.error('Failed to approve:', error);
+                alert('审核失败');
+            }
+        },
+
+        async reject(id) {
+            const reason = prompt('拒绝原因（可选）：');
+            if (reason === null) return; // Cancelled
+            
+            try {
+                const response = await fetch(`/api/memories/review/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'reject',
+                        notes: reason || undefined,
+                    }),
+                });
+                
+                if (response.ok) {
+                    this.loadQueue();
+                    this.loadStats();
+                } else {
+                    alert('拒绝失败');
+                }
+            } catch (error) {
+                console.error('Failed to reject:', error);
+                alert('拒绝失败');
+            }
+        },
+
+        editItem(item) {
+            this.editingItem = {
+                ...item,
+                tagsInput: item.tags ? item.tags.join(', ') : '',
+                review_notes: '',
+            };
+            this.showEditModal = true;
+        },
+
+        async saveEdit() {
+            try {
+                const response = await fetch(`/api/memories/review/${this.editingItem.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'edit',
+                        edited_data: {
+                            title: this.editingItem.title,
+                            content: this.editingItem.content,
+                            category: this.editingItem.category,
+                            tags: this.editingItem.tagsInput.split(',').map(t => t.trim()).filter(t => t),
+                        },
+                        notes: this.editingItem.review_notes,
+                    }),
+                });
+                
+                if (response.ok) {
+                    this.showEditModal = false;
+                    this.editingItem = null;
+                    this.loadQueue();
+                    this.loadStats();
+                } else {
+                    alert('保存失败');
+                }
+            } catch (error) {
+                console.error('Failed to save edit:', error);
+                alert('保存失败');
+            }
+        },
+
+        viewDetails(item) {
+            this.detailItem = item;
+            this.showDetailModal = true;
+        },
+
+        async batchApprove() {
+            if (!confirm(`确定要通过 ${this.selectedItems.length} 项记忆吗？`)) return;
+            
+            try {
+                const response = await fetch('/api/memories/review/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'approve',
+                        memory_ids: this.selectedItems,
+                    }),
+                });
+                
+                if (response.ok) {
+                    this.selectedItems = [];
+                    this.loadQueue();
+                    this.loadStats();
+                } else {
+                    alert('批量审核失败');
+                }
+            } catch (error) {
+                console.error('Failed to batch approve:', error);
+                alert('批量审核失败');
+            }
+        },
+
+        async batchReject() {
+            if (!confirm(`确定要拒绝 ${this.selectedItems.length} 项记忆吗？`)) return;
+            
+            const reason = prompt('拒绝原因（可选）：');
+            if (reason === null) return;
+            
+            try {
+                const response = await fetch('/api/memories/review/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'reject',
+                        memory_ids: this.selectedItems,
+                        notes: reason || undefined,
+                    }),
+                });
+                
+                if (response.ok) {
+                    this.selectedItems = [];
+                    this.loadQueue();
+                    this.loadStats();
+                } else {
+                    alert('批量拒绝失败');
+                }
+            } catch (error) {
+                console.error('Failed to batch reject:', error);
+                alert('批量拒绝失败');
+            }
+        },
+
+        changePage(page) {
+            if (page < 1 || page > this.pagination.pages) return;
+            this.pagination.page = page;
+            this.loadQueue();
+        },
+
+        getStatusText(status) {
+            const map = {
+                'pending': '待审核',
+                'approved': '已通过',
+                'rejected': '已拒绝',
+                'edited': '已编辑',
+            };
+            return map[status] || status;
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        },
+    }
+}
+</script>
+{% endblock %}

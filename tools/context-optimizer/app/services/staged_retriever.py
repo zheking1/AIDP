@@ -33,6 +33,7 @@ class StagedRetriever:
         required_tools: List[str],
         search_queries: Dict[str, List[str]],
         budget_hints: Dict[str, int],
+        task_context: dict = None,
     ) -> dict:
         results = {}
         tasks = []
@@ -42,7 +43,7 @@ class StagedRetriever:
                 continue
             queries = search_queries.get(tool_name, [])
             budget = budget_hints.get(tool_name, 2000)
-            tasks.append(self._retrieve_from_tool(tool_name, queries, budget))
+            tasks.append(self._retrieve_from_tool(tool_name, queries, budget, task_context or {}))
 
         gathered = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -58,7 +59,7 @@ class StagedRetriever:
 
         return results
 
-    async def _retrieve_from_tool(self, tool_name: str, queries: List[str], budget: int) -> dict:
+    async def _retrieve_from_tool(self, tool_name: str, queries: List[str], budget: int, task_context: dict = None) -> dict:
         endpoint = TOOL_ENDPOINTS[tool_name]
         capability = CAPABILITY_MAP.get(tool_name, f"{tool_name}.search")
 
@@ -76,7 +77,15 @@ class StagedRetriever:
             if tool_name == "memory-tool":
                 payload["input"] = {"project": query_text or "default", "query": query_text, "limit": limit}
             elif tool_name == "knowledge-tool":
-                payload["input"] = {"query": query_text, "top_k": limit}
+                payload["input"] = {"query": query_text, "top_k": limit, "search_mode": "hybrid"}
+                if task_context:
+                    payload["context"] = {
+                        "workspace_id": task_context.get("workspace_id", ""),
+                        "project_id": task_context.get("project_id"),
+                        "knowledge_base_ids": task_context.get("knowledge_base_ids"),
+                        "task_domains": task_context.get("task_domains"),
+                        "tech_keywords": task_context.get("tech_keywords"),
+                    }
             elif tool_name == "code-index":
                 payload["input"] = {"symbols": queries, "top_k": limit}
             elif tool_name == "asset-tool":

@@ -1,0 +1,578 @@
+﻿<div x-data="knowledgeDocumentsPage()" x-init="init()">
+    <div class="flex items-center justify-between pt-5 pb-4 border-b border-gray-700/50">
+        <div class="flex items-center gap-4">
+            <button @click="history.back()" class="text-gray-400 hover:text-white">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div>
+                <h1 class="text-2xl font-bold text-white">文档管理</h1>
+                <p class="text-gray-400 text-sm mt-1" x-text="knowledgeBase?.name || '所有文档'"></p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button @click="showUploadModal = true" 
+                    class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-upload"></i>
+                <span>上传文档</span>
+            </button>
+            <button @click="openWebImport()" 
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-globe"></i>
+                <span>从网页导入</span>
+            </button>
+            <button @click="showCreateModal = true" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-plus"></i>
+                <span>新建文档</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="pt-5 py-4">
+        <div class="flex gap-4">
+            <div class="flex-1 relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                <input x-model="searchQuery" 
+                       @input.debounce.300ms="loadDocuments()"
+                       type="text" 
+                       placeholder="搜索文档..." 
+                       class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none">
+            </div>
+            <select x-model="statusFilter" 
+                    @change="loadDocuments()"
+                    class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="processing">处理中</option>
+                <option value="indexed">已索引</option>
+                <option value="error">错误</option>
+            </select>
+            <select x-model="typeFilter" 
+                    @change="loadDocuments()"
+                    class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                <option value="">全部类型</option>
+                <option value="markdown">Markdown</option>
+                <option value="txt">文本</option>
+                <option value="code">代码</option>
+            </select>
+            <div class="relative">
+                <input x-model="categoryFilter" 
+                       @input.debounce.300ms="loadDocuments()"
+                       type="text" 
+                       placeholder="分类筛选..." 
+                       class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none w-40">
+                <div x-show="categorySuggestions.length > 0 && categoryFilter.length > 0"
+                     class="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10 max-h-40 overflow-y-auto">
+                    <template x-for="cat in categorySuggestions" :key="cat">
+                        <button @click="categoryFilter = cat; loadDocuments(); categorySuggestions=[]"
+                                class="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"
+                                x-text="cat">
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Table -->
+    <div class="pb-8">
+        <!-- Loading -->
+        <div x-show="loading" class="flex justify-center py-12">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- Empty -->
+        <div x-show="!loading && documents.length === 0" class="text-center py-12">
+            <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-file-alt text-3xl text-gray-600"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-300 mb-2">还没有文档</h3>
+            <p class="text-gray-500 mb-4">上传或创建您的第一个文档</p>
+            <div class="flex justify-center gap-3">
+                <button @click="showUploadModal = true" 
+                        class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
+                    上传文档
+                </button>
+                <button @click="showCreateModal = true" 
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition">
+                    新建文档
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div x-show="!loading && documents.length > 0" class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-700/50">
+                    <tr>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">文档</th>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">类型</th>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">分类</th>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">状态</th>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">分块</th>
+                        <th class="text-left px-4 py-3 text-sm font-medium text-gray-300">更新时间</th>
+                        <th class="text-right px-4 py-3 text-sm font-medium text-gray-300">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="doc in documents" :key="doc.id">
+                        <tr class="hover:bg-gray-700/30 transition">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-gray-700 rounded flex items-center justify-center">
+                                        <i :class="getDocTypeIcon(doc.doc_type)" class="text-gray-400"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-white" x-text="doc.title"></p>
+                                        <p class="text-xs text-gray-500" x-show="doc.source_uri" x-text="doc.source_uri"></p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-sm text-gray-400 capitalize" x-text="doc.doc_type"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-sm text-gray-400" x-text="doc.category || '-'"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span :class="getStatusClass(doc.status)" class="text-xs px-2 py-1 rounded-full capitalize">
+                                    <span x-text="getStatusText(doc.status)"></span>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-sm text-gray-400" x-text="doc.chunk_count || 0"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-sm text-gray-400" x-text="formatDate(doc.updated_at)"></span>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button @click="viewDocument(doc)" 
+                                            class="text-gray-400 hover:text-white transition"
+                                            title="查看">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button @click="editDocument(doc)" 
+                                            class="text-gray-400 hover:text-indigo-400 transition"
+                                            title="编辑">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button @click="deleteDocument(doc)" 
+                                            class="text-gray-400 hover:text-red-400 transition"
+                                            title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="!loading && total > limit" class="flex justify-center mt-6 gap-2">
+            <button @click="prevPage()" 
+                    :disabled="skip === 0"
+                    :class="skip === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-4 py-2 bg-gray-800 rounded-lg transition">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <span class="px-4 py-2 text-gray-400">
+                第 <span x-text="Math.floor(skip / limit) + 1"></span> 页
+            </span>
+            <button @click="nextPage()" 
+                    :disabled="skip + limit >= total"
+                    :class="skip + limit >= total ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-4 py-2 bg-gray-800 rounded-lg transition">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Create Document Modal -->
+    <div x-show="showCreateModal" 
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+         x-transition>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+             @click.away="showCreateModal = false">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold">新建文档</h2>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">标题 <span class="text-red-500">*</span></label>
+                    <input x-model="newDoc.title" 
+                           type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="输入文档标题">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">类型</label>
+                    <select x-model="newDoc.doc_type" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="markdown">Markdown</option>
+                        <option value="txt">纯文本</option>
+                        <option value="code">代码</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">分类</label>
+                    <input x-model="newDoc.category" 
+                           type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="例如: research/market">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">内容</label>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300"
+                              :class="{'bg-indigo-500/10 text-indigo-400': newDoc.doc_type==='markdown','bg-gray-700 text-gray-300': newDoc.doc_type==='txt','bg-green-500/10 text-green-400': newDoc.doc_type==='code'}"
+                              x-text="newDoc.doc_type==='markdown'?'Markdown':newDoc.doc_type==='txt'?'纯文本':'代码'"></span>
+                        <span x-show="showPreview && newDoc.doc_type==='markdown'" class="text-xs text-indigo-400">预览模式</span>
+                    </div>
+                    <div x-show="!(showPreview && newDoc.doc_type==='markdown')">
+                        <textarea x-model="newDoc.content" 
+                                  rows="14"
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none font-mono text-sm"
+                                  :placeholder="newDoc.doc_type==='markdown'?'# 标题\n\n输入 Markdown 内容...':newDoc.doc_type==='code'?'// 输入代码...':'输入文本内容...'"></textarea>
+                    </div>
+                    <div x-show="showPreview && newDoc.doc_type==='markdown'" 
+                         class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm min-h-[200px] whitespace-pre-wrap"
+                         x-text="newDoc.content"></div>
+                    <div class="flex justify-end mt-1">
+                        <button @click="showPreview=!showPreview" class="text-xs text-gray-500 hover:text-indigo-400 transition" x-show="newDoc.doc_type==='markdown'">
+                            <span x-text="showPreview?'编辑':'预览'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+                <button @click="showCreateModal = false" class="px-4 py-2 text-gray-300 hover:text-white transition">
+                    取消
+                </button>
+                <button @click="createDocument()" 
+                        :disabled="creating"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
+                        <span x-text="creating ? '保存中...' : '保存'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Document Modal -->
+    <div x-show="showUploadModal" 
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+         x-transition>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+             @click.away="showUploadModal = false">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold">上传文档</h2>
+                <button @click="showUploadModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">标题 <span class="text-red-500">*</span></label>
+                    <input x-model="newDoc.title" type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="输入文档标题">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">内容 <span class="text-red-500">*</span></label>
+                    <textarea x-model="newDoc.content" rows="14"
+                              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none font-mono text-sm"
+                              placeholder="粘贴文档内容..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">类型</label>
+                        <select x-model="newDoc.doc_type" 
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                            <option value="markdown">Markdown</option>
+                            <option value="txt">纯文本</option>
+                            <option value="code">代码</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">分类</label>
+                        <input x-model="newDoc.category" type="text" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                               placeholder="例如: research/market">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+                <button @click="showUploadModal = false" class="px-4 py-2 text-gray-300 hover:text-white transition">取消</button>
+                <button @click="createDocument()" 
+                        :disabled="creating"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg transition">
+                        <span x-text="creating ? '上传中...' : '确认上传'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Document Modal -->
+    <div x-show="showEditModal" 
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+         x-transition>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+             @click.away="showEditModal = false">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold">编辑文档</h2>
+                <button @click="showEditModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">标题 <span class="text-red-500">*</span></label>
+                    <input x-model="editDoc.title" 
+                           type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="输入文档标题">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">类型</label>
+                    <select x-model="editDoc.doc_type" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="markdown">Markdown</option>
+                        <option value="txt">纯文本</option>
+                        <option value="code">代码</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">分类</label>
+                    <input x-model="editDoc.category" 
+                           type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="例如: research/market">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">内容</label>
+                    <textarea x-model="editDoc.content" 
+                              rows="10"
+                              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none font-mono text-sm"
+                              placeholder="输入文档内容..."></textarea>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+                <button @click="showEditModal = false" class="px-4 py-2 text-gray-300 hover:text-white transition">
+                    取消
+                </button>
+                <button @click="saveEditDocument()" 
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
+                    保存修改
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Document Modal -->
+    <div x-show="showViewModal" 
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+         x-transition>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold" x-text="viewingDoc?.title"></h2>
+                <div class="flex items-center gap-2">
+                    <button @click="editDocument(viewingDoc)" class="text-gray-400 hover:text-white px-3 py-1">
+                        <i class="fas fa-edit"></i> 编辑
+                    </button>
+                    <button @click="showViewModal = false" class="text-gray-400 hover:text-white">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 px-6 py-2 border-b border-gray-700">
+                <button @click="viewTab='content'" :class="viewTab==='content'?'bg-indigo-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded text-sm transition">全文</button>
+                <button @click="viewTab='chunks'; loadChunks()" :class="viewTab==='chunks'?'bg-indigo-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded text-sm transition">分块视图 <span x-show="chunkCount>0" class="ml-1 text-xs opacity-70" x-text="'('+chunkCount+')'"></span></button>
+                <span x-show="chunksLoading" class="text-xs text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>加载中...</span>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6" x-show="viewTab==='content'">
+                <div class="prose prose-invert max-w-none">
+                    <pre class="bg-gray-900 p-4 rounded-lg overflow-x-auto"><code x-text="viewingDoc?.content"></code></pre>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6" x-show="viewTab==='chunks'">
+                <div class="space-y-3">
+                    <template x-for="(chunk, i) in chunks" :key="chunk.id">
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden hover:border-indigo-500/30 transition">
+                            <div class="flex items-center justify-between px-3 py-2 bg-gray-800/60 border-b border-gray-700/50">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" :class="chunkColorClass(i)" x-text="chunk.chunk_index"></span>
+                                    <span class="text-xs text-gray-400">Chunk #<span x-text="chunk.chunk_index"></span></span>
+                                </div>
+                                <div class="flex items-center gap-3 text-xs text-gray-500">
+                                    <span><i class="far fa-clock mr-1"></i><span x-text="estimatedReadTime(chunk)"></span></span>
+                                    <span x-show="chunk.token_count"><i class="fas fa-calculator mr-1"></i><span x-text="chunk.token_count"></span> tokens</span>
+                                </div>
+                            </div>
+                            <div class="p-3">
+                                <pre class="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed" x-text="chunk.content"></pre>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="!chunks.length && !chunksLoading" class="text-center py-8 text-gray-500">
+                        <i class="fas fa-cubes text-3xl text-gray-700 mb-3"></i>
+                        <p>暂无分块数据</p>
+                        <p class="text-xs mt-1">文档可能尚未处理或索引</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="fixed bottom-4 right-4 space-y-2 z-50">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div :class="{
+                'bg-green-600': toast.type === 'success',
+                'bg-red-600': toast.type === 'error'
+            }" class="text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px]"
+                 x-transition>
+                <i :class="toast.type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+                <span x-text="toast.message"></span>
+                <button @click="removeToast(toast.id)" class="ml-auto"><i class="fas fa-times"></i></button>
+            </div>
+        </template>
+    </div>
+
+
+
+<style>
+.loading-spinner {
+    border: 2px solid #374151;
+    border-top: 2px solid #6366f1;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.prose pre {
+    background-color: #111827;
+}
+</style>
+<script>window.knowledgeDocumentsPage=function(){
+  return {
+    documents:[], loading:false, total:0, skip:0, limit:20,
+    searchQuery:'', statusFilter:'', typeFilter:'', categoryFilter:'', categorySuggestions:[],
+    knowledgeBase:null, showCreateModal:false, showUploadModal:false,
+    showViewModal:false, showEditModal:false, viewingDoc:null, editDoc:{}, creating:false,
+    newDoc:{title:'',doc_type:'',category:'',content:''},
+    toasts:[], showPreview:false,
+    viewTab:'content', chunks:[], chunksLoading:false, chunkCount:0,
+
+    async init(){await this.loadDocuments()},
+
+    async loadDocuments(){
+      this.loading=true;
+      try{
+        const p=new URLSearchParams({limit:this.limit,skip:this.skip});
+        if(this.searchQuery)p.set('search',this.searchQuery);
+        if(this.statusFilter)p.set('status',this.statusFilter);
+        if(this.typeFilter)p.set('doc_type',this.typeFilter);
+        if(this.categoryFilter)p.set('category',this.categoryFilter);
+        const r=await fetch('/api/knowledge/documents-list?'+p);
+        if(r.ok){const d=await r.json();this.documents=d.items||[];this.total=d.total||0;this.buildCategorySuggestions(d.items||[])}
+      }catch(e){console.error(e)}finally{this.loading=false}
+    },
+
+    buildCategorySuggestions(items){
+      const cats=new Set();
+      items.forEach(d=>{if(d.category)cats.add(d.category)});
+      const existing=this.categoryFilter.trim().toLowerCase();
+      if(!existing){this.categorySuggestions=[];return}
+      this.categorySuggestions=Array.from(cats).filter(c=>c.toLowerCase().includes(existing));
+    },
+
+    formatDate(d){return d?new Date(d).toLocaleDateString('zh-CN'):''},
+    getStatusText(s){return s==='active'?'正常':s==='archived'?'归档':'草稿'},
+    getStatusClass(s){return s==='active'?'bg-green-900/50 text-green-300':s==='archived'?'bg-gray-700 text-gray-400':'bg-yellow-900/50 text-yellow-300'},
+    getDocTypeIcon(t){return{'markdown':'fas fa-file-alt','code':'fas fa-code','web':'fas fa-globe','api':'fas fa-plug','document':'fas fa-file'}[t]||'fas fa-file'},
+
+    async loadChunks(){
+      if(!this.viewingDoc) return
+      this.chunksLoading=true
+      try{
+        const r=await fetch('/api/knowledge/documents/'+this.viewingDoc.id+'/chunks?limit=50')
+        if(r.ok){const d=await r.json();this.chunks=d.items||[];this.chunkCount=d.total||0}
+      }catch(e){console.error(e)}
+      finally{this.chunksLoading=false}
+    },
+    chunkColorClass(i){
+      const colors=['bg-indigo-600','bg-blue-600','bg-emerald-600','bg-violet-600','bg-amber-600','bg-rose-600','bg-cyan-600','bg-pink-600']
+      return colors[i%colors.length]
+    },
+    estimatedReadTime(chunk){
+      const words=(chunk.content||'').length
+      if(words<100)return'< 10s'
+      if(words<500)return'~30s'
+      if(words<1000)return'~1min'
+      return'~'+Math.ceil(words/500)+'min'
+    },
+
+    async viewDocument(d){try{const r=await fetch('/api/knowledge/documents/'+d.id);if(r.ok){this.viewingDoc=await r.json();this.showViewModal=true;this.viewTab='content';this.chunks=[];this.chunkCount=0}}catch(e){}},
+    async editDocument(d){try{const r=await fetch('/api/knowledge/documents/'+d.id);if(r.ok){const full=await r.json();this.editDoc={...full,content:full.content||''};this.showEditModal=true}}catch(e){}},
+    async saveEditDocument(){
+      if(!this.editDoc.title)return;
+      try{
+        const r=await fetch('/api/knowledge/documents/'+this.editDoc.id,{method:'PUT',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({title:this.editDoc.title,doc_type:this.editDoc.doc_type,category:this.editDoc.category,content:this.editDoc.content})});
+        if(r.ok){this.showEditModal=false;await this.loadDocuments()}
+      }catch(e){}
+    },
+    async deleteDocument(d){
+      if(!confirm('删除文档「'+d.title+'」？'))return;
+      try{const r=await fetch('/api/knowledge/documents/'+d.id,{method:'DELETE'});if(r.ok)await this.loadDocuments()}catch(e){}
+    },
+
+    prevPage(){if(this.skip>=this.limit){this.skip-=this.limit;this.loadDocuments()}},
+    nextPage(){if(this.skip+this.limit<this.total){this.skip+=this.limit;this.loadDocuments()}},
+
+    async createDocument(){
+      if(!this.newDoc.title)return;
+      this.creating=true;
+      try{
+        const r=await fetch('/api/knowledge/documents',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(this.newDoc)});
+        if(r.ok){this.showCreateModal=false;this.newDoc={title:'',doc_type:'',category:'',content:''};await this.loadDocuments()}
+      }catch(e){}finally{this.creating=false}
+    },
+
+    openWebImport(){
+      window.open('/api/proxy/knowledge-tool/knowledge-bases', '_blank');
+    },
+
+    removeToast(id){this.toasts=this.toasts.filter(t=>t.id!==id)}
+  }
+}</script>

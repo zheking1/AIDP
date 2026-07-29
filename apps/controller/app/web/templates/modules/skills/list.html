@@ -1,0 +1,246 @@
+﻿{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/base.html" %}{% endif %}
+
+{% block title %}技能管理 - AIDP{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50" x-data="skillsPage()" x-init="init()">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">技能管理</h1>
+                <p class="text-gray-500 text-sm mt-1">管理全局、个人和项目技能</p>
+            </div>
+            <div class="flex gap-3">
+                <button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition">
+                    <i class="fas fa-plus mr-2"></i>创建技能
+                </button>
+            </div>
+        </div>
+
+        <!-- Scope Tabs -->
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+            <template x-for="s in scopes" :key="s.key">
+                <button @click="currentScope = s.key; loadSkills()"
+                        :class="currentScope === s.key ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition">
+                    <i :class="s.icon" class="mr-1"></i>
+                    <span x-text="s.label"></span>
+                    <span class="ml-1 text-xs bg-gray-200 px-1.5 py-0.5 rounded-full" x-text="scopeCounts[s.key] || 0"></span>
+                </button>
+            </template>
+        </div>
+
+        <!-- Search & Filter -->
+        <div class="flex gap-3 mb-6">
+            <div class="flex-1 relative">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                <input type="text" x-model="searchQuery" @input.debounce.300ms="loadSkills()"
+                       placeholder="搜索技能..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+            </div>
+        </div>
+
+        <!-- Skills Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="skill in skills" :key="skill.id">
+                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition cursor-pointer"
+                     @click="viewSkill(skill)">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg"><i class="fas fa-bolt text-yellow-500"></i></span>
+                            <h3 class="font-semibold text-gray-900 truncate" x-text="skill.name"></h3>
+                        </div>
+                        <span class="px-2 py-0.5 text-xs rounded-full"
+                              :class="skill.scope === 'global' ? 'bg-purple-100 text-purple-700' : skill.scope === 'personal' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'"
+                              x-text="skill.scope === 'global' ? '全局' : skill.scope === 'personal' ? '个人' : '项目'"></span>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-3 line-clamp-2" x-text="skill.description || '无描述'"></p>
+                    <div class="flex items-center justify-between">
+                        <div class="flex gap-1 flex-wrap">
+                            <template x-for="tag in (skill.tags || []).slice(0, 3)" :key="tag">
+                                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded" x-text="tag"></span>
+                            </template>
+                        </div>
+                        <span class="text-xs text-gray-400" x-text="skill.review_status === 'approved' ? '已审核' : skill.review_status === 'pending' ? '待审核' : '已拒绝'"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="skills.length === 0 && !loading" class="text-center py-12">
+            <i class="fas fa-bolt text-4xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500">暂无技能，点击上方按钮创建</p>
+        </div>
+    </div>
+
+    <!-- Create Skill Modal -->
+    <div x-show="showCreateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition>
+        <div class="bg-white rounded-lg w-full max-w-lg mx-4 p-6">
+            <h2 class="text-xl font-bold mb-4">创建技能</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">名称</label>
+                    <input type="text" x-model="newSkill.name" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                    <textarea x-model="newSkill.description" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">作用域</label>
+                    <select x-model="newSkill.scope" class="w-full border rounded-lg px-3 py-2">
+                        <option value="personal">个人技能</option>
+                        <option value="project">项目技能</option>
+                        <option value="global">全局技能</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">指令</label>
+                    <textarea x-model="newSkill.instruction" rows="4" class="w-full border rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-indigo-500" placeholder="输入技能指令/提示词..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">标签（逗号分隔）</label>
+                    <input type="text" x-model="newSkill.tagsInput" class="w-full border rounded-lg px-3 py-2" placeholder="tag1, tag2, tag3">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                <button @click="createSkill()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skill Detail Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition>
+        <div class="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h2 class="text-xl font-semibold" x-text="selectedSkill?.name"></h2>
+                <button @click="showDetailModal = false" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                <div class="space-y-4">
+                    <div class="flex gap-2">
+                        <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700" x-text="selectedSkill?.scope === 'global' ? '全局' : selectedSkill?.scope === 'personal' ? '个人' : '项目'"></span>
+                        <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700" x-text="selectedSkill?.review_status === 'approved' ? '已审核' : '待审核'"></span>
+                        <span class="text-xs text-gray-400">v<span x-text="selectedSkill?.version"></span></span>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">描述</h3>
+                        <p class="text-gray-900" x-text="selectedSkill?.description || '无描述'"></p>
+                    </div>
+                    <div x-show="selectedSkill?.instruction">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">指令</h3>
+                        <pre class="bg-gray-50 p-3 rounded-lg text-sm text-gray-800 overflow-x-auto whitespace-pre-wrap" x-text="selectedSkill?.instruction"></pre>
+                    </div>
+                    <div x-show="selectedSkill?.content">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">脚本内容</h3>
+                        <pre class="bg-gray-50 p-3 rounded-lg text-sm text-gray-800 overflow-x-auto whitespace-pre-wrap" x-text="selectedSkill?.content"></pre>
+                    </div>
+                    <div x-show="(selectedSkill?.tags || []).length > 0">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">标签</h3>
+                        <div class="flex gap-1 flex-wrap">
+                            <template x-for="tag in selectedSkill?.tags || []" :key="tag">
+                                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded" x-text="tag"></span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-between px-6 py-4 border-t bg-gray-50">
+                <button @click="deleteSkill(selectedSkill)" class="text-red-600 hover:text-red-800 text-sm">
+                    <i class="fas fa-trash mr-1"></i>删除
+                </button>
+                <button @click="showDetailModal = false" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+function skillsPage() {
+    return {
+        skills: [],
+        currentScope: 'personal',
+        searchQuery: '',
+        loading: false,
+        showCreateModal: false,
+        showDetailModal: false,
+        selectedSkill: null,
+        scopeCounts: { global: 0, personal: 0, project: 0 },
+        scopes: [
+            { key: 'global', label: '全局技能', icon: 'fas fa-globe' },
+            { key: 'personal', label: '我的技能', icon: 'fas fa-user' },
+            { key: 'project', label: '项目技能', icon: 'fas fa-folder' }
+        ],
+        newSkill: { name: '', description: '', scope: 'personal', instruction: '', tagsInput: '' },
+
+        async init() {
+            await this.loadSkills();
+            await this.loadStats();
+        },
+
+        async loadSkills() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({ scope: this.currentScope, limit: '50' });
+                if (this.searchQuery) params.set('search', this.searchQuery);
+                const res = await fetch(`/api/skills/list?${params}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.skills = data.items || [];
+                }
+            } finally { this.loading = false; }
+        },
+
+        async loadStats() {
+            try {
+                const res = await fetch('/api/skills/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.scopeCounts = data.by_scope || {};
+                }
+            } catch(e) {}
+        },
+
+        async createSkill() {
+            const tags = this.newSkill.tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+            try {
+                const res = await fetch('/api/skills/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...this.newSkill, tags })
+                });
+                if (res.ok) {
+                    this.showCreateModal = false;
+                    this.newSkill = { name: '', description: '', scope: 'personal', instruction: '', tagsInput: '' };
+                    await this.loadSkills();
+                    await this.loadStats();
+                }
+            } catch(e) { console.error(e); }
+        },
+
+        async viewSkill(skill) {
+            try {
+                const res = await fetch(`/api/skills/${skill.id}`);
+                if (res.ok) {
+                    this.selectedSkill = await res.json();
+                    this.showDetailModal = true;
+                }
+            } catch(e) {}
+        },
+
+        async deleteSkill(skill) {
+            if (!skill || !confirm('确定删除此技能？')) return;
+            try {
+                const res = await fetch(`/api/skills/${skill.id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.showDetailModal = false;
+                    await this.loadSkills();
+                    await this.loadStats();
+                }
+            } catch(e) {}
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+[
+  {
+    "n": "知识中心 Hub",
+    "s": "PASS",
+    "d": "4707b"
+  },
+  {
+    "n": "技能库 Hub",
+    "s": "PASS",
+    "d": "4482b"
+  },
+  {
+    "n": "记忆中心 Hub",
+    "s": "PASS",
+    "d": "4121b"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建",
+    "s": "FAIL",
+    "d": ""
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Failed to load resource: the server responded with a status of 404 (Not Found); Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": "13190b"
+  },
+  {
+    "n": "展开弹窗",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建API",
+    "s": "PASS",
+    "d": "200"
+  },
+  {
+    "n": "数据可见",
+    "s": "FAIL",
+    "d": "未找到"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": "8509b"
+  },
+  {
+    "n": "展开弹窗",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建API",
+    "s": "FAIL",
+    "d": "422"
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+  },
+  {
+    "n": "数据可见",
+    "s": "FAIL",
+    "d": "未找到"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Cannot read properties of null (reading 'tags')"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": "8580b"
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Cannot read properties of null (reading 'tags')"
+  },
+  {
+    "n": "展开弹窗",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建API",
+    "s": "FAIL",
+    "d": "422"
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+  },
+  {
+    "n": "数据可见",
+    "s": "FAIL",
+    "d": "未找到"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": "6204b"
+  },
+  {
+    "n": "展开弹窗",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建API",
+    "s": "FAIL",
+    "d": "422"
+  },
+  {
+    "n": "控制台错误",
+    "s": "FAIL",
+    "d": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+  },
+  {
+    "n": "数据可见",
+    "s": "FAIL",
+    "d": "未找到"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": "7167b"
+  },
+  {
+    "n": "展开弹窗",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "模态框",
+    "s": "FAIL",
+    "d": "未出现"
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建",
+    "s": "FAIL",
+    "d": ""
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "创建",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "输入",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "执行",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "页面",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "输入",
+    "s": "PASS",
+    "d": ""
+  },
+  {
+    "n": "检查结果",
+    "s": "PASS",
+    "d": ""
+  }
+]

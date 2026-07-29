@@ -40,12 +40,11 @@ class ClassificationService:
     async def get_classifier_config(self, db_session) -> Optional[LLMConfig]:
         """
         获取分类器角色的LLM配置
-        优先使用 Intent Analyzer，其次使用 Ranker
+        优先 DB Intent Analyzer → DB Ranker → Controller
         """
         from sqlalchemy import select
         
         try:
-            # 优先使用 Intent Analyzer
             result = await db_session.execute(
                 select(LLMConfig)
                 .where(LLMConfig.role == "Intent Analyzer")
@@ -53,9 +52,7 @@ class ClassificationService:
                 .where(LLMConfig.is_default == True)
             )
             config = result.scalar_one_or_none()
-            
             if not config:
-                # 降级使用 Ranker
                 result = await db_session.execute(
                     select(LLMConfig)
                     .where(LLMConfig.role == "Ranker")
@@ -63,7 +60,6 @@ class ClassificationService:
                     .where(LLMConfig.is_default == True)
                 )
                 config = result.scalar_one_or_none()
-            
             return config
         except Exception as e:
             logger.error(f"Failed to get classifier config: {e}")

@@ -1,0 +1,136 @@
+<div x-data="projectsPage()" x-init="init()">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">我的项目</h1>
+            <p class="text-gray-400 text-sm mt-1">管理您的所有项目</p>
+        </div>
+        <button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+            <i class="fas fa-plus"></i>创建项目
+        </button>
+    </div>
+
+    <!-- Search -->
+    <div class="flex gap-4 mb-6">
+        <div class="flex-1 relative">
+            <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+            <input x-model="searchQuery" @input.debounce.300ms="loadProjects()"
+                   placeholder="搜索项目..." class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+        </div>
+    </div>
+
+    <!-- Project Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="p in projects" :key="p.id">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-5 hover:border-indigo-500/50 transition cursor-pointer" @click="viewProject(p)">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                        <i class="fas fa-folder text-indigo-400"></i>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs px-2 py-0.5 rounded"
+                              :class="{
+                                  'bg-gray-700 text-gray-400': p.visibility === 'private',
+                                  'bg-blue-900/50 text-blue-400': p.visibility === 'internal',
+                                  'bg-green-900/50 text-green-400': p.visibility === 'public'
+                              }">
+                            <i :class="{
+                                'fas fa-lock': p.visibility === 'private',
+                                'fas fa-users': p.visibility === 'internal',
+                                'fas fa-globe': p.visibility === 'public'
+                            }" class="mr-1 text-xs"></i>
+                            <span x-text="{private: '私有', internal: '团队', public: '公开'}[p.visibility] || '私有'"></span>
+                        </span>
+                    </div>
+                </div>
+                <h3 class="font-medium text-white truncate mb-1" x-text="p.name"></h3>
+                <p class="text-sm text-gray-400 line-clamp-2 mb-2" x-text="p.description || '暂无描述'"></p>
+                <div class="flex items-center gap-3 text-xs text-gray-500">
+                    <span x-text="(p.member_count || 0) + ' 成员'"></span>
+                    <template x-if="p.tech_stack && p.tech_stack.length">
+                        <span class="truncate" x-text="p.tech_stack.slice(0, 3).join(', ') + (p.tech_stack.length > 3 ? '...' : '')"></span>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <div x-show="!projects.length && !loading" class="text-center py-16 text-gray-500">
+        <i class="fas fa-folder-open text-5xl text-gray-700 mb-4"></i>
+        <p>暂无项目</p>
+        <button @click="showCreateModal = true" class="mt-3 text-indigo-400 hover:text-indigo-300 text-sm">创建第一个项目 →</button>
+    </div>
+
+    <!-- Create Modal -->
+    <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showCreateModal = false">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white"><i class="fas fa-plus mr-2 text-indigo-400"></i>创建项目</h3>
+                <button @click="showCreateModal = false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div><label class="text-sm text-gray-400 block mb-1">项目名称 <span class="text-red-400">*</span></label><input type="text" x-model="newProject.name" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-sm text-gray-400 block mb-1">描述</label><textarea x-model="newProject.description" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></textarea></div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-2">可见性</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" @click="newProject.visibility = 'private'"
+                            class="p-3 rounded-lg border text-sm transition"
+                            :class="newProject.visibility === 'private' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600'">
+                        <i class="fas fa-lock block text-center mb-1"></i>
+                        <span class="block text-center">私有</span>
+                    </button>
+                    <button type="button" @click="newProject.visibility = 'internal'"
+                            class="p-3 rounded-lg border text-sm transition"
+                            :class="newProject.visibility === 'internal' ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600'">
+                        <i class="fas fa-users block text-center mb-1"></i>
+                        <span class="block text-center">团队</span>
+                    </button>
+                    <button type="button" @click="newProject.visibility = 'public'"
+                            class="p-3 rounded-lg border text-sm transition"
+                            :class="newProject.visibility === 'public' ? 'border-green-500 bg-green-500/10 text-green-400' : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600'">
+                        <i class="fas fa-globe block text-center mb-1"></i>
+                        <span class="block text-center">公开</span>
+                    </button>
+                </div>
+            </div>
+            <div><label class="text-sm text-gray-400 block mb-1">技术栈</label><input type="text" x-model="newProject.tech_stack" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Python, FastAPI, React"></div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button @click="showCreateModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">取消</button>
+                <button @click="createProject()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+window.projectsPage = function() {
+    return {
+        projects: [], searchQuery: '', loading: false, showCreateModal: false,
+        newProject: { name: '', description: '', visibility: 'private', tech_stack: '' },
+        async init() { await this.loadProjects() },
+        async loadProjects() {
+            this.loading = true
+            try {
+                const p = new URLSearchParams({ limit: '100' })
+                if (this.searchQuery) p.set('search', this.searchQuery)
+                const r = await fetch('/api/projects?' + p)
+                if (r.ok) this.projects = (await r.json()).items || []
+            } finally { this.loading = false }
+        },
+        async createProject() {
+            if (!this.newProject.name) return
+            try {
+                const params = new URLSearchParams();
+                params.set('name', this.newProject.name);
+                if (this.newProject.description) params.set('description', this.newProject.description);
+                params.set('visibility', this.newProject.visibility || 'private');
+                if (this.newProject.tech_stack) params.set('tech_stack', this.newProject.tech_stack);
+                const r = await fetch('/api/projects?' + params.toString(), { method: 'POST' });
+                if (r.ok) { this.showCreateModal = false; this.newProject = { name: '', description: '', visibility: 'private', tech_stack: '' }; await this.loadProjects() }
+                else { const e = await r.json().catch(() => ({})); console.error('Create failed:', r.status, e); }
+            } catch(e) { console.error('Create error:', e); }
+        },
+        viewProject(p) {
+            window.dispatchEvent(new CustomEvent('open-project-tab', { detail: { projectId: p.id, projectName: p.name } }))
+        }
+    }
+}
+</script>

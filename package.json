@@ -1,0 +1,27 @@
+{
+  "name": "opencode",
+  "version": "1.0.0",
+  "description": "私有化 AI 编程基础设施平台。Controller + N 个可选工具，按需安装。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zheking1/AIDP.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zheking1/AIDP/issues"
+  },
+  "homepage": "https://github.com/zheking1/AIDP#readme",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}

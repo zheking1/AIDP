@@ -1,8 +1,8 @@
 import logging
 from typing import Optional
 
-import httpx
 from app.services.tool_invoker import invoke_tool
+from app._config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ async def load_agent_instructions(project_name: str = "", agent_type: str = "mai
         # Try project-specific instructions first
         project_id = 0
         if project_name:
-            from app.models.project import Project
-            result = await session.execute(select(Project).where(Project.name == project_name))
+            from app.models.project_new import Project as AidpProject
+            result = await session.execute(select(AidpProject).where(AidpProject.name == project_name))
             proj = result.scalar_one_or_none()
             if proj:
                 project_id = proj.id
@@ -83,13 +83,12 @@ async def init_project(
     project_id = None
     try:
         from app.db.database import async_session_factory
-        from app.models.project import Project
+        from app.models.project_new import Project as AidpProject
         async with async_session_factory() as session:
-            project = Project(
+            project = AidpProject(
                 name=project_name,
                 description=description or f"{project_name} - initialized via aidp init",
-                project_type=(tech_stack or "unknown")[:64],
-                owner_id=str(user_id) if user_id else "0",
+                status="active",
             )
             session.add(project)
             await session.commit()
@@ -113,76 +112,86 @@ async def init_project(
         except Exception as e:
             step("import_via_project_importer", err=e)
 
-    # Step 2.5: Code indexing
+    # Step 3: Code indexing via code-index tool
     code_indexed = 0
+    ci_pid = None
     try:
-        ci_pid = None
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(
-                "http://127.0.0.1:18086/api/projects",
-                json={"name": project_name, "path": nas_path or "/tmp/aidp"},
+        # Use default NAS_PATH if not provided
+        effective_path = nas_path or settings.NAS_PATH
+
+        # Create project in code-index
+        r = await invoke_tool(
+            "code-index",
+            "code.create_project",
+            {"name": project_name, "path": effective_path},
+            user_id=user_id,
+        )
+        if r.get("success"):
+            ci_pid = r.get("output", {}).get("id")
+
+        # Scan files
+        if ci_pid:
+            scan_result = await invoke_tool(
+                "code-index",
+                "code.scan_project",
+                {"project_id": ci_pid},
+                user_id=user_id,
             )
-            if r.status_code == 200:
-                ci_pid = r.json().get("id")
+            if scan_result.get("success"):
+                code_indexed = scan_result.get("output", {}).get("file_count", 0)
 
-        if ci_pid and nas_path:
-            async with httpx.AsyncClient(timeout=60) as client:
-                r = await client.post(
-                    f"http://127.0.0.1:18086/api/projects/{ci_pid}/scan",
-                    json={},
-                )
-                if r.status_code == 200:
-                    data = r.json()
-                    code_indexed = data.get("file_count", 0)
-
-        step("code_index", {"project_id": ci_pid, "files_indexed": code_indexed})
+        step("code_index", {"project_id": ci_pid, "files_indexed": code_indexed, "path": effective_path})
     except Exception as e:
         step("code_index", err=e)
 
-    # Step 2.6: Upload key files for indexing (Windows projects without NAS path)
-    if key_files and not nas_path and project_id:
+    # Step 4: Upload key files for indexing (if no nas_path or as supplement)
+    if key_files and ci_pid:
         code_uploaded = 0
         for f in key_files[:50]:
             try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    await client.post(
-                        "http://127.0.0.1:18086/api/index/file-content",
-                        json={
-                            "project_id": ci_pid or 0,
-                            "file_path": f.get("path", "unknown"),
-                            "content": f.get("content", ""),
-                            "language": f.get("type", "python"),
-                        },
-                    )
+                r = await invoke_tool(
+                    "code-index",
+                    "code.index_file",
+                    {
+                        "project_id": ci_pid,
+                        "file_path": f.get("path", "unknown"),
+                        "content": f.get("content", ""),
+                        "language": f.get("type", "python"),
+                    },
+                    user_id=user_id,
+                )
+                if r.get("success"):
                     code_uploaded += 1
             except Exception:
                 pass
         if code_uploaded:
             step("code_index_upload", {"files_uploaded": code_uploaded})
 
-    # Step 3: Store docs into knowledge-tool
+    # Step 5: Store docs into knowledge-tool
     docs_imported = 0
     if docs:
         for doc in docs[:50]:
             try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    await client.post(
-                        "http://127.0.0.1:18081/api/documents",
-                        json={
-                            "workspace_id": "default",
-                            "title": doc.get("title", "untitled"),
-                            "doc_type": "markdown",
-                            "content": doc.get("content", ""),
-                            "project_id": str(project_id) if project_id else "",
-                            "source_uri": doc.get("title", ""),
-                        },
-                    )
+                r = await invoke_tool(
+                    "knowledge-tool",
+                    "knowledge.create_document",
+                    {
+                        "workspace_id": "default",
+                        "title": doc.get("title", "untitled"),
+                        "doc_type": "markdown",
+                        "content": doc.get("content", ""),
+                        "project_id": str(project_id) if project_id else "",
+                        "source_uri": doc.get("title", ""),
+                    },
+                    user_id=user_id,
+                )
+                if r.get("success"):
                     docs_imported += 1
             except Exception:
                 pass
         step("import_docs", {"docs_attempted": len(docs[:50]), "docs_imported": docs_imported})
 
-    # Step 4: Store architecture knowledge into memory-tool
+    # Step 6: Store architecture knowledge into memory-tool
     memories_created = 0
     memory_entries = []
 
@@ -216,7 +225,7 @@ async def init_project(
     for entry in memory_entries:
         try:
             r = await invoke_tool("memory-tool", "memory.create", entry, user_id=user_id)
-            if r.get("status") == "success":
+            if r.get("success"):
                 memories_created += 1
         except Exception:
             pass
@@ -224,31 +233,33 @@ async def init_project(
     if memory_entries:
         step("create_memories", {"memories_created": memories_created, "memories_attempted": len(memory_entries)})
 
-    # Step 5: Register key files into asset-tool
+    # Step 7: Register key files into asset-tool
     assets_registered = 0
     if key_files:
         for f in key_files[:30]:
             try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    await client.post(
-                        "http://127.0.0.1:18082/api/assets",
-                        json={
-                            "name": f.get("path", "unknown"),
-                            "content": f.get("content", ""),
-                            "asset_type": f.get("type", "code"),
-                            "tags": [f.get("type", "code")],
-                            "project_id": str(project_id) if project_id else "",
-                        },
-                    )
+                r = await invoke_tool(
+                    "asset-tool",
+                    "asset.create",
+                    {
+                        "name": f.get("path", "unknown"),
+                        "content": f.get("content", ""),
+                        "asset_type": f.get("type", "code"),
+                        "tags": [f.get("type", "code")],
+                        "project_id": str(project_id) if project_id else "",
+                    },
+                    user_id=user_id,
+                )
+                if r.get("success"):
                     assets_registered += 1
             except Exception:
                 pass
         step("register_assets", {"assets_attempted": len(key_files[:30]), "assets_registered": assets_registered})
 
-    # Step 6: Sync all tool capabilities
+    # Step 8: Sync all tool capabilities
     try:
         from app.services.tool_registry import sync_capabilities
-        for tool_name in ["knowledge-tool", "memory-tool", "asset-tool", "sandbox-tool", "quality-tool", "skillrouter"]:
+        for tool_name in ["knowledge-tool", "memory-tool", "asset-tool", "sandbox-tool", "quality-tool", "skillrouter", "code-index"]:
             try:
                 await sync_capabilities(tool_name)
             except Exception:
@@ -285,12 +296,8 @@ async def load_project_context(
             "memory.search",
             {"project": project_name, "query": query, "limit": 10},
         )
-        if mem_result.get("status") == "success" and mem_result.get("result"):
-            mem_data = mem_result["result"]
-            if isinstance(mem_data, dict) and mem_data.get("success"):
-                context["memories"] = mem_data.get("output", [])
-            else:
-                context["memories"] = mem_data
+        if mem_result.get("success"):
+            context["memories"] = mem_result.get("output", [])
     except Exception as e:
         context["memories_error"] = str(e)
 
@@ -302,12 +309,8 @@ async def load_project_context(
                 "memory.context",
                 {"project": project_name, "query": query, "limit": 10},
             )
-            if ctx_result.get("status") == "success" and ctx_result.get("result"):
-                ctx_data = ctx_result["result"]
-                if isinstance(ctx_data, dict) and ctx_data.get("success"):
-                    context["context_package"] = ctx_data.get("output", {})
-                else:
-                    context["context_package"] = ctx_data
+            if ctx_result.get("success"):
+                context["context_package"] = ctx_result.get("output", {})
         except Exception as e:
             context["context_package_error"] = str(e)
 
@@ -319,12 +322,8 @@ async def load_project_context(
                 "knowledge.search",
                 {"query": query, "top_k": 8},
             )
-            if kn_result.get("status") == "success" and kn_result.get("result"):
-                kn_data = kn_result["result"]
-                if isinstance(kn_data, dict) and kn_data.get("success"):
-                    context["knowledge"] = kn_data.get("output", {})
-                else:
-                    context["knowledge"] = kn_data
+            if kn_result.get("success"):
+                context["knowledge"] = kn_result.get("output", {})
         except Exception as e:
             context["knowledge_error"] = str(e)
 
@@ -336,12 +335,8 @@ async def load_project_context(
                 "asset.search",
                 {"query": query, "top_k": 8},
             )
-            if asset_result.get("status") == "success" and asset_result.get("result"):
-                asset_data = asset_result["result"]
-                if isinstance(asset_data, dict) and asset_data.get("success"):
-                    context["assets"] = asset_data.get("output", {})
-                else:
-                    context["assets"] = asset_data
+            if asset_result.get("success"):
+                context["assets"] = asset_result.get("output", {})
         except Exception as e:
             context["assets_error"] = str(e)
 
@@ -351,14 +346,10 @@ async def load_project_context(
             skill_result = await invoke_tool(
                 "skillrouter",
                 "resolve_task",
-                {"task": query, "api_key": "sk-1234567890", "top_k": 5},
+                {"task": query, "top_k": 5},
             )
-            if skill_result.get("status") == "success" and skill_result.get("result"):
-                skill_data = skill_result["result"]
-                if isinstance(skill_data, dict) and skill_data.get("success"):
-                    context["skills"] = skill_data.get("output", {})
-                else:
-                    context["skills"] = skill_data
+            if skill_result.get("success"):
+                context["skills"] = skill_result.get("output", {})
         except Exception as e:
             context["skills_error"] = str(e)
 

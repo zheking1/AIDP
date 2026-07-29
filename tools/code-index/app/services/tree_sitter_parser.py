@@ -80,17 +80,30 @@ class TreeSitterParser:
         if node_type in ("class_declaration", "class"):
             name_node = node.child_by_field_name("name") or (node.children[1] if len(node.children) > 1 else None)
             if name_node:
-                symbols.append(Symbol(name=name_node.text.decode(), kind="class", file_path=file_path, line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
+                sym = Symbol(name=name_node.text.decode(), kind="class", file_path=file_path,
+                             line=node.start_point[0] + 1, end_line=node.end_point[0] + 1)
+                sym.code = content[node.start_byte:node.end_byte].split("\n")[0].strip()
+                symbols.append(sym)
         elif node_type in ("function_definition", "function_declaration", "method_definition"):
-            name_node = node.child_by_field_name("name") or node.children[1] if len(node.children) > 1 else None
+            name_node = node.child_by_field_name("name")
+            if not name_node and len(node.children) > 1:
+                name_node = node.children[1]
             if name_node:
                 params_node = node.child_by_field_name("parameters")
                 params = []
+                return_type = None
                 if params_node:
                     for child in params_node.children:
-                        if child.type != "(" and child.type != ")":
+                        if child.type not in ("(", ")", ","):
                             params.append(child.text.decode())
-                symbols.append(Symbol(name=name_node.text.decode(), kind="function", file_path=file_path, line=node.start_point[0] + 1, end_line=node.end_point[0] + 1, params=params))
+                ret_node = node.child_by_field_name("return_type")
+                if ret_node:
+                    return_type = ret_node.text.decode()
+                sym = Symbol(name=name_node.text.decode(), kind="function", file_path=file_path,
+                             line=node.start_point[0] + 1, end_line=node.end_point[0] + 1,
+                             params=params, return_type=return_type)
+                sym.code = content[node.start_byte:node.end_byte].split("\n")[0].strip()
+                symbols.append(sym)
         for child in node.children:
             self._walk_tree(child, content, file_path, symbols)
 
@@ -121,11 +134,12 @@ class TreeSitterParser:
         syms = []
         for m in re.finditer(r'^\s*class\s+(\w+)', content, re.MULTILINE):
             syms.append(Symbol(name=m.group(1), kind="class", file_path=fp, line=content[:m.start()].count('\n') + 1))
-        for m in re.finditer(r'^\s*def\s+(\w+)\s*\(([^)]*)\)', content, re.MULTILINE):
+        for m in re.finditer(r'^\s*def\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*(\S+))?', content, re.MULTILINE):
             name = m.group(1)
             if not name.startswith('_'):
                 params = [p.strip().split(':')[0].split('=')[0].strip() for p in m.group(2).split(',') if p.strip() and p.strip() != 'self']
-                syms.append(Symbol(name=name, kind="function", file_path=fp, line=content[:m.start()].count('\n') + 1, params=params))
+                return_type = m.group(3) if m.group(3) else None
+                syms.append(Symbol(name=name, kind="function", file_path=fp, line=content[:m.start()].count('\n') + 1, params=params, return_type=return_type))
         return syms
 
     def _parse_ts_regex(self, content: str, fp: str) -> List[Symbol]:

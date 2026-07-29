@@ -1,0 +1,212 @@
+<div x-data="knowledgeGraphPage()" x-init="init()">
+    <div class="flex items-center justify-between pt-5 pb-4 border-b border-gray-700/50">
+        <div class="flex items-center gap-4">
+            <a href="javascript:void(0)" @click="history.back()" class="text-gray-400 hover:text-white">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-white">知识图谱</h1>
+                <p class="text-gray-400 text-sm mt-1">可视化知识库层级和文档关系</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button @click="resetZoom()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition" title="重置视图">
+                <i class="fas fa-compress-arrows-alt"></i>
+            </button>
+            <button @click="togglePhysics()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition" title="切换物理模拟">
+                <i class="fas fa-pause" x-show="physicsEnabled"></i>
+                <i class="fas fa-play" x-show="!physicsEnabled"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="relative h-[calc(100vh-140px)]">
+        <div id="kgraph-container" class="w-full h-full"></div>
+
+        <div class="absolute top-4 left-4 bg-gray-800/90 backdrop-blur rounded-lg border border-gray-700 p-4">
+            <h3 class="text-sm font-medium mb-3">图例</h3>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                    <span>知识库</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                    <span>文档</span>
+                </div>
+                <div class="flex items-center gap-2 mt-2 border-t border-gray-700 pt-2">
+                    <span class="text-xs text-gray-500">实线: 包含关系</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">虚线: 父子层级</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="absolute top-4 right-4 bg-gray-800/90 backdrop-blur rounded-lg border border-gray-700 p-4 min-w-[160px]">
+            <h3 class="text-sm font-medium mb-2">统计</h3>
+            <div class="text-xs text-gray-400 space-y-1">
+                <div>节点: <span class="text-white font-medium" x-text="stats.nodes">0</span></div>
+                <div>连线: <span class="text-white font-medium" x-text="stats.links">0</span></div>
+                <div>知识库: <span class="text-indigo-400 font-medium" x-text="stats.bases">0</span></div>
+                <div>文档: <span class="text-green-400 font-medium" x-text="stats.docs">0</span></div>
+            </div>
+        </div>
+
+        <div x-show="selectedItem" class="absolute bottom-4 left-4 bg-gray-800/95 backdrop-blur rounded-lg border border-gray-700 p-4 min-w-[250px] max-w-[350px]" x-transition>
+            <div class="flex items-start justify-between mb-2">
+                <h3 class="text-sm font-medium text-white" x-text="selectedItem?.label"></h3>
+                <button @click="selectedItem=null" class="text-gray-500 hover:text-white"><i class="fas fa-times text-xs"></i></button>
+            </div>
+            <div x-show="selectedItem?.type==='base'" class="space-y-1 text-xs text-gray-400">
+                <div>类型: <span class="text-indigo-400">知识库</span></div>
+                <div>层级: <span x-text="selectedItem?.level"></span></div>
+                <div>文档数: <span x-text="selectedItem?.doc_count"></span></div>
+                <div>分块数: <span x-text="selectedItem?.chunk_count"></span></div>
+            </div>
+            <div x-show="selectedItem?.type==='document'" class="space-y-1 text-xs text-gray-400">
+                <div>类型: <span class="text-green-400">文档</span></div>
+                <div>分类: <span x-text="selectedItem?.category"></span></div>
+                <div>分块数: <span x-text="selectedItem?.chunk_count"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+window.knowledgeGraphPage = function() {
+    return {
+        stats: { nodes: 0, links: 0, bases: 0, docs: 0 },
+        selectedItem: null, physicsEnabled: true,
+        simulation: null, svg: null, zoom: null, graphData: null,
+
+        async init() {
+            await this.loadGraph()
+            await this.waitForD3()
+            this.renderGraph()
+        },
+
+        async waitForD3() {
+            if (typeof d3 !== 'undefined') return
+            return new Promise(resolve => {
+                const check = () => {
+                    if (typeof d3 !== 'undefined') return resolve()
+                    setTimeout(check, 100)
+                }
+                check()
+            })
+        },
+
+        async loadGraph() {
+            try {
+                const r = await fetch('/api/knowledge/graph')
+                if (r.ok) {
+                    this.graphData = await r.json()
+                    const nodes = this.graphData.nodes || []
+                    this.stats.nodes = nodes.length
+                    this.stats.links = (this.graphData.links || []).length
+                    this.stats.bases = nodes.filter(n => n.type === 'base').length
+                    this.stats.docs = nodes.filter(n => n.type === 'document').length
+                }
+            } catch(e) { console.error(e) }
+        },
+
+        renderGraph() {
+            if (!this.graphData) return
+            const container = document.getElementById('kgraph-container')
+            if (!container) return
+
+            container.innerHTML = ''
+            const W = container.clientWidth
+            const H = container.clientHeight
+
+            const data = {
+                nodes: (this.graphData.nodes || []).map(n => ({...n})),
+                links: (this.graphData.links || []).map(l => ({...l}))
+            }
+
+            const svg = d3.select('#kgraph-container').append('svg')
+                .attr('width', W).attr('height', H)
+            this.svg = svg
+
+            const g = svg.append('g')
+            this.zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', (event) => {
+                g.attr('transform', event.transform)
+            })
+            svg.call(this.zoom)
+
+            // Arrow marker
+            svg.append('defs').append('marker')
+                .attr('id', 'kg-arrow').attr('viewBox', '0 -5 10 10')
+                .attr('refX', 20).attr('refY', 0)
+                .attr('markerWidth', 6).attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#6b7280')
+
+            const link = g.append('g').selectAll('line')
+                .data(data.links).join('line')
+                .attr('stroke', d => d.type === 'parent' ? '#4b5563' : '#6b7280')
+                .attr('stroke-width', 1.5)
+                .attr('stroke-dasharray', d => d.type === 'parent' ? '5,3' : null)
+                .attr('marker-end', d => d.type === 'contains' ? 'url(#kg-arrow)' : null)
+
+            const node = g.append('g').selectAll('g')
+                .data(data.nodes).join('g')
+                .attr('cursor', 'pointer')
+                .call(d3.drag()
+                    .on('start', (event, d) => {
+                        if (!event.active) this.simulation.alphaTarget(0.3).restart()
+                        d.fx = d.x; d.fy = d.y
+                    })
+                    .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y })
+                    .on('end', (event, d) => {
+                        if (!event.active) this.simulation.alphaTarget(0)
+                        if (!event.sourceEvent.shiftKey) { d.fx = null; d.fy = null }
+                    })
+                )
+
+            node.append('circle')
+                .attr('r', d => d.type === 'base' ? 12 : 8)
+                .attr('fill', d => d.type === 'base' ? '#6366f1' : '#22c55e')
+                .attr('stroke', '#1f2937')
+                .attr('stroke-width', 2)
+
+            node.append('text')
+                .text(d => d.label?.length > 20 ? d.label.substring(0, 18) + '...' : d.label)
+                .attr('x', 14).attr('y', 4)
+                .attr('fill', '#d1d5db').attr('font-size', '11px')
+
+            node.on('click', (event, d) => {
+                event.stopPropagation()
+                this.selectedItem = d
+            })
+
+            svg.on('click', () => { this.selectedItem = null })
+
+            this.simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.links).id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(W / 2, H / 2))
+                .force('collision', d3.forceCollide().radius(25))
+                .on('tick', () => {
+                    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                        .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+                    node.attr('transform', d => `translate(${d.x},${d.y})`)
+                })
+        },
+
+        resetZoom() {
+            if (this.svg && this.zoom) {
+                this.svg.transition().duration(500).call(this.zoom.transform, d3.zoomIdentity)
+            }
+        },
+
+        togglePhysics() {
+            this.physicsEnabled = !this.physicsEnabled
+            if (this.simulation) {
+                this.physicsEnabled ? this.simulation.restart() : this.simulation.stop()
+            }
+        }
+    }
+}
+</script>

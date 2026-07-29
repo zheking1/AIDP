@@ -1,0 +1,186 @@
+<div x-data="apiKeysPage()" x-init="loadKeys()" class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">API 密钥</h1>
+            <p class="text-gray-400 mt-1">管理用于 MCP / Agent 认证的 API 密钥</p>
+        </div>
+        <button @click="showCreateModal = true" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <i class="fas fa-plus mr-2"></i>创建密钥
+        </button>
+    </div>
+
+    <div x-show="loading" class="text-center text-gray-400 py-12">
+        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+        <p>加载中...</p>
+    </div>
+
+    <div x-show="!loading && keys.length === 0" class="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">
+        <i class="fas fa-key text-3xl mb-2"></i>
+        <p>暂无 API 密钥</p>
+        <p class="text-sm mt-1">创建一个密钥用于 MCP/Agent 认证</p>
+    </div>
+
+    <div x-show="!loading && keys.length > 0" class="space-y-3">
+        <template x-for="key in keys" :key="key.id">
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-key text-amber-400"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-white" x-text="key.label"></h3>
+                            <p class="text-sm text-gray-500 font-mono" x-text="key.key_preview"></p>
+                        </div>
+                    </div>
+                    <button @click="revokeKey(key)" class="px-3 py-1.5 text-red-400 hover:text-red-300 text-sm transition">
+                        <i class="fas fa-trash mr-1"></i>吊销
+                    </button>
+                    <button @click="copyApiKey(key)" class="px-3 py-1.5 text-indigo-400 hover:text-indigo-300 text-sm transition">
+                        <i class="fas fa-copy mr-1"></i>复制
+                    </button>
+                </div>
+                <div class="mt-3 grid grid-cols-3 gap-2 text-sm text-gray-400">
+                    <div><span class="text-gray-500">范围</span><br><span x-text="key.scopes?.join(', ') || 'read'"></span></div>
+                    <div><span class="text-gray-500">频率</span><br><span x-text="key.rate_limit_req_per_min + '/min'"></span></div>
+                    <div><span class="text-gray-500">过期</span><br><span x-text="key.expires_at ? new Date(key.expires_at).toLocaleDateString() : '永不过期'"></span></div>
+                </div>
+                <div class="mt-2 text-xs text-gray-600">
+                    创建于 <span x-text="new Date(key.created_at).toLocaleString()"></span>
+                    <span x-show="key.last_used_at"> · 最后使用: <span x-text="new Date(key.last_used_at).toLocaleString()"></span></span>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Create Modal -->
+    <div x-show="showCreateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-4">创建 API 密钥</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">标签</label>
+                    <input type="text" x-model="newLabel" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500" placeholder="如: OpenCode Agent">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">过期时间</label>
+                    <select x-model="expiresDays" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                        <option value="0">永不过期</option>
+                        <option value="30">30 天</option>
+                        <option value="90">90 天</option>
+                        <option value="180">180 天</option>
+                        <option value="365">365 天</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false" class="px-4 py-2 text-gray-400 hover:text-white transition">取消</button>
+                <button @click="createKey()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Modal -->
+    <div x-show="showResultModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-lg border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-2">密钥已创建</h2>
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
+                <p class="text-amber-400 text-sm mb-2">请立即复制此密钥，关闭后将无法再次查看！</p>
+                <div class="flex items-center gap-2">
+                    <code class="flex-1 bg-gray-900 px-3 py-2 rounded text-sm text-white font-mono break-all" x-text="newKey"></code>
+                    <button @click="copyKey()" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm whitespace-nowrap">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">将此密钥填入 <code class="text-gray-300">.opencode/opencode.jsonc</code> 的 aidp.api_key 字段</p>
+            <div class="flex justify-end mt-4">
+                <button @click="showResultModal = false; loadKeys()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">我已复制</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error -->
+    <div x-show="error" class="fixed bottom-4 right-4 bg-red-500/90 text-white px-4 py-2 rounded-lg z-50" x-text="error" @click="error=''" x-cloak></div>
+</div>
+
+<script>
+window.apiKeysPage = function() {
+    return {
+        keys: [],
+        loading: true,
+        error: '',
+        showCreateModal: false,
+        showResultModal: false,
+        newLabel: 'OpenCode Agent',
+        expiresDays: 0,
+        newKey: '',
+
+        async loadKeys() {
+            this.loading = true;
+            try {
+                const r = await fetch('/api/auth/api-keys');
+                if (r.ok) {
+                    const d = await r.json();
+                    this.keys = d.items || [];
+                } else {
+                    this.error = '加载失败';
+                }
+            } catch (e) {
+                this.error = '网络错误';
+            }
+            this.loading = false;
+        },
+
+        async createKey() {
+            this.error = '';
+            try {
+                const r = await fetch(`/api/auth/api-keys?label=${encodeURIComponent(this.newLabel)}&expires_days=${this.expiresDays}`, { method: 'POST' });
+                if (r.ok) {
+                    const d = await r.json();
+                    this.newKey = d.key;
+                    this.showCreateModal = false;
+                    this.showResultModal = true;
+                } else {
+                    this.error = '创建失败';
+                }
+            } catch (e) {
+                this.error = '创建失败: ' + e.message;
+            }
+        },
+
+        async revokeKey(key) {
+            if (!confirm('确定吊销此密钥？')) return;
+            try {
+                const r = await fetch(`/api/auth/api-keys/${key.id}`, { method: 'DELETE' });
+                if (r.ok) this.loadKeys();
+                else this.error = '吊销失败';
+            } catch (e) {
+                this.error = '网络错误';
+            }
+        },
+
+        async copyApiKey(key) {
+            try {
+                const r = await fetch(`/api/auth/api-keys/${key.id}/reveal`);
+                if (r.ok) {
+                    const d = await r.json();
+                    await navigator.clipboard.writeText(d.key);
+                    this.error = '已复制到剪贴板';
+                    setTimeout(() => this.error = '', 2000);
+                } else {
+                    this.error = '获取密钥失败';
+                }
+            } catch (e) {
+                this.error = '复制失败';
+            }
+        },
+
+        copyKey() {
+            navigator.clipboard.writeText(this.newKey);
+            this.error = '已复制到剪贴板';
+            setTimeout(() => this.error = '', 2000);
+        },
+    }
+}
+</script>

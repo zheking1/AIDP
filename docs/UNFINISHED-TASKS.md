@@ -4,7 +4,7 @@
 
 本文档汇总所有 docs 目录下的开发计划中**标记为未完成**的任务。
 
-**最后更新**: 2026-07-07
+**最后更新**: 2026-07-28
 
 ---
 
@@ -21,46 +21,46 @@
 | 修复 code-index Edge 图 | ⚠️ | 待验证 |
 | 修复 context-optimizer 去重 bug | ⚠️ | 待验证 |
 
-### Phase 2: Agent Instructions 存储与加载 🚧 进行中
+### Phase 2: Agent Instructions 存储与加载 ✅ 已完成
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| 创建 AgentInstruction 数据模型 | `apps/controller/app/db/models.py` | 🚧 待开发 |
-| 数据库迁移 | `apps/controller/app/db/init_db.py` | 🚧 待开发 |
-| 创建 Instructions CRUD API | `apps/controller/app/api/instructions.py` | 🚧 待开发 |
-| Stage 0 加载逻辑 | `project_init_service.py` | 🚧 待开发 |
+| 创建 AgentInstruction 数据模型 | `apps/controller/app/db/models.py` | ✅ 已完成 |
+| 数据库迁移 | `apps/controller/app/db/init_db.py` | ✅ 已完成 |
+| 创建 Instructions CRUD API | `apps/controller/app/api/instructions.py` | ✅ 已完成 |
+| Stage 0 加载逻辑 | `project_init_service.py` | ✅ 已完成 |
 
-### Phase 3: 意图分析扩展 🚧 进行中
-
-| 任务 | 文件 | 状态 |
-|------|------|------|
-| 扩展 analyze_intent 方法 | `skill-router/classification_service.py` | 🚧 待开发 |
-| 新增 analyze_intent capability | `skill-router/api/tool.py` | 🚧 待开发 |
-| Prompt 优化 | - | 🚧 待开发 |
-
-### Phase 4: 分段检索管线 🚧 进行中
+### Phase 3: 意图分析扩展 ✅ 已完成
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| StagedRetriever 服务 | `context-optimizer/services/staged_retriever.py` | 🚧 待开发 |
-| 更新 tool invoker 端点 | `context-optimizer/api/optimize.py` | 🚧 待开发 |
+| 扩展 analyze_intent 方法 | `skill-router/classification_service.py` | ✅ 已完成 |
+| 新增 analyze_intent capability | `skill-router/api/tool.py` | ✅ 已完成 |
+| Prompt 优化 | - | ✅ 已完成 |
 
-### Phase 5: 上下文组装 🚧 进行中
-
-| 任务 | 文件 | 状态 |
-|------|------|------|
-| SkillMatcher 服务 | `context-optimizer/services/skill_matcher.py` | 🚧 待开发 |
-| ContextAssembler 服务 | `context-optimizer/services/context_assembler.py` | 🚧 待开发 |
-| InstructionAssembler 服务 | `context-optimizer/services/instruction_assembler.py` | 🚧 待开发 |
-| assemble-context API | `context-optimizer/api/optimize.py` | 🚧 待开发 |
-| assemble-subagent API | `context-optimizer/api/optimize.py` | 🚧 待开发 |
-
-### Phase 6: MCP 集成 🚧 进行中
+### Phase 4: 分段检索管线 ✅ 已完成
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| aidp_context 重构 | `controller/mcp/server.py` | 🚧 待开发 |
-| aidp_instructions 新增 | `controller/mcp/server.py` | 🚧 待开发 |
+| StagedRetriever 服务 | `context-optimizer/services/staged_retriever.py` | ✅ 已完成 |
+| 更新 tool invoker 端点 | `context-optimizer/api/optimize.py` | ✅ 已完成 |
+
+### Phase 5: 上下文组装 ✅ 已完成
+
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| SkillMatcher 服务 | `context-optimizer/services/skill_matcher.py` | ✅ 已完成 |
+| ContextAssembler 服务 | `context-optimizer/services/context_assembler.py` | ✅ 已完成 |
+| InstructionAssembler 服务 | `context-optimizer/services/context_assembler.py` | ✅ 已完成 |
+| assemble-context API | `context-optimizer/api/optimize.py` | ✅ 已完成 |
+| assemble-subagent API | `context-optimizer/api/optimize.py` | ✅ 已完成 |
+
+### Phase 6: MCP 集成 ✅ 已完成
+
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| aidp_context 重构 | `controller/mcp/server.py` | ✅ 已完成 |
+| aidp_instructions 新增 | `controller/mcp/server.py` | ✅ 已完成 |
 
 ### Phase 7: 部署与测试 ⏳ 待开始
 
@@ -163,23 +163,23 @@
 
 ## 五、系统架构相关未完成任务
 
-### 5.1 上下文优化管线
+### 5.1 上下文优化管线 ✅ 已完成
 
 | 组件 | 任务 | 状态 |
 |------|------|------|
-| Stage 0 | Agent Instructions 加载 | 🚧 待完善 |
-| Stage 1 | Intent Analysis 增强 | 🚧 待完善 |
-| Stage 2 | Staged Retrieval | 🚧 待完善 |
-| Stage 3 | Skill Matching | 🚧 待完善 |
-| Stage 4 | Context Assembly | 🚧 待完善 |
+| Stage 0 | Agent Instructions 加载 | ✅ 已完成 |
+| Stage 1 | Intent Analysis 增强 | ✅ 已完成 |
+| Stage 2 | Staged Retrieval | ✅ 已完成 |
+| Stage 3 | Skill Matching | ✅ 已完成 |
+| Stage 4 | Context Assembly | ✅ 已完成 |
 
-### 5.2 MCP 集成
+### 5.2 MCP 集成 ✅ 已完成
 
 | 任务 | 状态 |
 |------|------|
-| aidp_context 重构 | 🚧 待完善 |
-| aidp_instructions | 🚧 待开发 |
-| Tool Manifest 完整支持 | ⚠️ 部分完成 |
+| aidp_context 重构 | ✅ 已完成 |
+| aidp_instructions | ✅ 已完成 |
+| Tool Manifest 完整支持 | ✅ 已完成 |
 
 ---
 
@@ -210,35 +210,32 @@
 
 ## 七、按优先级排序的任务清单
 
-### P0 - 最高优先级（立即开始）
+### P0 - 最高优先级 ✅ 已完成
 
-1. **Knowledge Tool Web UI** (3周)
-   - 文档预览与分块可视化
-   - 高级搜索中心
-   - 知识库管理
-
-2. **Memory Tool Web UI** (2周)
-   - 记忆图谱可视化
-   - 向量搜索优化
-   - 上下文包生成器
-
-3. **Agent Instructions 系统** (1周)
+1. **Agent Instructions 系统** (1周) ✅
    - Stage 0-4 完整管线
    - Intent Analysis 增强
+   - MCP aidp_context / aidp_instructions
 
-### P1 - 高优先级（下一个阶段）
+2. **Knowledge Tool Web UI** 基本完成 ✅
+   - 知识库管理、文档CRUD、搜索中心、统计仪表盘
+   - 待完善：分块可视化
 
-4. **Evolution Engine 重构** (2周)
+3. **Memory Tool Web UI** 基本完成 ✅
+   - 记忆CRUD、D3.js图谱、统计仪表盘
+   - 待完善：时间轴、上下文包生成器、向量搜索UI
+
+### P1 - 高优先级（当前阶段）
+
+4. **Evolution Engine 重构** (2周) ⚠️ 骨架阶段
    - 两级进化系统
    - 管理员审核工作流
+   - 版本管理与回退
 
-5. **上下文管线优化** (1周)
-   - 分段检索优化
-   - 组装逻辑完善
-
-6. **MCP 集成完善** (1周)
-   - aidp_context 重构
-   - aidp_instructions
+5. **上下文管线优化**
+   - Knowledge 分块可视化
+   - Memory 时间轴/上下文包生成器
+   - Asset/Quality 详情完善
 
 ### P2 - 中优先级（后续排期）
 

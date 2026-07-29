@@ -169,11 +169,8 @@ class AuthService:
                 user_session.last_activity_at = datetime.utcnow()
                 await session.commit()
                 
-                # Get user
-                result = await session.execute(
-                    select(User).where(User.id == user_session.user_id)
-                )
-                user = result.scalar_one_or_none()
+                # Get user by primary key
+                user = await session.get(User, user_session.user_id)
                 
                 if user and user.status == UserStatus.ACTIVE:
                     return user
@@ -357,6 +354,7 @@ class AuthService:
                 label=label or "Default",
                 key_hash=key_hash,
                 key_preview=key_preview,
+                raw_key=raw_key,
                 scopes=scopes or ["read"],
                 expires_at=datetime.utcnow() + timedelta(days=expires_days) if expires_days else None
             )

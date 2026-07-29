@@ -1,0 +1,337 @@
+# AIDP 菜单配置文件 v3.0
+# 一级入口：知识中心 / 技能库 / 记忆中心
+# 点击后在内容区渲染二级 Tab 导航
+
+version: "3.0"
+schema_version: "1.0"
+
+header:
+  - id: "notifications"
+    label: "通知"
+    icon: "bell"
+    badge:
+      type: "api"
+      endpoint: "/api/notifications/unread-count"
+      refresh_interval: 60
+    route: "/notifications"
+    permissions: []
+  - id: "help"
+    label: "帮助"
+    icon: "help-circle"
+    href: "https://docs.aidp.io"
+    target: "_blank"
+  - id: "theme"
+    label: "主题"
+    icon: "moon"
+    action: "toggle_theme"
+
+sidebar:
+  # ==============================
+  # 0. 首页
+  # ==============================
+  - group: "home"
+    title: "首页"
+    icon: "home"
+    order: 5
+    items:
+      - id: "home-dashboard"
+        label: "仪表盘"
+        icon: "tachometer-alt"
+        route: "/dashboard"
+        description: "个人工作台和数据概览"
+      - id: "home-guide"
+        label: "使用指南"
+        icon: "book"
+        route: "/home?tab=guide"
+        description: "系统使用说明"
+
+  # ==============================
+  # 1. 知识中心（Hub）
+  # ==============================
+  - group: "knowledge-hub"
+    title: "知识中心"
+    icon: "book-open"
+    order: 10
+    is_hub: true
+    hub_route: "/hub/knowledge"
+    description: "知识库 / 文档 / 搜索 / 模板 / 资产"
+
+    hub_items:
+      - id: "hub-knowledge-bases"
+        label: "知识库管理"
+        icon: "database"
+        route: "/knowledge/bases"
+        permissions: ["knowledge:read"]
+      - id: "hub-knowledge-docs"
+        label: "文档管理"
+        icon: "file-text"
+        route: "/knowledge/documents"
+        permissions: ["knowledge:read"]
+      - id: "hub-knowledge-search"
+        label: "高级搜索"
+        icon: "search"
+        route: "/knowledge/search"
+        permissions: ["knowledge:read"]
+      - id: "hub-knowledge-templates"
+        label: "文档模板"
+        icon: "file-alt"
+        route: "/knowledge/templates"
+        permissions: ["knowledge:read"]
+      - id: "hub-knowledge-graph"
+        label: "知识图谱"
+        icon: "project-diagram"
+        route: "/knowledge/graph"
+        permissions: ["knowledge:read"]
+      - id: "hub-assets-list"
+        label: "代码资产"
+        icon: "archive"
+        route: "/assets"
+        permissions: ["asset:read"]
+
+  # ==============================
+  # 2. 技能库（Hub）
+  # ==============================
+  - group: "skills-hub"
+    title: "技能库"
+    icon: "zap"
+    order: 20
+    is_hub: true
+    hub_route: "/hub/skills"
+    description: "技能 / 规则 / Agent / 流程"
+
+    hub_items:
+      - id: "hub-skills-global"
+        label: "全局技能"
+        icon: "globe"
+        route: "/skills/global"
+        permissions: ["skills:read:global"]
+      - id: "hub-skills-personal"
+        label: "我的技能"
+        icon: "user"
+        route: "/skills/personal"
+        permissions: ["skills:read:personal"]
+      - id: "hub-rules-global"
+        label: "全局规则"
+        icon: "shield-alt"
+        route: "/rules/global"
+        permissions: ["skills:read:global"]
+      - id: "hub-rules-personal"
+        label: "我的规则"
+        icon: "user-shield"
+        route: "/rules/personal"
+        permissions: ["skills:read:personal"]
+      - id: "hub-agents"
+        label: "Agent 管理"
+        icon: "robot"
+        route: "/agents"
+        permissions: ["skills:read:personal"]
+      - id: "hub-workflows"
+        label: "流程引擎"
+        icon: "cogs"
+        route: "/workflows"
+        permissions: ["skills:read:personal"]
+
+  # ==============================
+  # 3. 记忆中心（Hub）
+  # ==============================
+  - group: "memory-hub"
+    title: "记忆中心"
+    icon: "brain"
+    order: 30
+    is_hub: true
+    hub_route: "/hub/memory"
+    description: "记忆列表 / 图谱 / 搜索"
+
+    hub_items:
+      - id: "hub-memory-list"
+        label: "记忆列表"
+        icon: "list"
+        route: "/memory/memories"
+        permissions: ["memory:read"]
+      - id: "hub-memory-graph"
+        label: "记忆图谱"
+        icon: "share-2"
+        route: "/memory/graph"
+        permissions: ["memory:read"]
+      - id: "hub-memory-search"
+        label: "记忆检索"
+        icon: "search"
+        route: "/memory/search"
+        permissions: ["memory:read"]
+
+  # ==============================
+  # 4. 开发工具（直接打开）
+  # ==============================
+  - group: "devtools"
+    title: "开发工具"
+    icon: "code"
+    order: 40
+    description: "沙箱 / 质量检查"
+
+    items:
+      - id: "sandbox"
+        label: "代码沙箱"
+        icon: "terminal"
+        route: "/sandbox"
+        permissions: ["sandbox:execute"]
+      - id: "quality"
+        label: "质量检查"
+        icon: "check-circle"
+        route: "/quality"
+        permissions: ["quality:check"]
+
+  # ==============================
+  # 5. 项目专区（选项目后出现）
+  # ==============================
+  - group: "project"
+    title: "项目专区"
+    icon: "folder"
+    order: 90
+    requires_project: true
+    is_project_section: true
+    description: "当前项目的专属数据"
+
+    items:
+      - id: "project-dashboard"
+        label: "项目仪表盘"
+        icon: "bar-chart-2"
+        route: "/project/{project_id}/dashboard"
+        description: "项目概览和统计数据"
+        permissions: ["project:view"]
+      - id: "project-knowledge"
+        label: "项目知识"
+        icon: "book"
+        route: "/project/{project_id}/knowledge/documents"
+        description: "项目导入和独有的知识"
+        permissions: ["knowledge:read"]
+      - id: "project-skills"
+        label: "项目技能"
+        icon: "zap"
+        route: "/skills/project/{project_id}"
+        description: "项目专属技能"
+        permissions: ["skills:read:project"]
+      - id: "project-rules"
+        label: "项目规则"
+        icon: "shield-alt"
+        route: "/rules/project/{project_id}"
+        description: "项目专属约束规则"
+        permissions: ["skills:read:project"]
+      - id: "project-agents"
+        label: "项目 Agent"
+        icon: "robot"
+        route: "/project/{project_id}/agents"
+        description: "项目 Agent 配置"
+        permissions: ["skills:read:project"]
+      - id: "project-workflows"
+        label: "项目流程"
+        icon: "cogs"
+        route: "/project/{project_id}/workflows"
+        description: "项目自动化流程"
+        permissions: ["skills:read:project"]
+      - id: "project-memory"
+        label: "项目记忆"
+        icon: "brain"
+        route: "/project/{project_id}/memory/memories"
+        description: "项目相关的记忆"
+        permissions: ["memory:read"]
+      - id: "project-settings"
+        label: "项目设置"
+        icon: "settings"
+        route: "/project/{project_id}/settings/general"
+        description: "配置项目参数"
+        permissions: ["project:admin"]
+
+  # ==============================
+  # 6. 系统管理（仅 admin）
+  # ==============================
+  - group: "admin"
+    title: "系统管理"
+    icon: "shield"
+    order: 100
+    requires_role: "admin"
+    description: "系统级配置和管理"
+
+    items:
+      - id: "admin-users"
+        label: "用户管理"
+        icon: "users"
+        route: "/admin/users"
+        permissions: ["admin:users"]
+        visible: false
+      - id: "admin-projects"
+        label: "项目管理"
+        icon: "folder"
+        route: "/admin/projects"
+        permissions: ["admin:projects"]
+        visible: false
+      - id: "admin-instructions"
+        label: "指令管理"
+        icon: "book"
+        route: "/admin/instructions"
+        permissions: ["admin:skills"]
+      - id: "admin-models"
+        label: "模型管理"
+        icon: "microchip"
+        route: "/admin/models"
+        permissions: ["admin:skills"]
+      - id: "admin-tools"
+        label: "工具注册"
+        icon: "plug"
+        route: "/admin/tools"
+        permissions: ["admin:skills"]
+      - id: "admin-nas"
+        label: "NAS 文件"
+        icon: "database"
+        route: "/admin/nas"
+        permissions: ["admin:skills"]
+      - id: "admin-configs"
+        label: "环境配置"
+        icon: "cog"
+        route: "/admin/configs"
+        permissions: ["admin:skills"]
+      - id: "admin-audit"
+        label: "审计日志"
+        icon: "file-text"
+        route: "/admin/audit-logs"
+        permissions: ["admin:audit"]
+        visible: false
+      - id: "admin-evolution"
+        label: "进化管理"
+        icon: "code-branch"
+        route: "/admin/evolution"
+        permissions: ["admin:skills"]
+      - id: "admin-settings"
+        label: "系统设置"
+        icon: "settings"
+        route: "/admin/settings"
+        permissions: ["admin:settings"]
+      - id: "admin-apikeys"
+        label: "API 密钥"
+        icon: "key"
+        route: "/api-keys"
+
+user_menu:
+  - id: "profile"
+    label: "个人资料"
+    icon: "user"
+    route: "/profile"
+  - id: "my-skills"
+    label: "我的技能"
+    icon: "zap"
+    route: "/skills/personal"
+  - separator: true
+  - id: "settings"
+    label: "偏好设置"
+    icon: "sliders"
+    route: "/settings"
+  - id: "logout"
+    label: "退出登录"
+    icon: "log-out"
+    action: "logout"
+
+project_switcher:
+  enabled: true
+  show_recent: true
+  recent_count: 5
+  show_create: true
+  create_label: "创建新项目"

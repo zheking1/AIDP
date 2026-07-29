@@ -353,6 +353,7 @@
             loading: true,
             error: null,
             activeTab: 'overview',
+            webuiLoading: false,
 
             async init() {
                 AIDP.events.emit(AIDP.Events.PAGE_CHANGED, { page: 'tool-detail', tool: toolName });
@@ -362,17 +363,39 @@
             async loadTool() {
                 this.loading = true;
                 this.error = null;
-
                 try {
                     this.tool = await AIDP.toolService.getTool(this.toolName);
-                    
-                    // Update store
                     AIDP.store.set('tools.selected', this.tool);
                 } catch (e) {
                     this.error = e.message;
                 } finally {
                     this.loading = false;
                 }
+            },
+
+            async switchToWebUI() {
+                this.activeTab = 'webui';
+                this.webuiLoading = true;
+                const el = document.getElementById('tool-webui-content');
+                if (!el) return;
+                if (el.children.length > 0) { this.webuiLoading = false; return; }
+                try {
+                    const resp = await fetch('/tools/' + this.toolName + '/web/?partial=1');
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    let html = await resp.text();
+                    const scripts = [];
+                    html = html.replace(/<script>([\s\S]*?)<\/script>/g, function(m, c) { scripts.push(c); return ''; });
+                    el.innerHTML = html;
+                    scripts.forEach(function(code) {
+                        try {
+                            var t = code.trim();
+                            if (t.startsWith('function ')) { var m = t.match(/^function\s+(\w+)/); if (m) eval('window.' + m[1] + ' = ' + t); else eval(code); }
+                            else eval(code);
+                        } catch(e) { console.warn(e.message); }
+                    });
+                    if (window.Alpine) Alpine.initTree(el);
+                } catch(e) { console.error('WebUI load failed:', e); }
+                finally { this.webuiLoading = false; }
             },
 
             async checkHealth() {
@@ -392,13 +415,7 @@
             },
 
             getStatusColor(status) {
-                const colors = {
-                    'healthy': 'green',
-                    'registered': 'yellow',
-                    'unhealthy': 'red',
-                    'unreachable': 'gray',
-                    'disabled': 'gray'
-                };
+                var colors = { 'healthy': 'green', 'registered': 'yellow', 'unhealthy': 'red', 'unreachable': 'gray', 'disabled': 'gray' };
                 return colors[status] || 'gray';
             }
         };

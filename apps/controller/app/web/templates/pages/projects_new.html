@@ -1,0 +1,547 @@
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/unified_base.html" %}{% endif %}
+
+{% block title %}项目列表 - AIDP{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-900 text-gray-100" x-data="projectsPage()" x-init="init()">
+    <!-- Header -->
+    <div class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold">我的项目</h1>
+                    <p class="text-gray-400 text-sm mt-1">管理您的所有项目</p>
+                </div>
+                <button @click="showCreateModal = true" 
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                    <i class="fas fa-plus"></i>
+                    <span>创建项目</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex gap-4">
+            <div class="flex-1 relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                <input x-model="searchQuery" 
+                       @input.debounce.300ms="loadProjects()"
+                       type="text" 
+                       placeholder="搜索项目名称..." 
+                       class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none">
+            </div>
+            <select x-model="visibilityFilter" 
+                    @change="loadProjects()"
+                    class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+                <option value="">全部可见性</option>
+                <option value="private">私有</option>
+                <option value="internal">内部</option>
+                <option value="public">公开</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Projects Grid -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <!-- Loading State -->
+        <div x-show="loading" class="flex justify-center py-12">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!loading && projects.length === 0" class="text-center py-12">
+            <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-folder-open text-3xl text-gray-600"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-300 mb-2">还没有项目</h3>
+            <p class="text-gray-500 mb-4">创建您的第一个项目开始使用 AIDP</p>
+            <button @click="showCreateModal = true" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition">
+                创建项目
+            </button>
+        </div>
+
+        <!-- Projects List -->
+        <div x-show="!loading && projects.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <template x-for="project in projects" :key="project.id">
+                <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-600 transition cursor-pointer group"
+                     @click="enterProject(project)">
+                    <!-- Cover Image -->
+                    <div class="h-32 bg-gradient-to-br from-indigo-600 to-purple-600 relative">
+                        <img x-show="project.cover_url" 
+                             :src="project.cover_url" 
+                             class="w-full h-full object-cover">
+                        <div class="absolute top-2 right-2">
+                            <span :class="{
+                                'bg-gray-900/80': project.visibility === 'private',
+                                'bg-blue-900/80': project.visibility === 'internal',
+                                'bg-green-900/80': project.visibility === 'public'
+                            }" class="text-xs px-2 py-1 rounded text-white capitalize">
+                                <i :class="{
+                                    'fas fa-lock': project.visibility === 'private',
+                                    'fas fa-building': project.visibility === 'internal',
+                                    'fas fa-globe': project.visibility === 'public'
+                                }" class="mr-1"></i>
+                                <span x-text="project.visibility"></span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="p-4">
+                        <h3 class="font-semibold text-lg mb-1 group-hover:text-indigo-400 transition" x-text="project.name"></h3>
+                        <p class="text-gray-400 text-sm mb-3 line-clamp-2" x-text="project.description || '暂无描述'"></p>
+                        
+                        <!-- Tech Stack -->
+                        <div class="flex flex-wrap gap-1 mb-3" x-show="project.tech_stack && project.tech_stack.length > 0">
+                            <template x-for="tech in project.tech_stack.slice(0, 3)" :key="tech">
+                                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded" x-text="tech"></span>
+                            </template>
+                            <span x-show="project.tech_stack.length > 3" 
+                                  class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded"
+                                  x-text="'+' + (project.tech_stack.length - 3)"></span>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div class="flex items-center justify-between text-sm text-gray-500">
+                            <div class="flex items-center gap-4">
+                                <span><i class="fas fa-users mr-1"></i> <span x-text="project.member_count || 1"></span></span>
+                                <span><i class="fas fa-clock mr-1"></i> <span x-text="formatDate(project.updated_at)"></span></span>
+                            </div>
+                            <button @click.stop="deleteProject(project)" 
+                                    x-show="project.owner_id === currentUserId"
+                                    class="text-gray-500 hover:text-red-400 transition">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="!loading && total > limit" class="flex justify-center mt-8 gap-2">
+            <button @click="prevPage()" 
+                    :disabled="skip === 0"
+                    :class="skip === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-4 py-2 bg-gray-800 rounded-lg transition">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <span class="px-4 py-2 text-gray-400">
+                第 <span x-text="Math.floor(skip / limit) + 1"></span> 页
+            </span>
+            <button @click="nextPage()" 
+                    :disabled="skip + limit >= total"
+                    :class="skip + limit >= total ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-4 py-2 bg-gray-800 rounded-lg transition">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div x-show="showCreateModal" 
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4"
+             @click.away="showCreateModal = false"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100">
+            
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold">创建新项目</h2>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Form -->
+            <div class="p-6 space-y-4">
+                <!-- Project Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">项目名称 <span class="text-red-500">*</span></label>
+                    <input x-model="newProject.name" 
+                           type="text" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                           placeholder="输入项目名称">
+                    <p class="text-red-500 text-xs mt-1" x-show="errors.name" x-text="errors.name"></p>
+                </div>
+                
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">项目描述</label>
+                    <textarea x-model="newProject.description" 
+                              rows="3"
+                              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                              placeholder="描述您的项目..."></textarea>
+                </div>
+                
+                <!-- Visibility -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">可见性</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600 transition">
+                            <input type="radio" x-model="newProject.visibility" value="private" class="text-indigo-600">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-lock text-gray-400"></i>
+                                    <span class="font-medium">私有</span>
+                                </div>
+                                <p class="text-sm text-gray-400">仅项目成员可见</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600 transition">
+                            <input type="radio" x-model="newProject.visibility" value="internal" class="text-indigo-600">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-building text-blue-400"></i>
+                                    <span class="font-medium">内部</span>
+                                </div>
+                                <p class="text-sm text-gray-400">所有登录用户可见</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600 transition">
+                            <input type="radio" x-model="newProject.visibility" value="public" class="text-indigo-600">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-globe text-green-400"></i>
+                                    <span class="font-medium">公开</span>
+                                </div>
+                                <p class="text-sm text-gray-400">无需登录即可访问（只读）</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Tech Stack -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">技术栈</label>
+                    <div class="flex flex-wrap gap-2 mb-2">
+                        <template x-for="(tech, index) in newProject.tech_stack" :key="index">
+                            <span class="bg-indigo-600/20 text-indigo-400 px-2 py-1 rounded text-sm flex items-center gap-1">
+                                <span x-text="tech"></span>
+                                <button @click="removeTech(index)" class="hover:text-white">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                            </span>
+                        </template>
+                    </div>
+                    <div class="flex gap-2">
+                        <input x-model="newTech" 
+                               @keydown.enter.prevent="addTech()"
+                               type="text" 
+                               class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                               placeholder="添加技术标签（如 Python, React）">
+                        <button @click="addTech()" 
+                                class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+                <button @click="showCreateModal = false" 
+                        class="px-4 py-2 text-gray-300 hover:text-white transition">
+                    取消
+                </button>
+                <button @click="createProject()" 
+                        :disabled="creating"
+                        :class="creating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'"
+                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg transition flex items-center gap-2">
+                    <span x-show="creating" class="loading-spinner w-4 h-4 border-2"></span>
+                    <span x-text="creating ? '创建中...' : '创建项目'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed bottom-4 right-4 space-y-2 z-50">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div :class="{
+                'bg-green-600': toast.type === 'success',
+                'bg-red-600': toast.type === 'error',
+                'bg-blue-600': toast.type === 'info'
+            }" class="text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px]"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-x-full"
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-x-0"
+                 x-transition:leave-end="opacity-0 translate-x-full">
+                <i :class="{
+                    'fas fa-check-circle': toast.type === 'success',
+                    'fas fa-exclamation-circle': toast.type === 'error',
+                    'fas fa-info-circle': toast.type === 'info'
+                }"></i>
+                <span x-text="toast.message"></span>
+                <button @click="removeToast(toast.id)" class="ml-auto text-white/80 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function projectsPage() {
+    return {
+        // Data
+        projects: [],
+        loading: false,
+        skip: 0,
+        limit: 12,
+        total: 0,
+        searchQuery: '',
+        visibilityFilter: '',
+        currentUserId: '{{ current_user.id }}',
+        
+        // Create Modal
+        showCreateModal: false,
+        creating: false,
+        newProject: {
+            name: '',
+            description: '',
+            visibility: 'private',
+            tech_stack: []
+        },
+        newTech: '',
+        errors: {},
+        
+        // Toast
+        toasts: [],
+        toastId: 0,
+
+        init() {
+            this.loadProjects();
+        },
+
+        async loadProjects() {
+            this.loading = true;
+            
+            try {
+                const params = new URLSearchParams({
+                    skip: this.skip,
+                    limit: this.limit
+                });
+                
+                if (this.searchQuery) {
+                    params.append('search', this.searchQuery);
+                }
+                if (this.visibilityFilter) {
+                    params.append('visibility', this.visibilityFilter);
+                }
+                
+                const response = await fetch(`/api/projects?${params}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.projects = data.items || [];
+                    this.total = data.total || 0;
+                } else {
+                    this.showToast('error', data.detail || '加载项目失败');
+                }
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+                this.showToast('error', '网络错误，请稍后重试');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async createProject() {
+            // Validation
+            this.errors = {};
+            if (!this.newProject.name.trim()) {
+                this.errors.name = '项目名称不能为空';
+                return;
+            }
+            
+            this.creating = true;
+            
+            try {
+                const params = new URLSearchParams();
+                params.set('name', this.newProject.name);
+                if (this.newProject.description) params.set('description', this.newProject.description);
+                const response = await fetch('/api/projects?' + params.toString(), {
+                    method: 'POST',
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.showToast('success', '项目创建成功');
+                    this.showCreateModal = false;
+                    this.resetCreateForm();
+                    this.loadProjects();
+                } else {
+                    this.showToast('error', data.detail || '创建项目失败');
+                }
+            } catch (error) {
+                console.error('Failed to create project:', error);
+                this.showToast('error', '网络错误，请稍后重试');
+            } finally {
+                this.creating = false;
+            }
+        },
+
+        async deleteProject(project) {
+            if (!confirm(`确定要删除项目 "${project.name}" 吗？此操作不可恢复。`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/projects/${project.id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    this.showToast('success', '项目已删除');
+                    this.loadProjects();
+                } else {
+                    const data = await response.json();
+                    this.showToast('error', data.detail || '删除失败');
+                }
+            } catch (error) {
+                console.error('Failed to delete project:', error);
+                this.showToast('error', '网络错误，请稍后重试');
+            }
+        },
+
+        enterProject(project) {
+            // 进入项目工作区
+            window.parent.postMessage({
+                type: 'switch-project',
+                projectId: project.id,
+                projectName: project.name
+            }, '*');
+            
+            // 或者跳转到工作区
+            window.location.href = `/?project_id=${project.id}`;
+        },
+
+        // Tech Stack Management
+        addTech() {
+            const tech = this.newTech.trim();
+            if (tech && !this.newProject.tech_stack.includes(tech)) {
+                this.newProject.tech_stack.push(tech);
+                this.newTech = '';
+            }
+        },
+
+        removeTech(index) {
+            this.newProject.tech_stack.splice(index, 1);
+        },
+
+        resetCreateForm() {
+            this.newProject = {
+                name: '',
+                description: '',
+                visibility: 'private',
+                tech_stack: []
+            };
+            this.newTech = '';
+            this.errors = {};
+        },
+
+        // Pagination
+        nextPage() {
+            if (this.skip + this.limit < this.total) {
+                this.skip += this.limit;
+                this.loadProjects();
+            }
+        },
+
+        prevPage() {
+            if (this.skip > 0) {
+                this.skip -= this.limit;
+                this.loadProjects();
+            }
+        },
+
+        // Toast Notifications
+        showToast(type, message) {
+            const id = ++this.toastId;
+            this.toasts.push({ id, type, message });
+            
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                this.removeToast(id);
+            }, 3000);
+        },
+
+        removeToast(id) {
+            const index = this.toasts.findIndex(t => t.id === id);
+            if (index > -1) {
+                this.toasts.splice(index, 1);
+            }
+        },
+
+        // Utility
+        formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            
+            // Less than 24 hours
+            if (diff < 24 * 60 * 60 * 1000) {
+                const hours = Math.floor(diff / (60 * 60 * 1000));
+                if (hours < 1) {
+                    const minutes = Math.floor(diff / (60 * 1000));
+                    return minutes < 1 ? '刚刚' : `${minutes}分钟前`;
+                }
+                return `${hours}小时前`;
+            }
+            
+            // Less than 7 days
+            if (diff < 7 * 24 * 60 * 60 * 1000) {
+                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                return `${days}天前`;
+            }
+            
+            // Format date
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+    };
+}
+</script>
+
+<style>
+.loading-spinner {
+    border: 2px solid #374151;
+    border-top: 2px solid #6366f1;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+</style>
+{% endblock %}

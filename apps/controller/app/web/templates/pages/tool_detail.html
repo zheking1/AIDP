@@ -66,7 +66,7 @@
                         class="pb-3 border-b-2 font-medium text-sm transition">
                     <i class="fas fa-plug mr-2"></i>能力 (<span x-text="capabilities.length"></span>)
                 </button>
-                <button @click="activeTab = 'webui'" 
+                <button @click="switchToWebUI()" 
                         :class="activeTab === 'webui' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-300'"
                         class="pb-3 border-b-2 font-medium text-sm transition">
                     <i class="fas fa-desktop mr-2"></i>Web 界面
@@ -165,10 +165,10 @@
 
             <!-- Web UI Tab -->
             <div x-show="activeTab === 'webui'" class="h-[600px]">
-                <iframe :src="'/tools/' + tool.name + '/web/'" 
-                        class="w-full h-full rounded-xl border border-gray-700"
-                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads">
-                </iframe>
+              <div x-show="webuiLoading" class="flex items-center justify-center h-full">
+                <i class="fas fa-spinner fa-spin text-2xl text-indigo-400"></i>
+              </div>
+              <div id="tool-webui-content" class="w-full h-full rounded-xl border border-gray-700 overflow-y-auto" x-show="!webuiLoading"></div>
             </div>
 
             <!-- Logs Tab -->

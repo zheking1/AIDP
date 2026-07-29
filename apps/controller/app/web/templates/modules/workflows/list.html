@@ -1,0 +1,258 @@
+﻿<div x-data="workflowsPage()" x-init="init()">
+<div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">流程管理</h1>
+        <p class="text-gray-400 text-sm mt-1">多步骤多 Agent 协作流程定义和执行</p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="showTemplateModal=true" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm transition"><i class="fas fa-copy mr-1"></i>从模板</button>
+        <button @click="showCreateModal=true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-plus mr-2"></i>创建流程</button>
+       
+</div>
+</div>
+
+<div class="flex gap-3 mb-4">
+      <div class="flex-1 relative">
+        <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+        <input type="text" x-model="searchQuery" @input.debounce.300ms="loadWorkflows()" placeholder="搜索流程..." class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+      </div>
+      <select x-model="filterCategory" @change="loadWorkflows()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
+        <option value="">全部</option>
+        <option value="development">开发</option>
+        <option value="testing">测试</option>
+        <option value="deployment">部署</option>
+        <option value="review">审查</option>
+      </select>
+    </div>
+
+    <div class="space-y-2">
+      <template x-for="wf in workflows" :key="wf.id">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewWorkflow(wf)">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    :class="{'bg-blue-900/30 text-blue-400': wf.category==='development','bg-green-900/30 text-green-400': wf.category==='testing','bg-purple-900/30 text-purple-400': wf.category==='deployment','bg-yellow-900/30 text-yellow-400': wf.category==='review','bg-gray-800': true}">
+                <i :class="{'fas fa-code': wf.category==='development','fas fa-vial': wf.category==='testing','fas fa-rocket': wf.category==='deployment','fas fa-search': wf.category==='review','fas fa-cogs': true}" class="text-sm"></i>
+              </span>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-medium text-white truncate" x-text="wf.name"></h3>
+                  <span class="px-1.5 py-0.5 text-xs rounded bg-gray-700 text-gray-300 capitalize" x-text="wf.category"></span>
+                </div>
+                <p class="text-sm text-gray-400 truncate mt-0.5" x-text="wf.description||wf.trigger"></p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+              <span class="text-xs text-gray-500">v<span x-text="wf.version"></span></span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+    <div x-show="workflows.length===0&&!loading" class="text-center py-16 text-gray-500"><i class="fas fa-cogs text-5xl text-gray-700 mb-4"></i><p>暂无流程</p></div>
+
+  <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6">
+      <h2 class="text-xl font-bold text-white mb-4">创建流程</h2>
+      <div class="space-y-4">
+        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="form.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">分类</label><select x-model="form.category" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="development">开发</option><option value="testing">测试</option><option value="deployment">部署</option><option value="review">审查</option></select></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6"><button @click="showCreateModal=false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button><button @click="createWorkflow()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">创建</button></div>
+    </div>
+  </div>
+
+  <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center gap-3"><i class="fas fa-cogs text-indigo-400"></i><h2 class="text-xl font-semibold text-white" x-text="detail?.name"></h2><span class="px-2 py-0.5 text-xs rounded bg-gray-700 capitalize text-gray-300" x-text="detail?.category"></span></div>
+        <div class="flex gap-2"><button @click="executeWorkflow(detail)" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm transition"><i class="fas fa-play mr-1"></i>执行</button><button @click="showDetailModal=false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button></div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex gap-4 border-b border-gray-700 mb-4">
+          <button @click="detailTab='info'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='info'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">信息</button>
+          <button @click="detailTab='steps'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='steps'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">步骤 <span x-show="detail?.steps?.length" class="text-xs text-gray-500" x-text="detail?.steps?.length"></span></button>
+          <button @click="detailTab='executions'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='executions'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">执行记录</button>
+        </div>
+        <div x-show="detailTab==='info'" class="space-y-4">
+          <div><h3 class="text-sm text-gray-400 mb-1">描述</h3><p class="text-gray-300" x-text="detail?.description||'无'"></p></div>
+          <div class="grid grid-cols-2 gap-4"><div><h3 class="text-sm text-gray-400 mb-1">触发方式</h3><p class="text-white capitalize" x-text="detail?.trigger"></p></div><div><h3 class="text-sm text-gray-400 mb-1">版本</h3><p class="text-white" x-text="detail?.version"></p></div></div>
+        </div>
+        <div x-show="detailTab==='steps'">
+          <div x-show="!(detail?.steps||[]).length" class="text-gray-500 text-sm py-8 text-center">暂无步骤</div>
+          <template x-for="(s,i) in detail?.steps||[]" :key="s.id">
+            <div class="flex items-start gap-4 bg-gray-900 rounded-lg p-4 mb-3">
+              <div class="w-8 h-8 rounded-full bg-indigo-900/50 text-indigo-400 flex items-center justify-center text-sm font-bold flex-shrink-0" x-text="i+1"></div>
+              <div class="flex-1"><div class="font-medium text-white text-sm" x-text="s.name"></div><div class="text-xs text-gray-500 mt-1">Agent: <span x-text="s.agent_id||'未指定'"></span></div><div class="text-xs text-gray-500">超时: <span x-text="s.timeout||300"></span>s</div></div>
+              <div class="flex gap-1"><span x-show="s.on_fail?.action" class="px-1.5 py-0.5 text-xs rounded bg-red-900/30 text-red-300" x-text="'on_fail: '+s.on_fail.action"></span></div>
+            </div>
+          </template>
+        </div>
+        <div x-show="detailTab==='executions'">
+          <div x-show="executions.length===0" class="text-gray-500 text-sm py-8 text-center">暂无执行记录</div>
+          <template x-for="ex in executions" :key="ex.id">
+            <div class="flex items-center justify-between bg-gray-900 rounded-lg p-3 mb-2">
+              <div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full" :class="ex.status==='completed'?'bg-green-400':ex.status==='running'?'bg-yellow-400':'bg-red-400'"></span><span class="text-sm text-white" x-text="ex.status"></span><span class="text-xs text-gray-500" x-text="ex.created_at?.substring(0,19)"></span></div>
+              <span class="text-xs text-gray-500" x-text="(ex.step_records||[]).length+' 步'"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+        <div class="flex justify-between px-6 py-4 border-t border-gray-700">
+        <div class="flex gap-2"><button @click="editWorkflow(detail)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm transition"><i class="fas fa-edit mr-1"></i>编辑</button><button @click="deleteWorkflow(detail)" class="text-red-400 hover:text-red-300 text-sm"><i class="fas fa-trash mr-1"></i>删除</button></div>
+        <button @click="showDetailModal=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Workflow Modal -->
+  <div x-show="showEditModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 p-6 max-h-[85vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-white mb-4">编辑流程</h2>
+      <div class="space-y-4">
+        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="editForm.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="editForm.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-sm text-gray-400 mb-1">分类</label><select x-model="editForm.category" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="development">开发</option><option value="testing">测试</option><option value="deployment">部署</option><option value="review">审查</option></select></div>
+          <div><label class="block text-sm text-gray-400 mb-1">触发方式</label><select x-model="editForm.trigger" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="manual">手动</option><option value="auto">自动</option></select></div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-2"><label class="block text-sm text-gray-400">步骤</label><button @click="editForm.steps.push({name:'',description:'',order:editForm.steps.length+1,agent_id:'',skill_ids:[],rule_ids:[],timeout:300,on_fail:{}})" class="text-xs text-indigo-400 hover:text-indigo-300"><i class="fas fa-plus mr-1"></i>添加步骤</button></div>
+          <template x-for="(s,i) in editForm.steps" :key="i">
+            <div class="bg-gray-900 rounded-lg p-3 mb-2">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs text-indigo-400">步骤 <span x-text="i+1"></span></span><button @click="editForm.steps.splice(i,1)" class="text-gray-500 hover:text-red-400 text-xs"><i class="fas fa-times"></i></button></div>
+              <div class="space-y-2">
+                <input type="text" x-model="s.name" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="步骤名称">
+                <textarea x-model="s.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="步骤说明/规则文档..."></textarea>
+                <div class="grid grid-cols-2 gap-2">
+                  <div><label class="text-xs text-gray-500">Agent</label><input type="text" x-model="s.agent_id" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="Agent ID"></div>
+                  <div><label class="text-xs text-gray-500">超时(s)</label><input type="number" x-model.number="s.timeout" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="300"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-xs text-gray-500">关联规则 <span class="text-indigo-400 cursor-pointer hover:text-indigo-300" @click="openRuleSelector(i)">(+)</span></label>
+                    <div class="flex flex-wrap gap-1 mt-1"><template x-for="(rid,ri) in (s.rule_ids||[])" :key="rid"><span class="px-1.5 py-0.5 text-xs bg-indigo-900/50 text-indigo-300 rounded flex items-center gap-1"><span x-text="'规则'+(ri+1)"></span><button @click="s.rule_ids.splice(ri,1)" class="text-red-400 hover:text-red-300">×</button></span></template></div>
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-500">关联技能 <span class="text-yellow-400 cursor-pointer hover:text-yellow-300" @click="openSkillSelector(i)">(+)</span></label>
+                    <div class="flex flex-wrap gap-1 mt-1"><template x-for="(sid,si) in (s.skill_ids||[])" :key="sid"><span class="px-1.5 py-0.5 text-xs bg-yellow-900/50 text-yellow-300 rounded flex items-center gap-1"><span x-text="'技能'+(si+1)"></span><button @click="s.skill_ids.splice(si,1)" class="text-red-400 hover:text-red-300">×</button></span></template></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div x-show="!editForm.steps.length" class="text-gray-500 text-xs py-4 text-center">暂无步骤</div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6"><button @click="showEditModal=false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button><button @click="saveWorkflow()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">保存</button></div>
+    </div>
+  </div>
+
+  <!-- Link Knowledge Base Modal -->
+  <div x-show="showLinkKbModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-4">添加知识库</h2>
+      <div class="space-y-2">
+        <template x-for="kb in availableKbs" :key="kb.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="linkKb(kb)">
+            <div class="font-medium text-white text-sm" x-text="kb.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="kb.description||kb.document_count+' 篇文档'"></div>
+          </div>
+        </template>
+        <div x-show="availableKbs.length===0" class="text-gray-500 text-sm py-8 text-center">暂无可用知识库</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showLinkKbModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <!-- Step Rule Selector Modal -->
+  <div x-show="showStepRuleModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-2">选择规则</h2>
+      <p class="text-xs text-gray-500 mb-4">步骤 <span x-text="stepSelectorIdx+1"></span> — 可添加全局或个人规则</p>
+      <div class="flex gap-2 mb-3"><button @click="stepRuleTab='global'" class="px-3 py-1 text-xs rounded" :class="stepRuleTab==='global'?'bg-indigo-600 text-white':'bg-gray-700 text-gray-400'">全局规则</button><button @click="stepRuleTab='personal'" class="px-3 py-1 text-xs rounded" :class="stepRuleTab==='personal'?'bg-indigo-600 text-white':'bg-gray-700 text-gray-400'">个人规则</button></div>
+      <div class="space-y-2 max-h-60 overflow-y-auto">
+        <template x-for="r in stepRuleTab==='global'?globalRules:personalRules" :key="r.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="addRuleToStep(r)">
+            <div class="flex items-center gap-2"><span class="font-medium text-white text-sm" x-text="r.name"></span><span class="text-xs px-1.5 py-0.5 rounded" :class="r.severity==='critical'?'bg-red-900/50 text-red-300':r.severity==='high'?'bg-orange-900/50 text-orange-300':'bg-gray-700 text-gray-400'" x-text="r.severity"></span></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="r.description||r.content?.substring(0,60)||''"></div>
+          </div>
+        </template>
+        <div x-show="(stepRuleTab==='global'?globalRules:personalRules).length===0" class="text-gray-500 text-sm py-8 text-center">暂无规则</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showStepRuleModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <!-- Step Skill Selector Modal -->
+  <div x-show="showStepSkillModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-2">选择技能</h2>
+      <p class="text-xs text-gray-500 mb-4">步骤 <span x-text="stepSelectorIdx+1"></span></p>
+      <div class="space-y-2 max-h-60 overflow-y-auto">
+        <template x-for="sk in availableStepSkills" :key="sk.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="addSkillToStep(sk)">
+            <div class="font-medium text-white text-sm" x-text="sk.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="sk.description||sk.content?.substring(0,60)||''"></div>
+          </div>
+        </template>
+        <div x-show="availableStepSkills.length===0" class="text-gray-500 text-sm py-8 text-center">暂无技能</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showStepSkillModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <div x-show="showTemplateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6">
+      <h2 class="text-xl font-bold text-white mb-4">从模板创建</h2>
+      <div class="space-y-2 mb-4">
+        <template x-for="t in templates" :key="t.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="createFromTemplate(t)">
+            <div class="font-medium text-white text-sm" x-text="t.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="t.description||t.category"></div>
+            <div class="text-xs text-gray-500 mt-1"><span x-text="(t.steps||[]).length"></span> 步</div>
+          </div>
+        </template>
+      </div>
+      <div class="flex justify-end"><button @click="showTemplateModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+
+
+
+</script>
+<script>window.workflowsPage=function workflowsPage() {
+  return { workflows:[], templates:[], executions:[], searchQuery:'', filterCategory:'', loading:false, showCreateModal:false, showDetailModal:false, showEditModal:false, showTemplateModal:false, showLinkSkillModal:false, showLinkRuleModal:false, showLinkKbModal:false, showStepRuleModal:false, showStepSkillModal:false,
+    detail:null, detailTab:'info', stats:{}, stepSelectorIdx:-1, stepRuleTab:'global',
+    globalRules:[], personalRules:[], availableStepSkills:[],
+    availableSkills:[], availableRules:[], availableKbs:[],
+    form:{name:'',description:'',category:'development'},
+    editForm:{id:'',name:'',description:'',category:'',trigger:'',steps:[]},
+    async init(){await Promise.all([this.loadWorkflows(),this.loadTemplates()])},
+    async loadWorkflows(){this.loading=true;try{const p=new URLSearchParams({limit:'100'});if(this.searchQuery)p.set('search',this.searchQuery);if(this.filterCategory)p.set('category',this.filterCategory);const r=await fetch(`/api/workflows/list?${p}`);if(r.ok)this.workflows=(await r.json()).items||[]}finally{this.loading=false}},
+    async loadTemplates(){try{const r=await fetch('/api/workflows/templates/list');if(r.ok)this.templates=(await r.json()).items||[]}catch(e){}},
+    async createWorkflow(){try{const r=await fetch('/api/workflows/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.form)});if(r.ok){this.showCreateModal=false;this.form={name:'',description:'',category:'development'};await this.loadWorkflows()}}catch(e){}},
+    async viewWorkflow(w){try{const r=await fetch(`/api/workflows/${w.id}`);if(r.ok){this.detail=await r.json();this.showDetailModal=true;this.detailTab='info';const er=await fetch(`/api/workflows/executions/list?workflow_id=${w.id}&limit=5`);if(er.ok)this.executions=((await er.json()).items||[]);else this.executions=[]}}catch(e){}},
+    async editWorkflow(w){try{const r=await fetch(`/api/workflows/${w.id}`);if(r.ok){this.editForm={id:w.id,name:w.name,description:w.description,category:w.category,trigger:w.trigger||'manual',steps:(w.steps||[]).map(s=>({...s,description:s.description||'',skill_ids:s.skill_ids||[],rule_ids:s.rule_ids||[]}))};this.showEditModal=true;this.showDetailModal=false}}catch(e){}},
+    async saveWorkflow(){try{const body={name:this.editForm.name,description:this.editForm.description,category:this.editForm.category,trigger:this.editForm.trigger,steps:this.editForm.steps};const r=await fetch(`/api/workflows/${this.editForm.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){this.showEditModal=false;await this.loadWorkflows()}}catch(e){}},
+    async executeWorkflow(w){if(!confirm('执行流程「'+w.name+'」？'))return;try{const r=await fetch(`/api/workflows/${w.id}/execute`,{method:'POST'});if(r.ok)this.viewWorkflow(w)}catch(e){}},
+    async deleteWorkflow(w){if(!w||!confirm('删除流程「'+w.name+'」？'))return;try{await fetch(`/api/workflows/${w.id}`,{method:'DELETE'});this.showDetailModal=false;this.showEditModal=false;await this.loadWorkflows()}catch(e){}},
+    async createFromTemplate(t){try{const r=await fetch(`/api/workflows/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:t.name+'(副本)',description:t.description,category:t.category,steps:(t.steps||[]).map(s=>({name:s.name,order:s.order,agent_id:s.agent_id,skill_ids:s.skill_ids||[],rule_ids:s.rule_ids||[],timeout:s.timeout||300,conditions:s.conditions||{},on_success:s.on_success||{},on_fail:s.on_fail||{}}))})});if(r.ok){this.showTemplateModal=false;await this.loadWorkflows()}}catch(e){}},
+    async openRuleSelector(idx){this.stepSelectorIdx=idx;this.stepRuleTab='global';const r1=await fetch('/api/rules/list?scope=global&limit=100');if(r1.ok)this.globalRules=(await r1.json()).items||[];const r2=await fetch('/api/rules/list?scope=personal&limit=100');if(r2.ok)this.personalRules=(await r2.json()).items||[];this.showStepRuleModal=true},
+    addRuleToStep(r){const step=this.editForm.steps[this.stepSelectorIdx];if(!step.rule_ids)step.rule_ids=[];if(!step.rule_ids.includes(r.id))step.rule_ids.push(r.id);this.showStepRuleModal=false},
+    async openSkillSelector(idx){this.stepSelectorIdx=idx;const r=await fetch('/api/skills/list?scope=personal&limit=100');if(r.ok)this.availableStepSkills=(await r.json()).items||[];this.showStepSkillModal=true},
+    addSkillToStep(sk){const step=this.editForm.steps[this.stepSelectorIdx];if(!step.skill_ids)step.skill_ids=[];if(!step.skill_ids.includes(sk.id))step.skill_ids.push(sk.id);this.showStepSkillModal=false},
+    async loadAvailableSkills(){try{const r=await fetch('/api/skills/list?scope=personal&limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.skills||[]).map(s=>s.id);this.availableSkills=(d.items||[]).filter(s=>!linkedIds.includes(s.id))}}catch(e){}},
+    async loadAvailableRules(){try{const r=await fetch('/api/rules/list?scope=personal&limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.rules||[]).map(r=>r.id);this.availableRules=(d.items||[]).filter(r=>!linkedIds.includes(r.id))}}catch(e){}},
+    async loadAvailableKbs(){try{const r=await fetch('/api/knowledge/bases?limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.knowledge_bases||[]).map(k=>k.id);this.availableKbs=(d.items||[]).filter(k=>!linkedIds.includes(k.id))}}catch(e){}},
+    async linkSkill(s){try{const r=await fetch(`/api/agents/${this.detail.id}/link-skill?skill_id=${s.id}`,{method:'POST'});if(r.ok){this.showLinkSkillModal=false;await this.viewAgent(this.detail);await this.loadAvailableSkills()}}catch(e){}},
+    async unlinkSkill(s){if(!confirm('解绑技能「'+s.name+'」？'))return;try{const r=await fetch(`/api/agents/${this.detail.id}/unlink-skill?skill_id=${s.id}`,{method:'POST'});if(r.ok){await this.viewAgent(this.detail);await this.loadAvailableSkills()}}catch(e){}},
+    async linkRule(r){try{const res=await fetch(`/api/agents/${this.detail.id}/link-rule?rule_id=${r.id}`,{method:'POST'});if(res.ok){this.showLinkRuleModal=false;await this.viewAgent(this.detail);await this.loadAvailableRules()}}catch(e){}},
+    async unlinkRule(r){if(!confirm('解绑规则「'+r.name+'」？'))return;try{const res=await fetch(`/api/agents/${this.detail.id}/unlink-rule?rule_id=${r.id}`,{method:'POST'});if(res.ok){await this.viewAgent(this.detail);await this.loadAvailableRules()}}catch(e){}},
+    async linkKb(kb){try{const r=await fetch(`/api/agents/${this.detail.id}/link-knowledge?knowledge_base_id=${kb.id}`,{method:'POST'});if(r.ok){this.showLinkKbModal=false;await this.viewAgent(this.detail);await this.loadAvailableKbs()}}catch(e){}},
+    async unlinkKb(kb){if(!confirm('解绑知识库「'+kb.name+'」？'))return;try{const r=await fetch(`/api/agents/${this.detail.id}/unlink-knowledge?knowledge_base_id=${kb.id}`,{method:'POST'});if(r.ok){await this.viewAgent(this.detail);await this.loadAvailableKbs()}}catch(e){}},
+    async saveInstructions(){try{const r=await fetch(`/api/agents/${this.detail.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({instructions:this.detail.instructions})});if(r.ok){alert('Instructions 已保存')}}catch(e){alert('保存失败')}}
+  };
+}</script>

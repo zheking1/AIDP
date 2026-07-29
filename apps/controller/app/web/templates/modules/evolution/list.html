@@ -1,0 +1,197 @@
+<div x-data="evolutionPage()" x-init="init()">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">进化提案</h1>
+            <p class="text-gray-400 text-sm mt-1">项目级经验积累和系统级进化</p>
+        </div>
+        <button @click="showProposeModal=true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+            <i class="fas fa-plus"></i>提出进化
+        </button>
+        <button @click="showSmartPropose=true" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+            <i class="fas fa-robot"></i>智能分析
+        </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-6">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">我的提案</div>
+            <div class="text-xl font-bold text-white" x-text="stats.total || 0">0</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">系统级</div>
+            <div class="text-xl font-bold text-indigo-400" x-text="stats.system_level || 0">0</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">待审核</div>
+            <div class="text-xl font-bold text-yellow-400" x-text="stats.pending || 0">0</div>
+        </div>
+    </div>
+
+    <div class="space-y-3" x-show="!loading">
+        <template x-for="v in versions" :key="v.id">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/30 transition cursor-pointer" @click="showDetail(v)">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-white" x-text="v.title"></span>
+                            <span class="px-2 py-0.5 text-xs rounded-full" :class="v.review_status==='pending'?'bg-yellow-500/20 text-yellow-400':v.review_status==='approved'?'bg-green-500/20 text-green-400':'bg-red-500/20 text-red-400'" x-text="v.review_status==='pending'?'待审核':v.review_status==='approved'?'已批准':'已拒绝'"></span>
+                            <span class="px-2 py-0.5 text-xs rounded-full" :class="v.level==='system'?'bg-indigo-500/20 text-indigo-400':'bg-gray-600/30 text-gray-400'" x-text="v.level==='system'?'系统级':'项目级'"></span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1" x-text="v.description?.substring(0, 100)"></p>
+                    </div>
+                    <span class="text-xs text-gray-500" x-text="v.created_at?.substring(0, 10)"></span>
+                </div>
+            </div>
+        </template>
+        <div x-show="!versions.length" class="text-center py-12 text-gray-500">
+            <i class="fas fa-lightbulb text-4xl text-gray-700 mb-4"></i>
+            <p>暂无进化提案</p>
+            <p class="text-xs mt-1">点击上方按钮提出新的进化建议</p>
+        </div>
+    </div>
+
+    <!-- Propose Modal -->
+    <div x-show="showProposeModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showProposeModal=false">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h3 class="text-white font-medium">提出进化提案</h3>
+                <button @click="showProposeModal=false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div><label class="text-sm text-gray-400 block mb-1">标题 *</label><input type="text" x-model="form.title" placeholder="例如：统一错误处理模式" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+                <div><label class="text-sm text-gray-400 block mb-1">描述</label><textarea x-model="form.description" rows="3" placeholder="描述这个模式/经验的内容..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></textarea></div>
+                <div><label class="text-sm text-gray-400 block mb-1">影响工具</label><input type="text" x-model="form.affected_tools" placeholder="memory, knowledge (逗号分隔)" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+                <div><label class="text-sm text-gray-400 block mb-1">变更详情 (JSON)</label><textarea x-model="form.changes_str" rows="3" placeholder='{"added":[], "modified":[], "description":""}' class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono"></textarea></div>
+                <div><label class="text-sm text-gray-400 block mb-1">版本号</label><input type="text" x-model="form.version" placeholder="0.1.0" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-2">
+                <button @click="showProposeModal=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">取消</button>
+                <button @click="propose()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm">提交</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showDetailModal=false">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h3 class="text-white font-medium"><span x-text="detail?.title"></span></h3>
+                <button @click="showDetailModal=false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-3">
+                <div><label class="text-xs text-gray-500 uppercase">版本</label><p class="text-white text-sm" x-text="detail?.version"></p></div>
+                <div><label class="text-xs text-gray-500 uppercase">描述</label><p class="text-white text-sm whitespace-pre-wrap" x-text="detail?.description"></p></div>
+                <div x-show="detail?.changes && Object.keys(detail?.changes || {}).length">
+                    <label class="text-xs text-gray-500 uppercase">变更内容</label>
+                    <pre class="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto" x-text="JSON.stringify(detail?.changes, null, 2)"></pre>
+                </div>
+                <div x-show="detail?.review_log?.length">
+                    <label class="text-xs text-gray-500 uppercase">审核日志</label>
+                    <div class="space-y-1"><template x-for="log in detail?.review_log">
+                        <div class="text-xs bg-gray-900 rounded p-2"><span class="text-gray-400" x-text="log.timestamp?.substring(0, 19)"></span> — <span class="text-gray-300" x-text="log.action + ': ' + log.comment"></span></div>
+                    </template></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Smart Propose Modal -->
+    <div x-show="showSmartPropose" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showSmartPropose=false">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h3 class="text-white font-medium"><i class="fas fa-robot mr-2 text-emerald-400"></i>智能进化分析</h3>
+                <button @click="showSmartPropose=false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-400">输入已完成的工作描述，系统会调用 LLM 自动分析并提取可复用的模式。</p>
+                <div><label class="text-sm text-gray-400 block mb-1">任务描述 *</label><input type="text" x-model="smartForm.task" placeholder="例如：统一了所有 API 的错误处理" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+                <div><label class="text-sm text-gray-400 block mb-1">结果简述</label><input type="text" x-model="smartForm.result" placeholder="例如：新增了 error_handler 中间件" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">事件类型</label>
+                    <select x-model="smartForm.event_type" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                        <option value="success">成功模式</option>
+                        <option value="error">错误修复</option>
+                        <option value="optimization">性能优化</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-between">
+                <span x-show="smartSubmitting" class="text-sm text-emerald-400"><i class="fas fa-spinner fa-spin mr-1"></i>分析中...</span>
+                <div class="flex gap-2" x-show="!smartSubmitting">
+                    <button @click="showSmartPropose=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">取消</button>
+                    <button @click="smartPropose()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm">开始分析</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+window.evolutionPage = function() {
+    return {
+        versions: [], stats: {}, loading: false, showProposeModal: false, showDetailModal: false, detail: null,
+        showSmartPropose: false, smartSubmitting: false,
+        smartForm: { task: '', result: '', event_type: 'success' },
+        form: { title: '', description: '', affected_tools: '', changes_str: '{}', version: '0.1.0' },
+        async init() { await this.load() },
+        async load() {
+            this.loading = true
+            try {
+                const [vr, sr] = await Promise.all([
+                    fetch('/api/evolution/versions').then(r => r.json()),
+                    fetch('/api/evolution/stats').then(r => r.json())
+                ])
+                this.versions = vr.versions || []
+                this.stats = sr
+            } catch(e) {}
+            finally { this.loading = false }
+        },
+        async propose() {
+            if (!this.form.title) return alert('请输入标题')
+            const tools = this.form.affected_tools.split(',').map(t => t.trim()).filter(Boolean)
+            let changes = {}
+            try { changes = JSON.parse(this.form.changes_str || '{}') } catch(e) {}
+            try {
+                const r = await fetch('/api/evolution/propose', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: this.form.title, description: this.form.description,
+                        version: this.form.version, changes, affected_tools: tools
+                    })
+                })
+                if (r.ok) {
+                    this.showProposeModal = false
+                    this.form = { title: '', description: '', affected_tools: '', changes_str: '{}', version: '0.1.0' }
+                    await this.load()
+                }
+            } catch(e) {}
+        },
+        async showDetail(v) {
+            try {
+                const r = await fetch('/api/evolution/versions/' + v.id)
+                if (r.ok) { this.detail = await r.json(); this.showDetailModal = true }
+            } catch(e) {}
+        },
+        async smartPropose() {
+            if (!this.smartForm.task) return alert('请输入任务描述')
+            this.smartSubmitting = true
+            try {
+                const r = await fetch('/api/evolution/analyze-and-propose', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.smartForm)
+                })
+                if (r.ok) {
+                    const d = await r.json()
+                    this.showSmartPropose = false
+                    this.smartForm = { task: '', result: '', event_type: 'success' }
+                    if (d.auto_proposed) alert('智能分析完成！已自动创建进化提案：' + d.title)
+                    else alert('分析完成，置信度不足（' + d.confidence + '），未自动创建提案。\n可手动提交。')
+                    await this.load()
+                } else {
+                    alert('分析失败，请确认 evolution-engine 服务已启动')
+                }
+            } catch(e) { alert('连接 evolution-engine 失败: ' + e.message) }
+            finally { this.smartSubmitting = false }
+        }
+    }
+}
+</script>

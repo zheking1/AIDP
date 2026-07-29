@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  importer-tool:
+    build: .
+    image: aidp/importer-tool:0.1.0
+    network_mode: host
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/aidp_importer
+      - CONTROLLER_URL=http://localhost:8883
+    volumes:
+      - ./data:/app/data

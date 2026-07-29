@@ -379,15 +379,39 @@ async def invoke_tool(req: ToolInvokeRequest):
 
         elif req.capability == "skill_register":
             async with async_session_factory() as session:
-                result = await create_skill(
+                skill = await create_skill(
                     session=session,
                     name=inp.get("name", ""),
                     content=inp.get("content", ""),
                     tags=inp.get("tags"),
-                    description=inp.get("description"),
                     user_id=user_id,
                 )
-                output = result
+                # Update description separately (create_skill doesn't accept it)
+                description = inp.get("description")
+                if description:
+                    from app.db.models import Skill
+                    skill_obj = await session.get(Skill, skill.id)
+                    if skill_obj:
+                        skill_obj.description = description
+                        await session.commit()
+                
+                # Generate embedding for the skill
+                try:
+                    from app.services.vector_service import generate_embedding
+                    embed_text = f"{skill.name} {description or ''} {inp.get('content', '')[:500]}"
+                    embedding = await generate_embedding(embed_text)
+                    if embedding:
+                        from app.db.models import Skill
+                        skill_obj = await session.get(Skill, skill.id)
+                        if skill_obj:
+                            from pgvector.sqlalchemy import Vector
+                            skill_obj.embedding = embedding
+                            await session.commit()
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to generate embedding for skill {skill.name}: {e}")
+                
+                output = {"id": str(skill.id), "name": skill.name, "tags": skill.tags or []}
 
         elif req.capability == "skill_update":
             async with async_session_factory() as session:
@@ -409,7 +433,20 @@ async def invoke_tool(req: ToolInvokeRequest):
         elif req.capability == "skill_get":
             async with async_session_factory() as session:
                 result = await get_skill(session=session, skill_id=inp.get("id", ""))
-                output = result
+                if result:
+                    output = {
+                        "id": str(result.id),
+                        "name": result.name,
+                        "description": result.description,
+                        "content": result.content,
+                        "tags": result.tags or [],
+                        "scope": result.scope,
+                        "is_active": result.is_active,
+                        "review_status": result.review_status,
+                        "has_embedding": result.embedding is not None,
+                    }
+                else:
+                    output = None
 
         elif req.capability == "skill_list":
             async with async_session_factory() as session:
@@ -428,7 +465,7 @@ async def invoke_tool(req: ToolInvokeRequest):
                     priority=inp.get("priority", 0),
                     user_id=user_id,
                 )
-                output = result
+                output = {"id": str(result.id), "name": result.name, "tags": result.tags or [], "priority": result.priority}
 
         elif req.capability == "rule_list":
             from app.db.models import Rule
@@ -480,6 +517,15 @@ async def invoke_tool(req: ToolInvokeRequest):
             output = await analyze_intent_for_retrieval(
                 task=inp.get("task", ""),
                 instructions=instructions,
+            )
+
+        elif req.capability == "skill_run":
+            from app.services.resolve_service import resolve_task
+            output = await resolve_task(
+                task=inp.get("task", ""),
+                user_id=user_id,
+                hint_tags=inp.get("hint_tags", []),
+                role=inp.get("role"),
             )
 
         else:

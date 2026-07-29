@@ -1,0 +1,217 @@
+﻿<div x-data="agentsPage()" x-init="init()">
+<div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Agent 管理</h1>
+        <p class="text-gray-400 text-sm mt-1">Instructions + Skills + Rules + Knowledge 的组合体</p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="showTemplateModal=true" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm transition"><i class="fas fa-copy mr-1"></i>从模板创建</button>
+        <button @click="showCreateModal=true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-plus mr-2"></i>创建 Agent</button>
+       
+</div>
+</div>
+
+<div class="grid grid-cols-4 gap-3 mb-6">
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">Agent 总数</div><div class="text-xl font-bold text-white" x-text="stats.total||0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">全局模板</div><div class="text-xl font-bold text-purple-400" x-text="stats.by_scope?.global||0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">个人</div><div class="text-xl font-bold text-blue-400" x-text="stats.by_scope?.personal||0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">项目</div><div class="text-xl font-bold text-green-400" x-text="stats.by_scope?.project||0"></div></div>
+    </div>
+
+    <div class="flex gap-3 mb-4">
+      <div class="flex-1 relative">
+        <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+        <input type="text" x-model="searchQuery" @input.debounce.300ms="loadAgents()" placeholder="搜索 Agent..." class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+      </div>
+      <select x-model="scopeFilter" @change="loadAgents()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
+        <option value="">全部</option>
+        <option value="personal">我的 Agent</option>
+        <option value="global">全局模板</option>
+        <option value="project">项目</option>
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <template x-for="agent in agents" :key="agent.id">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewAgent(agent)">
+          <div class="flex items-start gap-3 mb-3">
+            <span class="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-robot text-indigo-400"></i></span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="font-semibold text-white truncate" x-text="agent.name"></h3>
+                <span class="px-1.5 py-0.5 text-xs rounded" :class="agent.is_template?'bg-purple-900/50 text-purple-300':'bg-blue-900/50 text-blue-300'" x-text="agent.is_template?'模板':'个人'"></span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5" x-text="agent.role||'无角色'"></p>
+            </div>
+          </div>
+          <p class="text-sm text-gray-400 line-clamp-2" x-text="agent.instructions?.substring(0,120)||'无 Instructions'"></p>
+        </div>
+      </template>
+    </div>
+    <div x-show="agents.length===0&&!loading" class="text-center py-16 text-gray-500"><i class="fas fa-robot text-5xl text-gray-700 mb-4"></i><p>暂无 Agent</p></div>
+
+  <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-white mb-4">创建 Agent</h2>
+      <div class="space-y-4">
+        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">角色</label><input type="text" x-model="form.role" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="如：全栈工程师、前端专家"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">Instructions</label><textarea x-model="form.instructions" rows="8" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder="定义 Agent 的角色和行为准则..."></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">作用域</label><select x-model="form.scope" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="personal">个人</option><option value="project">项目</option><option value="global">全局</option></select></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6"><button @click="showCreateModal=false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button><button @click="createAgent()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">创建</button></div>
+    </div>
+  </div>
+
+  <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center gap-3"><i class="fas fa-robot text-indigo-400"></i><h2 class="text-xl font-semibold text-white" x-text="detail?.name"></h2><span class="px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-300" x-text="detail?.role||'无角色'"></span></div>
+        <button @click="showDetailModal=false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex gap-4 border-b border-gray-700 mb-4">
+          <button @click="detailTab='info'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='info'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">信息</button>
+          <button @click="detailTab='instructions'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='instructions'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">Instructions</button>
+          <button @click="detailTab='skills'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='skills'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">技能 <span x-show="detail?.skills?.length" class="ml-1 text-xs text-gray-500" x-text="detail?.skills?.length"></span></button>
+          <button @click="detailTab='rules'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='rules'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">规则 <span x-show="detail?.rules?.length" class="ml-1 text-xs text-gray-500" x-text="detail?.rules?.length"></span></button>
+          <button @click="detailTab='knowledge'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='knowledge'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">知识库 <span x-show="detail?.knowledge_bases?.length" class="ml-1 text-xs text-gray-500" x-text="detail?.knowledge_bases?.length"></span></button>
+        </div>
+
+        <div x-show="detailTab==='info'" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div><h3 class="text-sm text-gray-400 mb-1">名称</h3><p class="text-white" x-text="detail?.name"></p></div>
+            <div><h3 class="text-sm text-gray-400 mb-1">角色</h3><p class="text-white" x-text="detail?.role||'无'"></p></div>
+            <div><h3 class="text-sm text-gray-400 mb-1">作用域</h3><p class="text-white capitalize" x-text="detail?.scope"></p></div>
+            <div><h3 class="text-sm text-gray-400 mb-1">模板</h3><p class="text-white" x-text="detail?.is_template?'是':'否'"></p></div>
+          </div>
+        </div>
+
+        <div x-show="detailTab==='instructions'">
+          <textarea x-model="detail.instructions" rows="10" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm text-green-400 whitespace-pre-wrap font-mono"></textarea>
+          <button @click="saveInstructions()" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">保存 Instructions</button>
+        </div>
+
+        <div x-show="detailTab==='skills'">
+          <div class="flex justify-end mb-3">
+            <button @click="showLinkSkillModal=true" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-xs transition"><i class="fas fa-plus mr-1"></i>添加技能</button>
+          </div>
+          <template x-for="s in detail?.skills||[]" :key="s.id"><div class="flex items-center justify-between bg-gray-900 rounded-lg p-3 mb-2"><div class="flex items-center gap-3"><i class="fas fa-bolt text-yellow-500"></i><span class="text-white text-sm" x-text="s.name"></span><span class="text-xs text-gray-500" x-text="s.category||''"></span></div><button @click="unlinkSkill(s)" class="text-gray-500 hover:text-red-400 text-xs"><i class="fas fa-times"></i></button></div></template>
+          <div x-show="!(detail?.skills||[]).length" class="text-gray-500 text-sm py-8 text-center">无关联技能，点击"添加技能"关联</div>
+        </div>
+
+        <div x-show="detailTab==='rules'">
+          <div class="flex justify-end mb-3">
+            <button @click="showLinkRuleModal=true" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-xs transition"><i class="fas fa-plus mr-1"></i>添加规则</button>
+          </div>
+          <template x-for="r in detail?.rules||[]" :key="r.id"><div class="flex items-center justify-between bg-gray-900 rounded-lg p-3 mb-2"><div class="flex items-center gap-3"><i class="fas fa-shield-alt text-indigo-400"></i><span class="text-white text-sm" x-text="r.name"></span><span class="text-xs text-gray-500" x-text="r.severity||''"></span></div><button @click="unlinkRule(r)" class="text-gray-500 hover:text-red-400 text-xs"><i class="fas fa-times"></i></button></div></template>
+          <div x-show="!(detail?.rules||[]).length" class="text-gray-500 text-sm py-8 text-center">无关联规则，点击"添加规则"关联</div>
+        </div>
+
+        <div x-show="detailTab==='knowledge'">
+          <div class="flex justify-end mb-3">
+            <button @click="showLinkKbModal=true" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-xs transition"><i class="fas fa-plus mr-1"></i>添加知识库</button>
+          </div>
+          <template x-for="kb in detail?.knowledge_bases||[]" :key="kb.id"><div class="flex items-center justify-between bg-gray-900 rounded-lg p-3 mb-2"><div class="flex items-center gap-3"><i class="fas fa-database text-green-400"></i><span class="text-white text-sm" x-text="kb.name"></span><span class="text-xs text-gray-500" x-text="kb.document_count?kb.document_count+' 篇文档':''"></span></div><button @click="unlinkKb(kb)" class="text-gray-500 hover:text-red-400 text-xs"><i class="fas fa-times"></i></button></div></template>
+          <div x-show="!(detail?.knowledge_bases||[]).length" class="text-gray-500 text-sm py-8 text-center">无关联知识库，点击"添加知识库"关联</div>
+        </div>
+      </div>
+      <div class="flex justify-between px-6 py-4 border-t border-gray-700">
+        <button @click="deleteAgent(detail)" class="text-red-400 hover:text-red-300 text-sm"><i class="fas fa-trash mr-1"></i>删除</button>
+        <button @click="showDetailModal=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Link Skill Modal -->
+  <div x-show="showLinkSkillModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-4">添加技能</h2>
+      <div class="space-y-2">
+        <template x-for="s in availableSkills" :key="s.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="linkSkill(s)">
+            <div class="font-medium text-white text-sm" x-text="s.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="s.description||s.content?.substring(0,60)||''"></div>
+          </div>
+        </template>
+        <div x-show="availableSkills.length===0" class="text-gray-500 text-sm py-8 text-center">暂无可用技能</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showLinkSkillModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <!-- Link Rule Modal -->
+  <div x-show="showLinkRuleModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-4">添加规则</h2>
+      <div class="space-y-2">
+        <template x-for="r in availableRules" :key="r.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="linkRule(r)">
+            <div class="flex items-center gap-2"><span class="font-medium text-white text-sm" x-text="r.name"></span><span class="text-xs px-1.5 py-0.5 rounded" :class="r.severity==='critical'?'bg-red-900/50 text-red-300':r.severity==='high'?'bg-orange-900/50 text-orange-300':'bg-gray-700 text-gray-400'" x-text="r.severity"></span></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="r.description||r.content?.substring(0,60)||''"></div>
+          </div>
+        </template>
+        <div x-show="availableRules.length===0" class="text-gray-500 text-sm py-8 text-center">暂无可用规则</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showLinkRuleModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <!-- Link Knowledge Base Modal -->
+  <div x-show="showLinkKbModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[70vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-white mb-4">添加知识库</h2>
+      <div class="space-y-2">
+        <template x-for="kb in availableKbs" :key="kb.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="linkKb(kb)">
+            <div class="font-medium text-white text-sm" x-text="kb.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="kb.description||kb.document_count+' 篇文档'"></div>
+          </div>
+        </template>
+        <div x-show="availableKbs.length===0" class="text-gray-500 text-sm py-8 text-center">暂无可用知识库</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showLinkKbModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+  <div x-show="showTemplateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6">
+      <h2 class="text-xl font-bold text-white mb-4">从模板创建</h2>
+      <div class="space-y-2">
+        <template x-for="t in templates" :key="t.id">
+          <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 cursor-pointer transition" @click="createFromTemplate(t)">
+            <div class="font-medium text-white text-sm" x-text="t.name"></div>
+            <div class="text-xs text-gray-400 mt-1" x-text="t.role||t.instructions?.substring(0,80)"></div>
+          </div>
+        </template>
+        <div x-show="templates.length===0" class="text-gray-500 text-sm py-8 text-center">暂无模板</div>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showTemplateModal=false" class="text-gray-400 hover:text-white text-sm">取消</button></div>
+    </div>
+  </div>
+
+<script>window.agentsPage=function agentsPage() {
+  return { agents:[], templates:[], searchQuery:'', scopeFilter:'', loading:false, showCreateModal:false, showDetailModal:false, showTemplateModal:false, showLinkSkillModal:false, showLinkRuleModal:false, showLinkKbModal:false,
+    detail:null, detailTab:'info', stats:{},
+    availableSkills:[], availableRules:[], availableKbs:[],
+    form:{name:'',role:'',instructions:'',scope:'personal'},
+    async init(){await Promise.all([this.loadAgents(),this.loadStats(),this.loadTemplates()]);if(window.location.search.includes('templates=1'))this.showTemplateModal=true},
+    async loadAgents(){this.loading=true;try{const p=new URLSearchParams({scope:this.scopeFilter,limit:'100'});if(this.searchQuery)p.set('search',this.searchQuery);const r=await fetch(`/api/agents/list?${p}`);if(r.ok)this.agents=(await r.json()).items||[]}finally{this.loading=false}},
+    async loadStats(){try{const r=await fetch('/api/agents/stats');if(r.ok)this.stats=await r.json()}catch(e){}},
+    async createAgent(){try{const r=await fetch('/api/agents/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...this.form})});if(r.ok){this.showCreateModal=false;this.form={name:'',role:'',instructions:'',scope:'personal'};await this.loadAgents();await this.loadStats()}}catch(e){}},
+    async viewAgent(a){try{const r=await fetch(`/api/agents/${a.id}`);if(r.ok){this.detail=await r.json();this.showDetailModal=true;this.detailTab='info'}}catch(e){}},
+    async deleteAgent(a){if(!a||!confirm('删除 Agent「'+a.name+'」？'))return;try{await fetch(`/api/agents/${a.id}`,{method:'DELETE'});this.showDetailModal=false;await this.loadAgents();await this.loadStats()}catch(e){}},
+    async loadTemplates(){try{const r=await fetch('/api/agents/templates/list');if(r.ok)this.templates=(await r.json()).items||[]}catch(e){}},
+    async createFromTemplate(t){try{const r=await fetch(`/api/agents/from-template/${t.id}?name=${encodeURIComponent(t.name+'(副本)')}`,{method:'POST'});if(r.ok){this.showTemplateModal=false;await this.loadAgents();await this.loadStats()}}catch(e){}},
+    async loadAvailableSkills(){try{const r=await fetch('/api/skills/list?scope=personal&limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.skills||[]).map(s=>s.id);this.availableSkills=(d.items||[]).filter(s=>!linkedIds.includes(s.id))}}catch(e){}},
+    async loadAvailableRules(){try{const r=await fetch('/api/rules/list?scope=personal&limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.rules||[]).map(r=>r.id);this.availableRules=(d.items||[]).filter(r=>!linkedIds.includes(r.id))}}catch(e){}},
+    async loadAvailableKbs(){try{const r=await fetch('/api/knowledge/bases?limit=100');if(r.ok){const d=await r.json();const linkedIds=(this.detail?.knowledge_bases||[]).map(k=>k.id);this.availableKbs=(d.items||[]).filter(k=>!linkedIds.includes(k.id))}}catch(e){}},
+    async linkSkill(s){try{const r=await fetch(`/api/agents/${this.detail.id}/link-skill?skill_id=${s.id}`,{method:'POST'});if(r.ok){this.showLinkSkillModal=false;await this.viewAgent(this.detail);await this.loadAvailableSkills()}}catch(e){}},
+    async unlinkSkill(s){if(!confirm('解绑技能「'+s.name+'」？'))return;try{const r=await fetch(`/api/agents/${this.detail.id}/unlink-skill?skill_id=${s.id}`,{method:'POST'});if(r.ok){await this.viewAgent(this.detail);await this.loadAvailableSkills()}}catch(e){}},
+    async linkRule(r){try{const res=await fetch(`/api/agents/${this.detail.id}/link-rule?rule_id=${r.id}`,{method:'POST'});if(res.ok){this.showLinkRuleModal=false;await this.viewAgent(this.detail);await this.loadAvailableRules()}}catch(e){}},
+    async unlinkRule(r){if(!confirm('解绑规则「'+r.name+'」？'))return;try{const res=await fetch(`/api/agents/${this.detail.id}/unlink-rule?rule_id=${r.id}`,{method:'POST'});if(res.ok){await this.viewAgent(this.detail);await this.loadAvailableRules()}}catch(e){}},
+    async linkKb(kb){try{const r=await fetch(`/api/agents/${this.detail.id}/link-knowledge?knowledge_base_id=${kb.id}`,{method:'POST'});if(r.ok){this.showLinkKbModal=false;await this.viewAgent(this.detail);await this.loadAvailableKbs()}}catch(e){}},
+    async unlinkKb(kb){if(!confirm('解绑知识库「'+kb.name+'」？'))return;try{const r=await fetch(`/api/agents/${this.detail.id}/unlink-knowledge?knowledge_base_id=${kb.id}`,{method:'POST'});if(r.ok){await this.viewAgent(this.detail);await this.loadAvailableKbs()}}catch(e){}},
+    async saveInstructions(){try{const r=await fetch(`/api/agents/${this.detail.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({instructions:this.detail.instructions})});if(r.ok){alert('Instructions 已保存')}}catch(e){alert('保存失败')}}
+  };
+}</script>

@@ -1,0 +1,263 @@
+# AIDP 权限配置文件
+# 版本: 1.0
+# 说明: 定义系统中所有的权限点
+
+version: "1.0"
+schema_version: "1.0"
+
+# ------------------------------
+# 权限定义
+# ------------------------------
+permissions:
+  
+  # ====================
+  # 项目权限
+  # ====================
+  project:
+    view:
+      description: "查看项目"
+      default_roles: [admin, editor, viewer]
+    
+    create:
+      description: "创建项目"
+      default_roles: [admin, editor]
+
+    write:
+      description: "编辑项目"
+      default_roles: [admin, editor]
+    
+    delete:
+      description: "删除项目"
+      default_roles: [admin]
+    
+    admin:
+      description: "管理项目（成员、设置）"
+      default_roles: [admin, editor]
+      includes: [project:view, project:create, project:write]
+  
+  # ====================
+  # 知识库权限
+  # ====================
+  knowledge:
+    read:
+      description: "读取文档"
+      default_roles: [admin, editor, viewer]
+    
+    write:
+      description: "创建/编辑文档"
+      default_roles: [admin, editor]
+    
+    delete:
+      description: "删除文档"
+      default_roles: [admin, editor]
+    
+    admin:
+      description: "管理知识库设置"
+      default_roles: [admin]
+  
+  # ====================
+  # 记忆权限
+  # ====================
+  memory:
+    read:
+      description: "读取记忆"
+      default_roles: [admin, editor, viewer]
+    
+    write:
+      description: "创建/编辑记忆"
+      default_roles: [admin, editor]
+    
+    delete:
+      description: "删除记忆"
+      default_roles: [admin, editor]
+    
+    admin:
+      description: "管理记忆设置"
+      default_roles: [admin]
+  
+  # ====================
+  # 代码资产权限
+  # ====================
+  asset:
+    read:
+      description: "读取资产"
+      default_roles: [admin, editor, viewer]
+    
+    write:
+      description: "创建/编辑资产"
+      default_roles: [admin, editor]
+    
+    delete:
+      description: "删除资产"
+      default_roles: [admin]
+  
+  # ====================
+  # 技能权限（三层）
+  # ====================
+  skills:
+    read:
+      global:
+        description: "读取全局技能"
+        default_roles: [admin]
+      
+      personal:
+        description: "读取个人技能"
+        default_roles: [admin, editor, viewer]
+      
+      project:
+        description: "读取项目技能"
+        default_roles: [admin, editor, viewer]
+    
+    write:
+      personal:
+        description: "写入个人技能"
+        default_roles: [admin, editor, viewer]
+      
+      project:
+        description: "写入项目技能"
+        default_roles: [admin, editor]
+    
+    admin:
+      global:
+        description: "管理全局技能"
+        default_roles: [admin]
+      
+      project:
+        description: "管理项目技能"
+        default_roles: [admin]
+  
+  # ====================
+  # 开发工具权限
+  # ====================
+  sandbox:
+    execute:
+      description: "执行沙箱代码"
+      default_roles: [admin, editor]
+  
+  quality:
+    check:
+      description: "运行质量检查"
+      default_roles: [admin, editor, viewer]
+  
+  # ====================
+  # 管理员权限
+  # ====================
+  admin:
+    users:
+      description: "管理用户"
+      default_roles: [admin]
+    
+    projects:
+      description: "管理所有项目"
+      default_roles: [admin]
+    
+    skills:
+      description: "管理全局技能"
+      default_roles: [admin]
+    
+    audit:
+      description: "查看审计日志"
+      default_roles: [admin]
+    
+    settings:
+      description: "系统设置"
+      default_roles: [admin]
+
+# ------------------------------
+# 角色定义
+# ------------------------------
+roles:
+  # 系统角色
+  system:
+    admin:
+      name: "系统管理员"
+      description: "拥有所有权限"
+      permissions: ["*"]
+    
+    user:
+      name: "普通用户"
+      description: "可查看全局技能、规则、文档；只读权限"
+      permissions:
+        - project:view
+        - project:create
+        - knowledge:read
+        - memory:read
+        - skills:read:global
+        - skills:read:personal
+        - quality:check
+    
+    guest:
+      name: "访客"
+      description: "只读访问"
+      permissions:
+        - project:view
+        - knowledge:read
+  
+  # 项目角色
+  project:
+    admin:
+      name: "项目管理员"
+      description: "管理项目成员和设置"
+      permissions:
+        - project:admin
+        - knowledge:read
+        - knowledge:write
+        - knowledge:delete
+        - memory:read
+        - memory:write
+        - memory:delete
+        - asset:read
+        - asset:write
+        - asset:delete
+        - skills:read:project
+        - skills:write:project
+        - sandbox:execute
+        - quality:check
+    
+    editor:
+      name: "编辑者"
+      description: "可以创建和编辑内容"
+      permissions:
+        - project:view
+        - knowledge:read
+        - knowledge:write
+        - knowledge:delete
+        - memory:read
+        - memory:write
+        - memory:delete
+        - asset:read
+        - asset:write
+        - skills:read:project
+        - sandbox:execute
+        - quality:check
+    
+    viewer:
+      name: "查看者"
+      description: "只读访问"
+      permissions:
+        - project:view
+        - knowledge:read
+        - memory:read
+        - asset:read
+        - skills:read:project
+        - quality:check
+
+# ------------------------------
+# 权限检查规则
+# ------------------------------
+rules:
+  # 系统管理员拥有所有权限
+  admin_override: true
+  
+  # 项目创建者自动成为管理员
+  creator_is_admin: true
+  
+  # 权限继承
+  inheritance:
+    project:admin:
+      - project:view
+      - project:write
+    knowledge:write:
+      - knowledge:read
+    memory:write:
+      - memory:read

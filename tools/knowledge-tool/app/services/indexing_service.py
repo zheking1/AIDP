@@ -11,6 +11,8 @@ from app.parser.plain_text_parser import PlainTextParser
 from app.chunk.markdown_chunker import MarkdownChunker
 from app.chunk.base import ChunkingOptions
 from app.embedding.mock_provider import MockEmbeddingProvider
+from app.embedding.openai_provider import OpenAIEmbeddingProvider
+from app.embedding.local_provider import LocalEmbeddingProvider
 from app.storage.local_storage import LocalObjectStorage
 from app.config import settings
 from app.schemas.document import IndexJobInfo
@@ -19,8 +21,27 @@ from app.schemas.document import IndexJobInfo
 markdown_parser = MarkdownParser()
 plain_text_parser = PlainTextParser()
 markdown_chunker = MarkdownChunker()
-embedding_provider = MockEmbeddingProvider(dimension=settings.EMBEDDING_DIMENSION)
 storage = LocalObjectStorage(root_path=settings.STORAGE_LOCAL_ROOT)
+
+
+def _get_embedding_provider():
+    from app.config import settings
+    provider = settings.EMBEDDING_PROVIDER
+    if provider == "openai":
+        return OpenAIEmbeddingProvider(
+            model=settings.OPENAI_EMBEDDING_MODEL,
+            api_key=settings.OPENAI_API_KEY or None,
+            base_url=settings.OPENAI_BASE_URL or None,
+        )
+    elif provider == "local":
+        return LocalEmbeddingProvider(
+            model_name=settings.LOCAL_EMBEDDING_MODEL,
+        )
+    else:
+        return MockEmbeddingProvider(
+            dimension=settings.EMBEDDING_DIMENSION,
+            model=settings.EMBEDDING_MODEL,
+        )
 
 
 async def create_index_job(
@@ -117,8 +138,14 @@ async def run_index_job(db: AsyncSession, job_id: str) -> IndexJobInfo:
         for old_chunk in old_chunks_result.scalars().all():
             await db.delete(old_chunk)
 
+        provider_name = settings.EMBEDDING_PROVIDER
+        embedding_provider = _get_embedding_provider()
+
         for candidate in chunk_candidates:
-            emb = embedding_provider.embed(candidate.content)
+            if provider_name == "openai":
+                emb = (await embedding_provider.embed_batch([candidate.content]))[0]
+            else:
+                emb = embedding_provider.embed(candidate.content)
             chunk = KtDocumentChunk(
                 document_id=doc.id,
                 workspace_id=doc.workspace_id,

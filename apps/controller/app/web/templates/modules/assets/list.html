@@ -1,0 +1,143 @@
+﻿<div x-data="assetsPage()" x-init="init()">
+    <div class="flex items-center justify-between pt-5 pb-4 border-b border-gray-700/50">
+        <div>
+            <h1 class="text-2xl font-bold text-white">代码资产</h1>
+            <p class="text-gray-400 text-sm mt-1">管理代码片段、模板和配置</p>
+        </div>
+        <button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+            <i class="fas fa-plus"></i>创建资产
+        </button>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 pb-4">
+        <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4"><div class="text-xs text-gray-500">总资产</div><div class="text-2xl font-bold text-white" x-text="stats.total || 0"></div></div>
+        <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4"><div class="text-xs text-gray-500">代码片段</div><div class="text-2xl font-bold text-blue-400" x-text="stats.by_type?.snippet || 0"></div></div>
+        <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4"><div class="text-xs text-gray-500">模板</div><div class="text-2xl font-bold text-purple-400" x-text="stats.by_type?.template || 0"></div></div>
+        <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4"><div class="text-xs text-gray-500">配置</div><div class="text-2xl font-bold text-green-400" x-text="stats.by_type?.config || 0"></div></div>
+    </div>
+
+    <div class="flex gap-3 pb-4">
+        <div class="flex-1 relative">
+            <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+            <input type="text" x-model="searchQuery" @input.debounce.300ms="loadAssets()" placeholder="搜索资产..."
+                   class="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <select x-model="filterType" @change="loadAssets()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+            <option value="">全部类型</option>
+            <option value="snippet">代码片段</option>
+            <option value="template">模板</option>
+            <option value="config">配置</option>
+            <option value="component">组件</option>
+            <option value="utility">工具</option>
+        </select>
+    </div>
+
+    <div class="space-y-2 pb-6">
+        <template x-for="asset in assets" :key="asset.id">
+            <div class="bg-gray-800/40 rounded-xl border border-gray-700/30 p-4 hover:border-indigo-500/40 cursor-pointer transition" @click="viewAsset(asset)">
+                <div class="flex items-center gap-2 mb-1">
+                    <h3 class="font-semibold text-white" x-text="asset.title"></h3>
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-500/10 text-indigo-400" x-text="asset.asset_type"></span>
+                    <span x-show="asset.language" class="text-xs text-gray-500" x-text="asset.language"></span>
+                </div>
+                <p class="text-sm text-gray-400 line-clamp-2" x-text="asset.description || '无描述'"></p>
+                <div class="flex gap-1 mt-2"><template x-for="tag in (asset.tags || []).slice(0,5)" :key="tag"><span class="px-1.5 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span></template></div>
+            </div>
+        </template>
+        <div x-show="assets.length === 0 && !loading" class="text-center py-12 text-gray-500"><i class="fas fa-archive text-4xl text-gray-700 mb-4"></i><p>暂无资产</p></div>
+        <div x-show="loading" class="flex justify-center py-12"><div class="loading-spinner w-8 h-8"></div></div>
+    </div>
+
+    <!-- Create Modal -->
+    <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-lg mx-4 p-6">
+            <h2 class="text-xl font-bold text-white mb-4">创建资产</h2>
+            <div class="space-y-4">
+                <div><label class="block text-sm text-gray-400 mb-1">标题 <span class="text-red-500">*</span></label><input type="text" x-model="newAsset.title" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block text-sm text-gray-400 mb-1">类型</label><select x-model="newAsset.asset_type" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="snippet">代码片段</option><option value="template">模板</option><option value="config">配置</option><option value="component">组件</option><option value="utility">工具</option></select></div>
+                    <div><label class="block text-sm text-gray-400 mb-1">语言</label><input type="text" x-model="newAsset.language" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="python, js..."></div>
+                </div>
+                <div><label class="block text-sm text-gray-400 mb-1">内容 <span class="text-red-500">*</span></label><textarea x-model="newAsset.content" rows="6" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
+                <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="newAsset.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
+                <button @click="createAsset()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-xl font-semibold text-white" x-text="selectedAsset?.title"></h2>
+                <div class="flex items-center gap-2">
+                    <button @click="copyContent()" class="text-gray-400 hover:text-green-400 transition text-sm" title="复制内容"><i class="far fa-copy"></i></button>
+                    <button @click="showDetailModal = false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-500/10 text-indigo-400" x-text="selectedAsset?.asset_type"></span>
+                    <span x-show="selectedAsset?.language" class="text-xs text-gray-500" x-text="selectedAsset?.language"></span>
+                    <span x-show="selectedAsset?.created_at" class="text-xs text-gray-600" x-text="'创建: '+selectedAsset?.created_at?.substring(0,10)"></span>
+                    <span x-show="selectedAsset?.description" class="text-sm text-gray-400 ml-2" x-text="selectedAsset?.description"></span>
+                </div>
+                <div class="relative" x-show="selectedAsset?.content">
+                    <div class="absolute top-2 right-2 z-10">
+                        <button @click="copyContent()" class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded">复制</button>
+                    </div>
+                    <pre class="bg-gray-900 p-4 rounded-lg text-sm text-gray-200 overflow-x-auto whitespace-pre-wrap font-mono" x-text="selectedAsset?.content"></pre>
+                </div>
+                <div x-show="(selectedAsset?.tags || []).length > 0">
+                    <h3 class="text-sm text-gray-400 mb-1">标签</h3>
+                    <div class="flex gap-1 flex-wrap"><template x-for="tag in selectedAsset?.tags || []" :key="tag"><span class="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span></template></div>
+                </div>
+            </div>
+            <div class="flex justify-between px-6 py-4 border-t border-gray-700">
+                <button @click="deleteAsset(selectedAsset)" class="text-red-400 hover:text-red-300 text-sm"><i class="fas fa-trash mr-1"></i>删除</button>
+                <button @click="showDetailModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+            </div>
+        </div>
+    </div>
+<style>
+.loading-spinner { border: 2px solid #374151; border-top: 2px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+<script>window.assetsPage=function assetsPage() {
+    return {
+        assets: [], searchQuery: '', filterType: '', loading: false,
+        showCreateModal: false, showDetailModal: false,
+        selectedAsset: null, stats: { total: 0, by_type: {}, by_language: {} },
+        newAsset: { title: '', description: '', asset_type: 'snippet', language: '', content: '' },
+        async init() { await this.loadAssets(); await this.loadStats(); },
+        async loadAssets() {
+            this.loading = true;
+            try {
+                const p = new URLSearchParams({ limit: '50' });
+                if (this.searchQuery) p.set('search', this.searchQuery);
+                if (this.filterType) p.set('asset_type', this.filterType);
+                const r = await fetch('/api/assets/list?' + p);
+                if (r.ok) { const d = await r.json(); this.assets = d.items || []; }
+            } finally { this.loading = false; }
+        },
+        async loadStats() { try { const r = await fetch('/api/assets/stats'); if (r.ok) this.stats = await r.json(); } catch(e) {} },
+        async createAsset() {
+            try {
+                const r = await fetch('/api/assets/create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(this.newAsset) });
+                if (r.ok) { this.showCreateModal = false; this.newAsset = { title:'', description:'', asset_type:'snippet', language:'', content:'' }; await this.loadAssets(); await this.loadStats(); }
+            } catch(e) { console.error(e); }
+        },
+        async viewAsset(asset) { try { const r = await fetch('/api/assets/'+asset.id); if (r.ok) { this.selectedAsset = await r.json(); this.showDetailModal = true; } } catch(e) {} },
+        copyContent() {
+            if (this.selectedAsset?.content) {
+                navigator.clipboard.writeText(this.selectedAsset.content).then(() => {
+                    alert('已复制到剪贴板')
+                }).catch(() => {})
+            }
+        },
+        async deleteAsset(asset) { if (!asset || !confirm('确定删除？')) return; try { const r = await fetch('/api/assets/'+asset.id, { method:'DELETE' }); if (r.ok) { this.showDetailModal = false; await this.loadAssets(); await this.loadStats(); } } catch(e) {} }
+    };
+}</script>

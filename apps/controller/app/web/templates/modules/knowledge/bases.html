@@ -1,0 +1,431 @@
+﻿<!-- 统一页面模板 - 知识库管理 -->
+<div x-data="knowledgeBasesPage()" x-init="init()">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-white tracking-tight">知识库</h1>
+            <p class="text-sm text-gray-400 mt-0.5">管理文档和知识资源</p>
+        </div>
+        <div class="flex gap-2">
+            <button @click="showWebImport = true" 
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow-emerald-500/25">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                从网页导入
+            </button>
+            <button @click="showCreateModal = true" 
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow-indigo-500/25">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                创建知识库
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="pt-5 pb-3">
+        <div class="grid grid-cols-4 gap-4">
+            <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4 hover:border-indigo-500/30 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">知识库</p>
+                        <p class="text-2xl font-bold text-white mt-1 tabular-nums" x-text="stats.total_bases||'0'">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4 hover:border-blue-500/30 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">文档</p>
+                        <p class="text-2xl font-bold text-white mt-1 tabular-nums" x-text="stats.total_documents||'0'">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4 hover:border-yellow-500/30 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">待处理</p>
+                        <p class="text-2xl font-bold text-yellow-400 mt-1 tabular-nums" x-text="stats.pending||'0'">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-800/60 rounded-xl border border-gray-700/50 p-4 hover:border-green-500/30 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">搜索</p>
+                        <p class="text-2xl font-bold text-green-400 mt-1 tabular-nums" x-text="stats.search_count||'0'">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search + Level Filter -->
+    <div class="py-3 flex gap-3">
+        <div class="flex-1 relative">
+            <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" x-model="searchQuery" @input.debounce.300ms="loadKnowledgeBases()"
+                   placeholder="搜索知识库..." 
+                   class="w-full pl-10 pr-4 py-2.5 bg-gray-800/60 border border-gray-700/50 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all">
+        </div>
+        <select x-model="levelFilter" @change="loadKnowledgeBases()"
+                class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+            <option value="">全部层级</option>
+            <option value="framework">框架文档</option>
+            <option value="template">模板项目</option>
+            <option value="project">实际项目</option>
+        </select>
+    </div>
+
+    <!-- ===== KB 列表（按层级分组） ===== -->
+    <div class="pb-6 flex-1 space-y-6">
+        <template x-for="group in groupedKnowledgeBases" :key="group.level">
+            <div>
+                <div class="flex items-center gap-2 mb-3">
+                    <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider" x-text="group.label"></h3>
+                    <span class="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full" x-text="group.items.length + ' 个'"></span>
+                </div>
+                <div class="space-y-1">
+                    <template x-for="kb in group.items" :key="kb.id">
+                        <div class="group flex items-center justify-between px-4 py-3 bg-gray-800/30 hover:bg-gray-800/60 rounded-xl border border-gray-700/20 hover:border-indigo-500/30 cursor-pointer transition-all duration-150"
+                             @click="viewKnowledgeBase(kb)">
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                <div class="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4.5 h-4.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-white truncate" x-text="kb.name"></p>
+                                    <p class="text-xs text-gray-500 truncate mt-0.5" x-text="kb.description || '暂无描述'"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0 ml-4" @click.stop>
+                                <div class="flex gap-1">
+                                    <template x-for="tech in (kb.tech_stack||[]).slice(0,3)" :key="tech">
+                                        <span class="text-xs bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded" x-text="tech"></span>
+                                    </template>
+                                </div>
+                                <span class="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded-md" x-text="kb.document_count + ' 文档'"></span>
+                                <button @click="editKnowledgeBase(kb)" class="text-gray-500 hover:text-indigo-400 transition p-1 opacity-0 group-hover:opacity-100" title="编辑"><i class="fas fa-edit text-xs"></i></button>
+                                <button @click="deleteKnowledgeBase(kb)" class="text-gray-500 hover:text-red-400 transition p-1 opacity-0 group-hover:opacity-100" title="删除"><i class="fas fa-trash text-xs"></i></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Empty -->
+        <div x-show="knowledgeBases.length === 0 && !loading"
+             class="flex flex-col items-center justify-center py-16 text-center">
+            <svg class="w-16 h-16 text-gray-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+            <p class="text-sm text-gray-500">还没有知识库</p>
+            <button @click="showCreateModal = true" class="mt-3 text-sm text-indigo-400 hover:text-indigo-300 transition-colors">创建第一个知识库 →</button>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="loading" class="flex items-center justify-center py-12">
+            <svg class="w-6 h-6 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            <span class="ml-2 text-sm text-gray-500">加载中...</span>
+        </div>
+    </div>
+
+    <!-- ===== Web Import Modal ===== -->
+    <div x-show="showWebImport" class="fixed inset-0 z-50 flex items-center justify-center" x-cloak>
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showWebImport = false"></div>
+        <div class="relative bg-gray-800 rounded-2xl border border-gray-700/60 shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-700/50">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-white">从网页导入</h2>
+                    <button @click="showWebImport = false" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1.5">文档 URL</label>
+                    <input type="url" x-model="importUrl" placeholder="https://example.com/docs/..."
+                           class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                </div>
+
+                <div x-show="importAnalysis !== null" class="space-y-3 p-4 bg-gray-900/40 rounded-xl border border-gray-700/30">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-check text-emerald-400 text-sm"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-white" x-text="importAnalysis?.title || ''"></p>
+                            <p class="text-xs text-gray-400 mt-0.5" x-text="importAnalysis?.description || ''"></p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                        <template x-for="tech in (importAnalysis?.tech_stack||[])" :key="tech">
+                            <span class="text-xs bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded" x-text="tech"></span>
+                        </template>
+                        <template x-for="domain in (importAnalysis?.domains||[])" :key="domain">
+                            <span class="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded" x-text="domain"></span>
+                        </template>
+                    </div>
+                    <p class="text-xs text-gray-500">建议名称: <span class="text-gray-300" x-text="importAnalysis?.suggested_name || ''"></span> · 层级: <span class="text-gray-300" x-text="importAnalysis?.suggested_level || ''"></span></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-900/30 border-t border-gray-700/50 flex items-center justify-end gap-3">
+                <button @click="showWebImport = false" 
+                        class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">取消</button>
+                <button @click="analyzeUrl()" :disabled="!importUrl || analyzing"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-50">
+                    <span x-text="analyzing ? '分析中...' : '分析预览'"></span>
+                </button>
+                <button @click="executeImport()" :disabled="!importAnalysis || importing"
+                        class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-all duration-150 shadow-sm hover:shadow-emerald-500/25 disabled:opacity-50">
+                    <span x-text="importing ? '导入中...' : '确认导入'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 创建/编辑模态框 ===== -->
+    <div x-show="showCreateModal || showEditModal" class="fixed inset-0 z-50 flex items-center justify-center" x-cloak>
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showCreateModal = false; showEditModal = false"></div>
+        <div class="relative bg-gray-800 rounded-2xl border border-gray-700/60 shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-5 border-b border-gray-700/50">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-white" x-text="showEditModal ? '编辑知识库' : '创建知识库'"></h2>
+                    <button @click="showCreateModal = false; showEditModal = false" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">名称 <span class="text-red-500">*</span></label>
+                        <input type="text" x-model="formKB.name" placeholder="输入知识库名称"
+                               class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">层级</label>
+                        <select x-model="formKB.kb_level"
+                                class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                            <option value="framework">框架文档</option>
+                            <option value="template">模板项目</option>
+                            <option value="project">实际项目</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1.5">描述</label>
+                    <textarea x-model="formKB.description" rows="2" placeholder="知识库描述（可选）"
+                              class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all resize-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">可见性</label>
+                        <select x-model="formKB.visibility"
+                                class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                            <option value="private">私有</option>
+                            <option value="team">团队</option>
+                            <option value="public">公开</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">父知识库</label>
+                        <select x-model="formKB.parent_id"
+                                class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                            <option value="">无（根节点）</option>
+                            <template x-for="kb in knowledgeBases" :key="kb.id">
+                                <option :value="kb.id" x-text="kb.name" x-show="kb.id !== formKB.id"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1.5">技术栈 <span class="text-xs text-gray-500">(逗号分隔)</span></label>
+                    <input type="text" x-model="formKB.techStackStr" placeholder="Java, Spring, Docker..."
+                           class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">领域 <span class="text-xs text-gray-500">(逗号分隔)</span></label>
+                        <input type="text" x-model="formKB.domainsStr" placeholder="api, auth, database..."
+                               class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">关键词 <span class="text-xs text-gray-500">(逗号分隔)</span></label>
+                        <input type="text" x-model="formKB.keywordsStr" placeholder="spring-boot, jwt..."
+                               class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">分块策略</label>
+                        <select x-model="formKB.chunking_strategy" 
+                                class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                            <option value="fixed">固定大小</option>
+                            <option value="semantic">语义分块</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1.5">分块大小</label>
+                        <input type="number" x-model.number="formKB.chunk_size" 
+                               class="w-full px-3.5 py-2.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-900/30 border-t border-gray-700/50 flex items-center justify-end gap-3">
+                <button @click="showCreateModal = false; showEditModal = false" 
+                        class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">取消</button>
+                <button @click="confirmForm()"
+                        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-xl transition-all duration-150 shadow-sm hover:shadow-indigo-500/25">
+                    <span x-text="showEditModal ? '保存修改' : '创建知识库'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+<script>window.knowledgeBasesPage=function(){
+  return {
+    knowledgeBases:[],searchQuery:'',levelFilter:'',showCreateModal:false,showEditModal:false,
+    showWebImport:false,loading:false,importing:false,analyzing:false,stats:{},
+    importUrl:'',importAnalysis:null,
+    newKB:{name:'',description:'',chunking_strategy:'fixed',chunk_size:500},
+    formKB:{id:null,name:'',description:'',kb_level:'framework',parent_id:'',visibility:'private',
+            techStackStr:'',domainsStr:'',keywordsStr:'',
+            chunking_strategy:'fixed',chunk_size:500,chunk_overlap:50},
+
+    get groupedKnowledgeBases(){
+      var byLevel={'framework':[],'template':[],'project':[]};
+      this.knowledgeBases.forEach(function(kb){
+        var lvl=kb.kb_level||'project';
+        if(!byLevel[lvl])byLevel[lvl]=[];
+        byLevel[lvl].push(kb);
+      });
+      var labels={'framework':'框架文档','template':'模板项目','project':'实际项目'};
+      var result=[];
+      for(var lvl of ['framework','template','project']){
+        if(byLevel[lvl]&&byLevel[lvl].length>0)
+          result.push({level:lvl,label:labels[lvl]||lvl,items:byLevel[lvl]});
+      }
+      return result;
+    },
+
+    async init(){await Promise.all([this.loadKnowledgeBases(),this.loadStats()])},
+
+    async loadKnowledgeBases(){
+      this.loading=true;
+      try{
+        var p=new URLSearchParams({limit:100});
+        if(this.searchQuery)p.set('search',this.searchQuery);
+        if(this.levelFilter)p.set('kb_level',this.levelFilter);
+        var r=await fetch('/api/knowledge/bases?'+p);
+        if(r.ok){var d=await r.json();this.knowledgeBases=d.items||[]}
+      }finally{this.loading=false}
+    },
+
+    async loadStats(){try{var r=await fetch('/api/knowledge/stats');if(r.ok)this.stats=await r.json()}catch(e){}},
+
+    async analyzeUrl(){
+      if(!this.importUrl)return;
+      this.analyzing=true;
+      this.importAnalysis=null;
+      try{
+        var r=await fetch('/api/knowledge/import-web/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({url:this.importUrl})});
+        if(r.ok)this.importAnalysis=await r.json();
+      }catch(e){console.error(e);alert('分析失败')}
+      finally{this.analyzing=false}
+    },
+
+    async executeImport(){
+      if(!this.importAnalysis || !this.importAnalysis.suggested_name)return;
+      this.importing=true;
+      try{
+        var r=await fetch('/api/knowledge/import-web/direct-import',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({url:this.importUrl,kb_name:this.importAnalysis.suggested_name,kb_level:this.importAnalysis.suggested_level,auto_detect:true})});
+        if(r.ok){
+          this.showWebImport=false;
+          this.importUrl='';
+          this.importAnalysis=null;
+          await this.loadKnowledgeBases();
+          await this.loadStats();
+        }else{alert('导入失败: '+r.status)}
+      }catch(e){console.error(e);alert('导入出错')}
+      finally{this.importing=false}
+    },
+
+    editKnowledgeBase(kb){
+      this.formKB={
+        id:kb.id,name:kb.name,description:kb.description||'',
+        kb_level:kb.kb_level||'project',
+        parent_id:kb.parent_id||'',
+        visibility:kb.visibility||'private',
+        techStackStr:(kb.tech_stack||[]).join(', '),
+        domainsStr:(kb.domains||[]).join(', '),
+        keywordsStr:(kb.keywords||[]).join(', '),
+        chunking_strategy:kb.chunking_strategy||'fixed',
+        chunk_size:kb.chunk_size||500,
+        chunk_overlap:kb.chunk_overlap||50
+      };
+      this.showEditModal=true;
+    },
+
+    async confirmForm(){
+      var body={
+        name:this.formKB.name,
+        description:this.formKB.description||null,
+        kb_level:this.formKB.kb_level,
+        parent_id:this.formKB.parent_id||null,
+        visibility:this.formKB.visibility,
+        tech_stack:this.formKB.techStackStr ? JSON.stringify(this.formKB.techStackStr.split(',').map(s=>s.trim()).filter(Boolean)) : '[]',
+        domains:this.formKB.domainsStr ? JSON.stringify(this.formKB.domainsStr.split(',').map(s=>s.trim()).filter(Boolean)) : '[]',
+        keywords:this.formKB.keywordsStr ? JSON.stringify(this.formKB.keywordsStr.split(',').map(s=>s.trim()).filter(Boolean)) : '[]',
+        chunking_strategy:this.formKB.chunking_strategy,
+        chunk_size:this.formKB.chunk_size,
+        chunk_overlap:this.formKB.chunk_overlap
+      };
+      if(this.showEditModal){
+        var r=await fetch('/api/knowledge/bases/'+this.formKB.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        if(r.ok){this.showEditModal=false;await this.loadKnowledgeBases();await this.loadStats()}
+      } else {
+        var r=await fetch('/api/knowledge/bases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        if(r.ok){this.showCreateModal=false;await this.loadKnowledgeBases();await this.loadStats()}
+      }
+    },
+
+    viewKnowledgeBase(kb){
+      var wsData=Alpine.$data(document.body);
+      if(wsData&&wsData.openTab){
+        wsData.openTab('kb-docs-'+kb.id,kb.name,'fas fa-file-alt','/knowledge/documents?base_id='+kb.id);
+      }else{
+        window.location.href='/knowledge/documents?base_id='+kb.id;
+      }
+    },
+
+    async deleteKnowledgeBase(kb){
+      if(!confirm('确定删除知识库「'+kb.name+'」？此操作不可撤销。'))return;
+      try{
+        var r=await fetch('/api/knowledge/bases/'+kb.id,{method:'DELETE'});
+        if(r.ok){
+          await this.loadKnowledgeBases();
+          await this.loadStats();
+        }else{
+          console.error('Delete failed:',r.status);
+          alert('删除失败: '+r.status);
+        }
+      }catch(e){console.error('Delete error:',e)}
+    }
+  }
+};</script>

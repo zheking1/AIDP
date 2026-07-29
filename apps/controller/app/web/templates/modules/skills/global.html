@@ -1,0 +1,498 @@
+﻿<div x-data="globalSkillsPage()" x-init="init()">
+<!-- Header -->
+<div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">全局技能库</h1>
+        <p class="text-gray-400 text-sm mt-1">系统级共享技能 · 由管理员维护</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-gray-500">共 <span x-text="stats.total" class="text-gray-300 font-medium"></span> 个技能</span>
+        {% if is_admin %}<button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fas fa-plus"></i>创建</button>{% endif %}
+    </div>
+</div>
+<!-- Stats Bar -->
+    <div class="grid grid-cols-4 gap-3 mb-6">
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+        <div class="text-xs text-gray-500">技能总数</div>
+        <div class="text-xl font-bold text-white" x-text="stats.total || 0"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+        <div class="text-xs text-gray-500">已审核</div>
+        <div class="text-xl font-bold text-green-400" x-text="stats.approved || 0"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+        <div class="text-xs text-gray-500">待审核</div>
+        <div class="text-xl font-bold text-yellow-400" x-text="stats.pending || 0"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+        <div class="text-xs text-gray-500">技能分组</div>
+        <div class="text-xl font-bold text-indigo-400" x-text="groupCount || 0"></div>
+      </div>
+    </div>
+
+    <!-- Group Tree + Skill Grid -->
+    <div class="flex gap-6">
+      <!-- Left: Group Tree -->
+      <div class="w-56 flex-shrink-0">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-700 text-sm font-medium text-white flex items-center justify-between">
+            <span><i class="fas fa-folder mr-2 text-indigo-400"></i>分组</span>
+            <div class="flex items-center gap-2">
+              <button @click="showGroupModal = true; groupForm = {name:'', parent_id:''}" class="text-indigo-400 hover:text-indigo-300 text-xs" title="新建分组"><i class="fas fa-plus"></i></button>
+              <button @click="loadGroups()" class="text-gray-500 hover:text-white text-xs" title="刷新"><i class="fas fa-sync"></i></button>
+            </div>
+          </div>
+          <div class="p-2 space-y-0.5">
+            <!-- All Skills button -->
+            <button @click="selectGroup('')" 
+                    class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition"
+                    :class="selectedGroup === '' ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-gray-700'">
+              <i class="fas fa-th-list w-4 text-center"></i>
+              <span class="flex-1 text-left">全部技能</span>
+              <span class="text-xs text-gray-500" x-text="stats.total || ''"></span>
+            </button>
+            
+            <!-- Root groups with expand -->
+            <template x-for="g in rootGroups" :key="g.id">
+              <div>
+                <div @click="selectGroup(g.id)" 
+                     class="flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition cursor-pointer group"
+                     :class="selectedGroup === g.id ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-gray-700'">
+                  <button @click.stop="toggleGroup(g.id)" class="p-0.5 hover:bg-gray-700 rounded">
+                    <i class="fas fa-chevron-right text-xs transition-transform" :class="{'rotate-90': expandedGroups.includes(g.id)}"></i>
+                  </button>
+                  <i class="fas fa-folder text-yellow-600 text-xs"></i>
+                  <span class="flex-1 truncate" x-text="g.name"></span>
+                  <span class="text-xs text-gray-500 bg-gray-700/50 px-1.5 py-0.5 rounded" x-text="getSkillCount(g.id)"></span>
+                  <button @click.stop="editGroup(g)" class="p-0.5 text-gray-500 hover:text-indigo-400 rounded opacity-0 group-hover:opacity-100"><i class="fas fa-pen text-xs"></i></button>
+                  <button @click.stop="deleteGroup(g)" class="p-0.5 text-gray-500 hover:text-red-400 rounded opacity-0 group-hover:opacity-100"><i class="fas fa-times text-xs"></i></button>
+                </div>
+                <!-- Children (shown when expanded) -->
+                <div x-show="expandedGroups.includes(g.id)" class="ml-4 border-l border-gray-700 pl-2 space-y-0.5">
+                  <template x-for="child in getChildren(g.id)" :key="child.id">
+                    <div @click="selectGroup(child.id)" 
+                         class="flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition cursor-pointer group"
+                         :class="selectedGroup === child.id ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-gray-700'">
+                      <span class="w-4"></span>
+                      <i class="fas fa-folder-open text-yellow-600 text-xs"></i>
+                      <span class="flex-1 truncate" x-text="child.name"></span>
+                      <span class="text-xs text-gray-500 bg-gray-700/50 px-1.5 py-0.5 rounded" x-text="getSkillCount(child.id)"></span>
+                      <button @click.stop="editGroup(child)" class="p-0.5 text-gray-500 hover:text-indigo-400 rounded"><i class="fas fa-pen text-xs"></i></button>
+                      <button @click.stop="deleteGroup(child)" class="p-0.5 text-gray-500 hover:text-red-400 rounded"><i class="fas fa-times text-xs"></i></button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Skills -->
+      <div class="flex-1 min-w-0">
+        <!-- Search Bar -->
+        <div class="flex gap-3 mb-4">
+          <div class="flex-1 relative">
+            <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+            <input type="text" x-model="searchQuery" @input.debounce.300ms="loadSkills()"
+                   placeholder="搜索技能名称、描述或标签..." 
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+          </div>
+          <select x-model="filterStatus" @change="loadSkills()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
+            <option value="">全部状态</option>
+            <option value="approved">已审核</option>
+            <option value="pending">待审核</option>
+          </select>
+        </div>
+
+        <!-- Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <template x-for="skill in skills" :key="skill.id">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewSkill(skill)">
+              <div class="flex items-start gap-3 mb-2">
+                <span class="w-9 h-9 bg-yellow-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <i class="fas fa-bolt text-yellow-500 text-sm"></i>
+                </span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-medium text-white truncate" x-text="skill.name"></h3>
+                    <span class="px-1.5 py-0.5 text-xs rounded flex-shrink-0"
+                          :class="skill.review_status === 'approved' ? 'bg-green-900/50 text-green-300' : 'bg-yellow-900/50 text-yellow-300'"
+                          x-text="skill.review_status === 'approved' ? '已审核' : '待审核'"></span>
+                  </div>
+                  <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                    <span>v<span x-text="skill.version"></span></span>
+                    <span>·</span>
+                    <span x-text="skill.source_type"></span>
+                    <span x-show="skill.sensitive" class="text-red-400">· 敏感</span>
+                  </div>
+                </div>
+              </div>
+              <p class="text-sm text-gray-400 line-clamp-2 mb-3" x-text="skill.description || '暂无描述'"></p>
+              <div class="flex items-center justify-between">
+                <div class="flex gap-1 flex-wrap">
+                  <template x-for="tag in ((skill && skill.tags) || []).slice(0, 3)" :key="tag">
+                    <span class="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span>
+                  </template>
+                  <span x-show="(skill.tags || []).length > 3" class="text-xs text-gray-500">+<span x-text="skill.tags.length - 3"></span></span>
+                </div>
+                <div class="flex gap-1">
+                  <span class="text-xs text-gray-600" x-text="skill.access_count + ' 次使用'"></span>
+                  {% if is_admin %}<button @click.stop="deleteSkill(skill)" class="text-gray-600 hover:text-red-400 transition p-0.5" title="删除"><i class="fas fa-trash text-xs"></i></button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div x-show="skills.length === 0 && !loading" class="text-center py-16">
+          <i class="fas fa-bolt text-5xl text-gray-700 mb-4"></i>
+          <p class="text-gray-500">暂无技能</p>
+</div>
+</div>
+    </div>
+
+  <!-- Detail Modal -->
+  <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center gap-3 min-w-0">
+          <i class="fas fa-bolt text-yellow-500 flex-shrink-0"></i>
+          <h2 class="text-xl font-semibold text-white truncate" x-text="detail?.name"></h2>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-purple-900/50 text-purple-300 flex-shrink-0">全局</span>
+          <span class="px-2 py-0.5 text-xs rounded-full flex-shrink-0"
+                :class="detail?.review_status === 'approved' ? 'bg-green-900/50 text-green-300' : 'bg-yellow-900/50 text-yellow-300'"
+                x-text="detail?.review_status === 'approved' ? '已审核' : '待审核'"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500">v<span x-text="detail?.version"></span></span>
+          <button @click="showDetailModal = false" class="text-gray-400 hover:text-white ml-2"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <!-- Tabs -->
+        <div class="flex gap-4 border-b border-gray-700 mb-4">
+          <button @click="detailTab = 'info'" class="pb-2 text-sm font-medium border-b-2 transition"
+                  :class="detailTab === 'info' ? 'text-indigo-400 border-indigo-400' : 'text-gray-500 border-transparent hover:text-gray-300'">基本信息</button>
+          <button @click="detailTab = 'instruction'" class="pb-2 text-sm font-medium border-b-2 transition"
+                  :class="detailTab === 'instruction' ? 'text-indigo-400 border-indigo-400' : 'text-gray-500 border-transparent hover:text-gray-300'">指令</button>
+          <button @click="detailTab = 'content'" class="pb-2 text-sm font-medium border-b-2 transition"
+                  :class="detailTab === 'content' ? 'text-indigo-400 border-indigo-400' : 'text-gray-500 border-transparent hover:text-gray-300'">脚本</button>
+          <button @click="detailTab = 'files'" class="pb-2 text-sm font-medium border-b-2 transition"
+                  :class="detailTab === 'files' ? 'text-indigo-400 border-indigo-400' : 'text-gray-500 border-transparent hover:text-gray-300'">文件</button>
+          <button @click="detailTab = 'examples'" class="pb-2 text-sm font-medium border-b-2 transition"
+                  :class="detailTab === 'examples' ? 'text-indigo-400 border-indigo-400' : 'text-gray-500 border-transparent hover:text-gray-300'">示例</button>
+        </div>
+
+        <div x-show="detailTab === 'info'" class="space-y-4">
+          <div><h3 class="text-sm font-medium text-gray-400 mb-1">描述</h3><p class="text-gray-300" x-text="detail?.description || '无'"></p></div>
+          <div><h3 class="text-sm font-medium text-gray-400 mb-1">标签</h3><div class="flex gap-1 flex-wrap"><template x-for="tag in (detail?.tags || [])" :key="tag"><span class="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span></template></div></div>
+          <div class="grid grid-cols-2 gap-4">
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">来源</h3><p class="text-gray-300 text-sm" x-text="detail?.source_type || 'manual'"></p></div>
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">来源地址</h3><p class="text-gray-300 text-sm truncate" x-text="detail?.source_url || '无'"></p></div>
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">敏感</h3><p class="text-gray-300 text-sm" x-text="detail?.sensitive ? '是' : '否'"></p></div>
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">使用次数</h3><p class="text-gray-300 text-sm" x-text="detail?.access_count || 0"></p></div>
+          </div>
+          <div x-show="detail?.exec_config"><h3 class="text-sm font-medium text-gray-400 mb-1">执行配置</h3><pre class="bg-gray-900 p-3 rounded-lg text-xs text-gray-400 overflow-x-auto" x-text="JSON.stringify(detail?.exec_config, null, 2)"></pre></div>
+        </div>
+
+        <div x-show="detailTab === 'instruction'">
+          <h3 class="text-sm font-medium text-gray-400 mb-2">AI 指令</h3>
+          <pre class="bg-gray-900 p-4 rounded-lg text-sm text-green-400 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed" x-text="detail?.instruction || '暂无指令'"></pre>
+        </div>
+
+        <div x-show="detailTab === 'content'">
+          <h3 class="text-sm font-medium text-gray-400 mb-2">脚本内容</h3>
+          <pre class="bg-gray-900 p-4 rounded-lg text-sm text-blue-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed" x-text="detail?.content || '暂无脚本'"></pre>
+        </div>
+
+        <div x-show="detailTab === 'files'">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm text-gray-400">关联文件</span>
+            {% if is_admin %}<button @click="openFileManager()" class="text-indigo-400 hover:text-indigo-300 text-sm"><i class="fas fa-edit mr-1"></i>管理文件</button>{% endif %}
+          </div>
+          <div x-show="!(detail?.files || []).length" class="text-gray-500 text-sm py-8 text-center">无关联文件</div>
+          <div x-show="(detail?.files||[]).length" class="flex gap-4 min-h-0">
+            <div class="w-48 flex-shrink-0 space-y-1 overflow-y-auto max-h-96">
+              <template x-for="f in (detail?.files||[])" :key="f.id">
+                <div @click="selectedFile = f" class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition" :class="selectedFile?.id === f.id ? 'bg-gray-700 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'">
+                  <i class="fas fa-file-code text-xs"></i>
+                  <span class="truncate flex-1" x-text="f.path"></span>
+                  <span x-show="f.is_entry" class="px-1 py-0.5 text-xs bg-indigo-900/50 text-indigo-300 rounded flex-shrink-0">入口</span>
+                </div>
+              </template>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div x-show="!selectedFile" class="text-gray-500 text-sm py-8 text-center">选择一个文件查看内容</div>
+              <div x-show="selectedFile" class="bg-gray-900 rounded-lg p-4">
+                <div class="flex items-center gap-2 mb-3">
+                  <i class="fas fa-file-code text-gray-500"></i>
+                  <span class="text-sm text-white font-medium" x-text="selectedFile?.path"></span>
+                  <span class="text-xs text-gray-500" x-text="selectedFile?.language"></span>
+                </div>
+                <pre class="text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono max-h-80 overflow-y-auto" x-text="selectedFile?.content || ''"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="detailTab === 'examples'">
+          <div x-show="!(detail?.examples || []).length" class="text-gray-500 text-sm py-8 text-center">无示例</div>
+          <template x-for="(ex, i) in (detail?.examples || [])" :key="i">
+            <div class="bg-gray-900 rounded-lg p-3 mb-2">
+              <div class="text-xs text-gray-500 mb-1">示例 #<span x-text="i+1"></span></div>
+              <div x-show="ex.input"><span class="text-xs text-gray-400">输入:</span><pre class="text-xs text-green-400 mt-1" x-text="typeof ex.input === 'string' ? ex.input : JSON.stringify(ex.input, null, 2)"></pre></div>
+              <div x-show="ex.output" class="mt-2"><span class="text-xs text-gray-400">输出:</span><pre class="text-xs text-blue-300 mt-1" x-text="typeof ex.output === 'string' ? ex.output : JSON.stringify(ex.output, null, 2)"></pre></div>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-700 flex justify-end">
+        {% if is_admin %}<button @click="editSkill(detail)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-edit mr-1"></i>编辑</button>{% endif %}
+        <a :href="'/api/skills/' + detail?.id + '/package'" target="_blank" class="text-gray-400 hover:text-white text-sm mr-4 ml-2"><i class="fas fa-download mr-1"></i>下载</a>
+        <button @click="showDetailModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group Create/Edit Modal -->
+  <div x-show="showGroupModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showGroupModal = false">
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
+        <h3 class="text-white font-medium"><i class="fas fa-folder mr-2 text-indigo-400"></i><span x-text="groupForm.id ? '编辑分组' : '新建分组'"></span></h3>
+        <button @click="showGroupModal = false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="text-sm text-gray-400 block mb-1">分组名称</label>
+          <input type="text" x-model="groupForm.name" @keyup.enter="groupForm.id ? updateGroup() : createGroup()"
+                 placeholder="输入分组名称" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 block mb-1">上级分组（可选）</label>
+          <select x-model="groupForm.parent_id" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
+            <option value="">无（顶级分组）</option>
+            <template x-for="g in groups" :key="g.id">
+              <option :value="g.id" x-text="g.name" :disabled="g.id === groupForm.id"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-700 flex justify-end gap-2">
+        <button @click="showGroupModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">取消</button>
+        <button @click="groupForm.id ? updateGroup() : createGroup()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition">
+          <span x-text="groupForm.id ? '保存' : '创建'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Skill Modal -->
+  <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-cloak @click.self="showCreateModal = false">
+    <div class="bg-gray-800 rounded-2xl border border-gray-700/60 w-full max-w-lg mx-4 p-6">
+      <h2 class="text-lg font-semibold text-white mb-4" x-text="editingSkill ? '编辑全局技能' : '创建全局技能'"></h2>
+      <div class="space-y-4">
+        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="newSkill.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="newSkill.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">指令内容</label><textarea x-model="newSkill.instruction" rows="6" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">脚本内容</label><textarea x-model="newSkill.content" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">标签（逗号分隔）</label><input type="text" x-model="newSkill.tagsInput" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showCreateModal = false; editingSkill = null; newSkill = {name:'', description:'', instruction:'', content:'', tagsInput:''}" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">取消</button>
+        <button @click="createGlobalSkill()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-xl transition" x-text="editingSkill ? '保存' : '创建'"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Manager Modal -->
+  <div x-show="showFileManager" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showFileManager = false">
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <h2 class="text-xl font-bold text-white">管理文件</h2>
+        <button @click="showFileManager = false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6 space-y-3">
+        <template x-for="(file, i) in editFiles" :key="i">
+          <div class="bg-gray-900 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <input type="text" x-model="file.path" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white font-mono" placeholder="文件路径 (如 main.py)">
+              <input type="text" x-model="file.language" class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="语言">
+              <label class="flex items-center gap-1 text-xs text-gray-400 cursor-pointer whitespace-nowrap">
+                <input type="checkbox" x-model="file.is_entry" class="form-checkbox rounded">
+                入口
+              </label>
+              <button @click="editFiles.splice(i, 1)" class="text-red-400 hover:text-red-300 text-xs p-1"><i class="fas fa-trash"></i></button>
+            </div>
+            <textarea x-model="file.content" rows="6" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-300" placeholder="文件内容..."></textarea>
+          </div>
+        </template>
+        <button @click="editFiles.push({path:'',content:'',language:'',is_entry:false,sort_order:editFiles.length})" class="w-full border-2 border-dashed border-gray-600 hover:border-gray-500 rounded-lg py-4 text-gray-400 hover:text-white text-sm transition">
+          <i class="fas fa-plus mr-2"></i>添加文件
+        </button>
+      </div>
+      <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+        <button @click="showFileManager = false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
+        <button @click="saveFiles()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">保存文件</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Group Confirm Modal -->
+  <div x-show="showDeleteModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showDeleteModal = false">
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-sm mx-4 p-5">
+      <div class="text-center">
+        <i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>
+        <h3 class="text-white font-medium mb-2">确认删除</h3>
+        <p class="text-sm text-gray-400">确定要删除分组「<span class="text-white" x-text="deleteTarget?.name"></span>」吗？此操作不可撤销。</p>
+      </div>
+      <div class="flex justify-center gap-3 mt-5">
+        <button @click="showDeleteModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">取消</button>
+        <button @click="deleteGroupConfirm()" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm transition">删除</button>
+      </div>
+    </div>
+  </div>
+
+<script>window.globalSkillsPage=function globalSkillsPage() {
+  return {
+    skills: [], groups: [], searchQuery: '', selectedGroup: '', filterStatus: '',
+    loading: false, showDetailModal: false, detailTab: 'info', detail: null, selectedFile: null,
+    stats: {}, groupCount: 0, showFileManager: false, editFiles: [],
+    expandedGroups: [],
+    showGroupModal: false, showDeleteModal: false, showCreateModal: false, groupForm: {name:'', parent_id:''}, deleteTarget: null,
+    newSkill: {name:'', description:'', instruction:'', content:'', tagsInput:''},
+    editingSkill: null,
+
+    get rootGroups() {
+      return this.groups.filter(g => !g.parent_id)
+    },
+
+    getChildren(parentId) {
+      return this.groups.filter(g => g.parent_id === parentId)
+    },
+
+    getSkillCount(gid) {
+      return this.skills.filter(s => s.group_id === gid).length
+    },
+
+    toggleGroup(id) {
+      const i = this.expandedGroups.indexOf(id)
+      if (i > -1) this.expandedGroups.splice(i, 1); else this.expandedGroups.push(id)
+    },
+
+    selectGroup(id) {
+      this.selectedGroup = id
+      this.loadSkills()
+    },
+
+    async init() {
+      await Promise.all([this.loadSkills(), this.loadGroups(), this.loadStats()])
+    },
+
+    async loadSkills() {
+      this.loading = true
+      try {
+        const p = new URLSearchParams({ scope: 'global', limit: '100' })
+        if (this.searchQuery) p.set('search', this.searchQuery)
+        if (this.selectedGroup) p.set('group_id', this.selectedGroup)
+        const r = await fetch(`/api/skills/list?${p}`)
+        if (r.ok) this.skills = (await r.json()).items || []
+      } finally { this.loading = false }
+    },
+
+    async loadGroups() {
+      try { const r = await fetch('/api/skills/groups/list?scope=global'); if (r.ok) { const d = await r.json(); this.groups = d.items || []; this.groupCount = this.groups.length; this.expandedGroups = [] } } catch(e) {}
+    },
+
+    async loadStats() {
+      try { const r = await fetch('/api/skills/stats'); if (r.ok) this.stats = await r.json() } catch(e) {}
+    },
+
+    async viewSkill(s) {
+      this.detailTab = 'info'; this.selectedFile = null
+      try { const r = await fetch(`/api/skills/${s.id}`); if (r.ok) { this.detail = await r.json(); this.showDetailModal = true } } catch(e) {}
+    },
+
+    openFileManager() {
+      var files = this.detail?.files || []
+      this.editFiles = files.map(function(f) { return {path:f.path, content:f.content||'', language:f.language||'', is_entry:!!f.is_entry, sort_order:f.sort_order||0} })
+      if (!this.editFiles.length) this.editFiles.push({path:'', content:'', language:'', is_entry:true, sort_order:0})
+      this.showFileManager = true
+    },
+
+    async saveFiles() {
+      if (!this.detail) return
+      try {
+        var r = await fetch('/api/skills/' + this.detail.id + '/files', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(this.editFiles) })
+        if (r.ok) {
+          this.showFileManager = false; this.selectedFile = null
+          var dr = await fetch('/api/skills/' + this.detail.id); if (dr.ok) this.detail = await dr.json()
+        } else alert('保存失败')
+      } catch(e) { alert('保存失败: ' + e.message) }
+    },
+
+    editSkill(s) {
+      this.showDetailModal = false
+      this.newSkill = {name: s.name, description: s.description || '', instruction: s.instruction || '', content: s.content || '', tagsInput: (s.tags || []).join(', ')}
+      this.editingSkill = s.id
+      this.showCreateModal = true
+    },
+
+    editGroup(g) {
+      this.groupForm = {id: g.id, name: g.name, parent_id: g.parent_id || ''}
+      this.showGroupModal = true
+    },
+
+    async createGroup() {
+      if (!this.groupForm.name) return
+      try {
+        const r = await fetch('/api/skills/groups/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: this.groupForm.name, parent_id: this.groupForm.parent_id || null, scope: 'global'}) })
+        if (r.ok) { this.showGroupModal = false; await this.loadGroups() }
+      } catch(e) {}
+    },
+
+    async updateGroup() {
+      if (!this.groupForm.name) return
+      try {
+        const r = await fetch('/api/skills/groups/'+this.groupForm.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: this.groupForm.name, parent_id: this.groupForm.parent_id || null}) })
+        if (r.ok) { this.showGroupModal = false; await this.loadGroups() }
+      } catch(e) {}
+    },
+
+    deleteGroup(g) {
+      this.deleteTarget = g
+      this.showDeleteModal = true
+    },
+
+    async deleteGroupConfirm() {
+      if (!this.deleteTarget) return
+      try {
+        const r = await fetch('/api/skills/groups/'+this.deleteTarget.id, { method: 'DELETE' })
+        if (r.ok) { this.showDeleteModal = false; this.deleteTarget = null; await this.loadGroups() }
+      } catch(e) {}
+    },
+
+    async deleteSkill(s) {
+      if (!s || !confirm(`删除技能「${s.name}」？`)) return
+      try { await fetch(`/api/skills/${s.id}`, { method: 'DELETE' }); await this.loadSkills(); await this.loadStats() } catch(e) {}
+    },
+
+    async createGlobalSkill() {
+      var tags = this.newSkill.tagsInput.split(',').map(t=>t.trim()).filter(Boolean)
+      try {
+        var body = {name:this.newSkill.name, description:this.newSkill.description, instruction:this.newSkill.instruction, content:this.newSkill.content, tags:tags}
+        var isEdit = this.editingSkill
+        var url, method
+        if (isEdit) { url = '/api/skills/'+isEdit; method = 'PUT' }
+        else { body.scope = 'global'; url = '/api/skills/create'; method = 'POST' }
+        var r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+        if (r.ok) {
+          this.showCreateModal = false; this.editingSkill = null
+          this.newSkill = {name:'', description:'', instruction:'', content:'', tagsInput:''}
+          if (isEdit) { var dr = await fetch('/api/skills/'+isEdit); if (dr.ok) this.detail = await dr.json() }
+          await this.loadSkills(); await this.loadStats()
+        }
+      } catch(e) {}
+    }
+  }
+}</script>

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
+from app.db.models import Node, Edge
 from app.services.indexer import Indexer
 from app.services.search_service import SearchService
 from app.services.code_explore import CodeExploreService
@@ -57,11 +59,42 @@ async def explore(request: Request, db: AsyncSession = Depends(get_db)):
     return JSONResponse(content=result)
 
 
-@router.get("/api/search")
-async def search(project_id: int, q: str = "", type: str = None, limit: int = 50, db: AsyncSession = Depends(get_db)):
-    svc = SearchService(db)
-    symbols = await svc.search_symbols(project_id, q, type, limit)
-    return JSONResponse(content={"symbols": symbols, "total": len(symbols)})
+@router.get("/api/search/typed")
+async def search_typed(
+    project_id: int,
+    node_type: str = None,
+    return_type: str = None,
+    param_type: str = None,
+    access_modifier: str = None,
+    q: str = "",
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import and_, or_
+    conditions = [Node.project_id == project_id]
+    if node_type:
+        conditions.append(Node.node_type == node_type)
+    if return_type:
+        conditions.append(Node.return_type.ilike(f"%{return_type}%"))
+    if param_type and Node.params_json.isnot(None):
+        conditions.append(Node.params_json.ilike(f"%{param_type}%"))
+    if q:
+        conditions.append(Node.name.ilike(f"%{q}%"))
+    result = await db.execute(select(Node).where(*conditions).limit(limit))
+    nodes = result.scalars().all()
+    return JSONResponse(content={
+        "symbols": [{
+            "id": n.id, "node_type": n.node_type, "name": n.name,
+            "qualified_name": n.qualified_name, "file_path": n.file_path,
+            "line_start": n.line_start, "language": n.language,
+            "signature": n.signature,
+            "return_type": n.return_type,
+            "params": n.params_json,
+            "docstring": n.docstring,
+        } for n in nodes],
+        "total": len(nodes),
+        "filters_applied": {"node_type": node_type, "return_type": return_type, "param_type": param_type, "query": q},
+    })
 
 
 @router.post("/api/index/file")
@@ -131,7 +164,7 @@ async def index_file_content(request: Request, db: AsyncSession = Depends(get_db
                     line_start=cls["line"], language=lang)
         db.add(node)
         await db.flush()
-        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=node.id, edge_type="CONTAINS"))
+        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=node.id, edge_type="contains"))
 
     func_ids = {}
     for fn in functions:
@@ -142,11 +175,11 @@ async def index_file_content(request: Request, db: AsyncSession = Depends(get_db
         db.add(node)
         await db.flush()
         func_ids[name] = node.id
-        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=node.id, edge_type="CONTAINS"))
+        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=node.id, edge_type="contains"))
 
     for imp in re.findall(r'(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))', content):
         mod = imp[0] or imp[1]
-        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=0, edge_type="IMPORTS", metadata_={"import_name": mod}))
+        db.add(Edge(project_id=project_id, source_id=file_node.id, target_id=0, edge_type="imports", metadata_={"import_name": mod}))
 
     if len(func_ids) > 1:
         for match in re.finditer(r'(\w+)\s*\(', content):
@@ -154,7 +187,7 @@ async def index_file_content(request: Request, db: AsyncSession = Depends(get_db
             if call_name in func_ids:
                 for caller, cid in func_ids.items():
                     if caller != call_name:
-                        db.add(Edge(project_id=project_id, source_id=cid, target_id=func_ids[call_name], edge_type="CALLS"))
+                        db.add(Edge(project_id=project_id, source_id=cid, target_id=func_ids[call_name], edge_type="calls"))
 
     await db.commit()
     nodes = 1 + len(classes) + len(functions)

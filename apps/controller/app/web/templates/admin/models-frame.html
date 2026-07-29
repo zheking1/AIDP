@@ -17,7 +17,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-white">模型管理</h1>
-            <p class="text-gray-400 mt-1">配置 LLM 模型和 API 密钥</p>
+            <p class="text-gray-400 mt-1">配置模型并分配任务类型（对话 / 嵌入 / 代码）</p>
         </div>
         <button @click="showAddModal = true" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
             <i class="fas fa-plus mr-2"></i>添加模型
@@ -27,7 +27,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <template x-for="model in models" :key="model.id">
             <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                             <i class="fas fa-robot text-blue-400"></i>
@@ -39,15 +39,22 @@
                     </div>
                     <span class="w-2 h-2 rounded-full" :class="model.status === 'active' ? 'bg-green-500' : 'bg-gray-500'"></span>
                 </div>
-                <div class="space-y-2 text-sm text-gray-400 mb-4">
+                <div class="space-y-2 text-sm text-gray-400 mb-3">
                     <div class="flex justify-between">
-                        <span>模型</span>
+                        <span>模型ID</span>
                         <span class="text-white" x-text="model.model_name"></span>
                     </div>
                     <div class="flex justify-between">
-                        <span>角色</span>
-                        <span class="text-white" x-text="model.role"></span>
+                        <span>Token</span>
+                        <span class="text-white" x-text="model.max_tokens || 4096"></span>
                     </div>
+                </div>
+                <div class="flex flex-wrap gap-1 mb-3">
+                    <template x-for="task in model.task_types" :key="task">
+                        <span class="px-2 py-0.5 text-xs rounded"
+                              :class="task === 'chat' ? 'bg-green-500/20 text-green-400' : task === 'embedding' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'"
+                              x-text="task === 'chat' ? '对话' : task === 'embedding' ? '嵌入' : task"></span>
+                    </template>
                 </div>
                 <div class="flex gap-2">
                     <button @click="editModel(model)" class="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition">编辑</button>
@@ -55,7 +62,6 @@
                 </div>
             </div>
         </template>
-
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 border-dashed flex items-center justify-center">
             <button @click="showAddModal = true" class="text-center text-gray-500 hover:text-gray-300 transition">
                 <i class="fas fa-plus text-3xl mb-2"></i>
@@ -64,7 +70,7 @@
         </div>
     </div>
 
-    <!-- Add/Edit Model Modal -->
+    <!-- Modal -->
     <div x-show="showAddModal || showEditModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
         <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
             <h2 class="text-xl font-bold text-white mb-4" x-text="showEditModal ? '编辑模型' : '添加模型'"></h2>
@@ -75,26 +81,64 @@
                 </div>
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">提供商</label>
-                    <input type="text" x-model="currentModel.provider" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    <select x-model="currentModel.provider" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                        <option value="OpenAI">OpenAI</option>
+                        <option value="DeepSeek">DeepSeek</option>
+                        <option value="Local">Local</option>
+                        <option value="Anthropic">Anthropic</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">模型ID</label>
-                    <input type="text" x-model="currentModel.model_name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    <input type="text" x-model="currentModel.model_name" placeholder="deepseek-chat" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">角色</label>
-                    <select x-model="currentModel.role" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
-                        <option value="completion">Completion</option>
-                        <option value="chat">Chat</option>
-                        <option value="embedding">Embedding</option>
-                    </select>
+                    <label class="block text-sm text-gray-400 mb-1">API 地址</label>
+                    <input type="text" x-model="currentModel.api_base" placeholder="https://api.deepseek.com/v1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">状态</label>
-                    <select x-model="currentModel.status" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
-                        <option value="active">激活</option>
-                        <option value="inactive">停用</option>
-                    </select>
+                    <label class="block text-sm text-gray-400 mb-1">API Key</label>
+                    <input type="password" x-model="currentModel.api_key" placeholder="sk-..." class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">任务分配（可多选）</label>
+                    <div class="flex gap-6">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" value="chat" x-model="currentModel.task_types" class="w-4 h-4 accent-indigo-500">
+                            <span class="text-sm text-gray-300">对话</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" value="embedding" x-model="currentModel.task_types" class="w-4 h-4 accent-purple-500">
+                            <span class="text-sm text-gray-300">嵌入</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" value="rerank" x-model="currentModel.task_types" class="w-4 h-4 accent-cyan-500">
+                            <span class="text-sm text-gray-300">重排</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">最大Token</label>
+                        <input type="number" x-model="currentModel.max_tokens" min="1" max="128000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">温度 (0-2)</label>
+                        <input type="number" x-model="currentModel.temperature" min="0" max="2" step="0.1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">优先级</label>
+                        <input type="number" x-model="currentModel.priority" min="0" max="100" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">状态</label>
+                        <select x-model="currentModel.status" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                            <option value="active">激活</option>
+                            <option value="inactive">停用</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="flex justify-end gap-3 mt-6">
@@ -110,27 +154,23 @@
                 models: [],
                 showAddModal: false,
                 showEditModal: false,
-                currentModel: { id: null, name: '', provider: '', model_name: '', role: 'completion', status: 'active' },
+                currentModel: { id: null, name: '', provider: 'DeepSeek', model_name: '', api_base: '', api_key: '', task_types: ['chat'], max_tokens: 4096, temperature: 0.7, priority: 0, status: 'active' },
 
                 async loadModels() {
                     try {
-                        const response = await fetch('/api/models');
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.models = data.items || data.models || [];
+                        const resp = await fetch('/api/models');
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            this.models = data.items || [];
                         }
                     } catch (e) {
                         console.error('Failed to load models:', e);
-                        // Use sample data for demo
-                        this.models = [
-                            { id: 1, name: 'DeepSeek-V3', provider: 'DeepSeek', model_name: 'deepseek-chat', role: 'completion', status: 'active' },
-                            { id: 2, name: 'GPT-4', provider: 'OpenAI', model_name: 'gpt-4', role: 'completion', status: 'active' },
-                        ];
                     }
                 },
 
                 editModel(model) {
                     this.currentModel = { ...model };
+                    this.currentModel.task_types = model.task_types || [];
                     this.showEditModal = true;
                     this.showAddModal = false;
                 },
@@ -138,7 +178,7 @@
                 closeModal() {
                     this.showAddModal = false;
                     this.showEditModal = false;
-                    this.currentModel = { id: null, name: '', provider: '', model_name: '', role: 'completion', status: 'active' };
+                    this.currentModel = { id: null, name: '', provider: 'DeepSeek', model_name: '', api_base: '', task_types: ['chat'], priority: 0, status: 'active' };
                 },
 
                 async saveModel() {
@@ -146,38 +186,31 @@
                         const isEdit = this.showEditModal;
                         const url = isEdit ? `/api/models/${this.currentModel.id}` : '/api/models';
                         const method = isEdit ? 'PUT' : 'POST';
-                        
-                        const response = await fetch(url, {
-                            method: method,
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.currentModel)
-                        });
-                        
-                        if (response.ok) {
-                            this.closeModal();
-                            this.loadModels();
-                        } else {
-                            alert('保存失败');
-                        }
-                    } catch (e) {
-                        console.error('Failed to save model:', e);
-                        alert('保存失败: ' + e.message);
-                    }
+                        const body = {
+                            name: this.currentModel.name,
+                            provider: this.currentModel.provider,
+                            model_name: this.currentModel.model_name,
+                            api_base: this.currentModel.api_base || null,
+                            api_key: this.currentModel.api_key || null,
+                            task_types: this.currentModel.task_types,
+                            max_tokens: this.currentModel.max_tokens,
+                            temperature: this.currentModel.temperature,
+                            priority: this.currentModel.priority,
+                            status: this.currentModel.status,
+                        };
+                        const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                        if (resp.ok) { this.closeModal(); this.loadModels(); }
+                        else { alert('保存失败'); }
+                    } catch (e) { alert('保存失败: ' + e.message); }
                 },
 
                 async deleteModel(id) {
-                    if (!confirm('确定要删除这个模型吗？')) return;
+                    if (!confirm('确定删除？')) return;
                     try {
-                        const response = await fetch(`/api/models/${id}`, { method: 'DELETE' });
-                        if (response.ok) {
-                            this.loadModels();
-                        } else {
-                            alert('删除失败');
-                        }
-                    } catch (e) {
-                        console.error('Failed to delete model:', e);
-                        alert('删除失败: ' + e.message);
-                    }
+                        const resp = await fetch(`/api/models/${id}`, { method: 'DELETE' });
+                        if (resp.ok) this.loadModels();
+                        else alert('删除失败');
+                    } catch (e) { alert('删除失败: ' + e.message); }
                 }
             }
         }

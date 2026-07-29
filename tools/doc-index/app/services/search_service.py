@@ -9,10 +9,12 @@ class SearchService:
         self.db = db
 
     async def search(self, query: str, limit: int = 20) -> List[Dict]:
+        pattern = f"%{query}%"
         result = await self.db.execute(
             select(DocPage).where(
-                DocPage.title.ilike(f"%{query}%") |
-                DocPage.summary.ilike(f"%{query}%")
+                DocPage.title.ilike(pattern) |
+                DocPage.summary.ilike(pattern) |
+                DocPage.content.ilike(pattern)
             ).limit(limit)
         )
         pages = result.scalars().all()

@@ -1,0 +1,54 @@
+name: aidp
+
+services:
+  # Use existing PostgreSQL (novel-postgres) and Redis if available
+  # For fresh deployments, uncomment these:
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: aidp-postgres
+  #   environment:
+  #     POSTGRES_USER: aidp
+  #     POSTGRES_PASSWORD: ${AIDP_DB_PASSWORD:-aidp_secret}
+  #     POSTGRES_DB: aidp
+  #   ports: ["5432:5432"]
+  #   volumes:
+  #     - aidp_pgdata:/var/lib/postgresql/data
+  #     - ./deploy/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+  #   restart: unless-stopped
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: aidp-redis
+  #   ports: ["6379:6379"]
+  #   volumes: [aidp_redisdata:/data]
+  #   restart: unless-stopped
+
+  controller:
+    image: aidp/controller:0.1.0
+    container_name: aidp-controller
+    network_mode: host
+    environment:
+      DATABASE_URL: ${CONTROLLER_DB_URL:-postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/aidp}
+      REDIS_URL: ${REDIS_URL:-redis://127.0.0.1:6379/0}
+      CONTROLLER_SESSION_KEY: ${CONTROLLER_SESSION_KEY:-change-me-in-production}
+    restart: unless-stopped
+
+  sandbox-tool:
+    image: aidp/sandbox-tool:0.1.0
+    container_name: aidp-sandbox
+    network_mode: host
+    environment:
+      DATABASE_URL: ${SANDBOX_DB_URL:-postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/aidp}
+    restart: unless-stopped
+
+  quality-tool:
+    image: aidp/quality-tool:0.1.0
+    container_name: aidp-quality
+    network_mode: host
+    environment:
+      DATABASE_URL: ${QUALITY_DB_URL:-postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/aidp}
+    restart: unless-stopped
+
+# volumes:
+#   aidp_pgdata:
+#   aidp_redisdata:

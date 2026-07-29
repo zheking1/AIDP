@@ -6,7 +6,7 @@
     <title>{% block title %}Dashboard{% endblock %} - AIDP</title>
     
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -164,11 +164,11 @@
                style="transition: margin-left 0.3s ease;">
             
             <nav class="p-3 space-y-1">
-                <!-- Dashboard -->
-                <a href="/" 
-                   class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg {% if active_page == 'dashboard' %}active{% endif %}">
-                    <i class="fas fa-home w-5 text-center {% if active_page == 'dashboard' %}text-indigo-400{% else %}text-gray-400{% endif %}"></i>
-                    <span class="{% if active_page == 'dashboard' %}text-white font-medium{% else %}text-gray-300{% endif %}">总览</span>
+                <!-- Home -->
+                <a href="/?tab=home" 
+                   class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg {% if active_page == 'home' %}active{% endif %}">
+                    <i class="fas fa-home w-5 text-center {% if active_page == 'home' %}text-indigo-400{% else %}text-gray-400{% endif %}"></i>
+                    <span class="{% if active_page == 'home' %}text-white font-medium{% else %}text-gray-300{% endif %}">首页</span>
                 </a>
 
                 <!-- Tools Section -->

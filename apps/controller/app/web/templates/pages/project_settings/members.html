@@ -1,0 +1,21 @@
+{% extends "pages/project_settings/base.html" %}
+{% block settings_content %}
+<h2 class="text-lg font-semibold text-gray-900 mb-4">成员管理</h2>
+<div class="max-w-7xl mx-auto px-4"><div class="space-y-4" x-data="settingsMembers()" x-init="init()">
+  <div class="flex gap-3"><input type="text" x-model="inviteEmail" placeholder="输入邮箱邀请成员..." class="flex-1 border rounded-lg px-3 py-2"><select x-model="inviteRole" class="border rounded-lg px-3 py-2"><option value="viewer">查看者</option><option value="editor">编辑者</option><option value="admin">管理员</option></select><button @click="invite()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition"><i class="fas fa-user-plus mr-1"></i>邀请</button></div>
+  <table class="min-w-full mt-4"><thead><tr class="border-b"><th class="text-left py-2 text-sm text-gray-500">用户</th><th class="text-left py-2 text-sm text-gray-500">角色</th><th class="text-right py-2 text-sm text-gray-500">操作</th></tr></thead><tbody><template x-for="m in members" :key="m.id"><tr class="border-b"><td class="py-2 text-sm" x-text="m.user_id || m.username"></td><td class="py-2"><span class="px-2 py-1 text-xs rounded-full bg-gray-100" x-text="m.role"></span></td><td class="py-2 text-right"><button @click="removeMember(m)" class="text-red-600 hover:text-red-800 text-sm"><i class="fas fa-times"></i></button></td></tr></template></tbody></table>
+  <p x-show="saved" class="text-green-600 text-sm"><i class="fas fa-check mr-1"></i>已更新</p>
+</div>
+<script>
+function settingsMembers() {
+  return { members: [], inviteEmail: '', inviteRole: 'viewer', saved: false,
+    async init() { try { const r = await fetch('/api/projects/{{project_id}}/members'); if(r.ok) this.members = (await r.json()).items || []; } catch(e){} },
+    async invite() {
+      if(!this.inviteEmail) return;
+      try { const r = await fetch('/api/projects/{{project_id}}/members', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:this.inviteEmail, role:this.inviteRole}) }); if(r.ok) { this.inviteEmail=''; this.init(); this.saved=true; setTimeout(()=>this.saved=false,3000); } } catch(e){}
+    },
+    async removeMember(m) { try { await fetch('/api/projects/{{project_id}}/members/'+m.id, {method:'DELETE'}); this.init(); } catch(e){} }
+  };
+}
+</script>
+{% endblock %}

@@ -23,14 +23,16 @@
         </div>
     </div>
 
-    <!-- Content Area with Iframe -->
+    <!-- Content Area -->
     <div class="flex-1 relative bg-gray-900">
+        <div x-show="loading" class="flex items-center justify-center py-20">
+            <div class="loading-spinner w-8 h-8"></div>
+        </div>
         <template x-for="tab in tabs" :key="tab.id">
-            <iframe :src="tab.url"
-                    x-show="activeTab === tab.id"
-                    class="w-full h-full border-0"
-                    :class="activeTab === tab.id ? '' : 'hidden'">
-            </iframe>
+            <div :id="'admin-content-' + tab.id" 
+                 x-show="activeTab === tab.id && !loading"
+                 class="w-full h-full overflow-y-auto">
+            </div>
         </template>
     </div>
 </div>
@@ -41,9 +43,9 @@ function adminFrame() {
         tabs: [],
         activeTab: null,
         tabCounter: 0,
+        loading: false,
 
         init() {
-            // Parse URL hash to determine initial tab
             const hash = window.location.hash.replace('#', '');
             const menuMap = {
                 'users': { name: '用户管理', icon: 'fas fa-users', url: '/admin/users-content' },
@@ -51,49 +53,58 @@ function adminFrame() {
                 'models': { name: '模型管理', icon: 'fas fa-robot', url: '/admin/models-content' },
                 'settings': { name: '系统设置', icon: 'fas fa-cog', url: '/admin/settings-content' }
             };
-
             if (hash && menuMap[hash]) {
                 this.openTab(hash, menuMap[hash].name, menuMap[hash].icon, menuMap[hash].url);
             } else {
-                // Default to users
                 this.openTab('users', '用户管理', 'fas fa-users', '/admin/users-content');
             }
         },
 
         openTab(id, name, icon, url) {
-            // Check if tab already exists
             const existing = this.tabs.find(t => t.id === id);
-            if (existing) {
-                this.activeTab = id;
-                return;
-            }
-
-            // Create new tab
-            this.tabs.push({
-                id: id,
-                name: name,
-                icon: icon,
-                url: url
-            });
+            if (existing) { this.activeTab = id; return; }
+            this.tabs.push({ id, name, icon, url });
             this.activeTab = id;
+            this.loadTab(id, url);
         },
 
         switchTab(id) {
             this.activeTab = id;
-            // Update URL hash without reloading
             window.history.replaceState(null, null, '#'+id);
+            const tab = this.tabs.find(t => t.id === id);
+            if (tab) this.loadTab(id, tab.url);
         },
 
         closeTab(id) {
             const index = this.tabs.findIndex(t => t.id === id);
             if (index === -1) return;
-
             this.tabs.splice(index, 1);
-
-            // Switch to another tab if closing active tab
             if (this.activeTab === id && this.tabs.length > 0) {
-                this.activeTab = this.tabs[Math.min(index, this.tabs.length - 1)].id;
+                this.switchTab(this.tabs[Math.min(index, this.tabs.length - 1)].id);
             }
+        },
+
+        async loadTab(tabId, url) {
+            const el = document.getElementById('admin-content-' + tabId);
+            if (!el || el.children.length > 0) return; // Already loaded
+            this.loading = true;
+            try {
+                const resp = await fetch(url + '?partial=1');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                let html = await resp.text();
+                const scripts = [];
+                html = html.replace(/<script>([\s\S]*?)<\/script>/g, (m, c) => { scripts.push(c); return ''; });
+                el.innerHTML = html;
+                scripts.forEach(code => {
+                    try {
+                        const t = code.trim();
+                        if (t.startsWith('function ')) { const m = t.match(/^function\s+(\w+)/); if (m) eval('window.' + m[1] + '=' + t); else eval(code); }
+                        else eval(code);
+                    } catch(e) { console.warn(e.message); }
+                });
+                if (window.Alpine) Alpine.initTree(el);
+            } catch(e) { console.error('Load failed:', e); }
+            finally { this.loading = false; }
         }
     }
 }

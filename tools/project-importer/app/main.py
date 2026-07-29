@@ -2,6 +2,12 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx, os, json
+import logging
+
+from app.tech_analyzer import analyze_project_techs, auto_import_official_docs
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Project Importer", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -38,6 +44,9 @@ async def onboarding_scan(path: str):
     groups = _group_by_type(files)
     language = _detect_language(files)
     framework = _detect_framework(path, files)
+    
+    # NEW: Analyze tech stack
+    techs = analyze_project_techs(path)
 
     return {
         "path": path,
@@ -50,21 +59,34 @@ async def onboarding_scan(path: str):
         "script_files": len(groups.get("script", [])),
         "doc_preview": [f["path"] for f in groups.get("doc", [])[:5]],
         "config_preview": [f["path"] for f in groups.get("config", [])[:5]],
+        # NEW: Tech stack analysis
+        "detected_technologies": [
+            {
+                "key": t["key"],
+                "name": t["name"],
+                "version": t["version"],
+                "doc_url": t["doc_url"],
+                "has_official_doc": t["has_doc"],
+            }
+            for t in techs[:10]  # Limit to top 10
+        ],
+        "can_auto_import_docs": any(t.get("has_doc") for t in techs),
     }
 
 
 @app.post("/api/onboarding/import")
 async def onboarding_import(request: Request):
-    """Step 3: 完整导入"""
+    """Step 3: 完整导入（包含技术栈分析和官方文档自动导入）"""
     body = await request.json()
     project_path = body.get("path", "")
     project_name = body.get("name", "")
     project_type = body.get("type", "python")
+    auto_import_docs = body.get("auto_import_docs", True)  # 默认开启自动导入
 
     if not project_path or not project_name:
         raise HTTPException(400, "path and name are required")
 
-    result = {"steps": [], "errors": [], "progress": 0}
+    result = {"steps": [], "errors": [], "progress": 0, "tech_analysis": None, "imported_docs": []}
 
     async def report(step_name, progress_pct):
         result["steps"].append({"step": step_name, "done": True})
@@ -85,11 +107,36 @@ async def onboarding_import(request: Request):
     try:
         if groups["code"]:
             await _index_code(pid, project_path, project_name)
-        await report("Index code", 40)
+        await report("Index code", 35)
     except Exception as e:
-        await report("Index code (skipped)", 40)
+        await report("Index code (skipped)", 35)
 
-    # Import docs
+    # NEW: Analyze tech stack and auto-import official docs
+    if auto_import_docs:
+        try:
+            # Analyze technology stack
+            techs = analyze_project_techs(project_path)
+            result["tech_analysis"] = {
+                "detected_count": len(techs),
+                "technologies": [{"name": t["name"], "version": t["version"], "key": t["key"]} for t in techs],
+            }
+            await report("Analyze tech stack", 45)
+            
+            # Auto-import official docs
+            if techs:
+                imported = await auto_import_official_docs(techs, str(pid), KNOWLEDGE)
+                result["imported_docs"] = imported
+                await report("Import official docs", 60)
+            else:
+                await report("Import official docs (skipped - no tech detected)", 60)
+        except Exception as e:
+            logger.error(f"Tech analysis or doc import failed: {e}")
+            result["errors"].append(f"Tech analysis: {str(e)}")
+            await report("Tech analysis (failed)", 60)
+    else:
+        await report("Tech analysis (skipped)", 60)
+
+    # Import project docs
     doc_count = 0
     for f in groups.get("doc", [])[:50]:
         try:
@@ -103,7 +150,7 @@ async def onboarding_import(request: Request):
                 "content": content, "project_id": str(pid),
             })
             doc_count += 1
-    await report("Import docs", 60)
+    await report("Import project docs", 75)
 
     # Import configs
     config_count = 0
@@ -118,20 +165,25 @@ async def onboarding_import(request: Request):
             await c.post(f"{CONTROLLER}/api/projects/{pid}/configs/",
                          json={"env_type": env, "config_key": f["path"], "config_value": val})
             config_count += 1
-    await report("Import configs", 75)
+    await report("Import configs", 85)
 
     # Create memories
     memories = [
         ("项目技术栈", f"{project_name} 技术栈: {language}, 框架: {framework}", "semantic"),
         ("项目结构", f"{project_name} 包含 {len(groups.get('code',[]))} 个源码文件, {doc_count} 个文档", "semantic"),
     ]
+    # Add detected techs to memory
+    if result.get("tech_analysis"):
+        techs_str = ", ".join([f"{t['name']}({t['version']})" for t in result["tech_analysis"]["technologies"][:5]])
+        memories.append(("依赖技术栈", f"{project_name} 检测到技术: {techs_str}", "semantic"))
+    
     for title, content, tier in memories:
         async with httpx.AsyncClient() as c:
             await c.post(f"{MEMORY}/api/memory", json={
                 "project": project_name, "category": "architecture",
                 "title": title, "content": content, "memory_tier": tier, "source_type": "auto",
             })
-    await report("Create memories", 90)
+    await report("Create memories", 95)
 
     # Summary
     await report("Complete", 100)
@@ -144,6 +196,8 @@ async def onboarding_import(request: Request):
         "doc_files": doc_count,
         "config_files": config_count,
         "total_files": len(files),
+        "detected_techs": result.get("tech_analysis", {}).get("detected_count", 0),
+        "imported_official_docs": len([d for d in result.get("imported_docs", []) if d.get("status") == "success"]),
     }
     return JSONResponse(result)
 

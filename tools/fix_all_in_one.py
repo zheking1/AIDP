@@ -1,0 +1,6 @@
+c = open('/app/app/routers/projects_new.py', encoding='utf-8').read()
+c = c.replace('tech_stack=json.dumps(data.tech_stack)', '')
+c = c.replace('get_current_user_id(user)', 'str(get_current_user_id(user))')
+c = c.replace('str(str(', 'str(')
+open('/app/app/routers/projects_new.py', 'w', encoding='utf-8').write(c)
+print('OK proj')

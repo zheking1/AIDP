@@ -3,8 +3,9 @@ from pydantic import BaseModel
 
 
 class DocumentCreateRequest(BaseModel):
-    workspace_id: str
+    workspace_id: Optional[str] = None
     project_id: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
     title: str
     doc_type: str
     visibility: str = "project"
@@ -17,8 +18,9 @@ class DocumentCreateRequest(BaseModel):
 
 class DocumentInfo(BaseModel):
     id: str
-    workspace_id: str
+    workspace_id: Optional[str] = None
     project_id: Optional[str] = None
+    knowledge_base_id: Optional[str] = None
     title: str
     doc_type: str
     visibility: str
@@ -26,6 +28,10 @@ class DocumentInfo(BaseModel):
     index_status: str
     tags: list[str] = []
     checksum: Optional[str] = None
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    object_key: Optional[str] = None
     created_at: str
     updated_at: str
 

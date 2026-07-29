@@ -16,8 +16,13 @@ async def create_doc(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
     title = body.get("title", "")
     content = body.get("content", "")
-    url = body.get("url", "")
+    url = body.get("url")  # allow None for non-unique constraint
     source = body.get("source", "manual")
+    language = body.get("language")
+    framework = body.get("framework")
+    category = body.get("category")
+    level = body.get("level")
+    tags = body.get("tags", [])
     if not title or not content:
         raise HTTPException(status_code=400, detail="title and content are required")
 
@@ -28,11 +33,13 @@ async def create_doc(request: Request, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text
     doc = DocPage(
         title=parsed["title"] or title,
-        url=url,
+        url=url or None,
         content=content,
         summary=parsed["summary"],
         word_count=parsed["word_count"],
         source=source,
+        language=language or None,
+        framework=framework or None,
     )
     db.add(doc)
     await db.commit()
@@ -42,6 +49,8 @@ async def create_doc(request: Request, db: AsyncSession = Depends(get_db)):
         "id": doc.id,
         "title": doc.title,
         "url": doc.url,
+        "language": doc.language,
+        "framework": doc.framework,
         "word_count": doc.word_count,
     })
 

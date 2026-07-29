@@ -1,4 +1,5 @@
 import os
+import hashlib
 import re
 from typing import Dict, List, Optional
 
@@ -87,3 +88,20 @@ class Scanner:
                         "path": mod,
                     })
         return modules
+
+    def compute_file_hash(self, file_path: str) -> str:
+        try:
+            with open(file_path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except Exception:
+            return ""
+
+    def compute_fingerprints(self, files: List[Dict]) -> Dict[str, str]:
+        fingerprints = {}
+        for f in files:
+            fp = fingerprints.get(f["full_path"], "")
+            if not fp:
+                fp = self.compute_file_hash(f["full_path"])
+                fingerprints[f["full_path"]] = fp
+            f["hash"] = fp
+        return fingerprints

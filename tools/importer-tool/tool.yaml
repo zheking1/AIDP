@@ -1,0 +1,228 @@
+apiVersion: aidp.dev/v1
+kind: Tool
+
+metadata:
+  name: importer-tool
+  displayName: Importer Tool
+  version: 0.1.0
+  description: "Conversational content import tool. Classifies, quality-checks, and persists documents, skills, rules, and plans into AIDP."
+
+runtime:
+  modes:
+    - standalone
+    - managed
+  docker:
+    image: aidp/importer-tool:0.1.0
+    port: 18086
+  local:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 18086
+    healthUrl: http://127.0.0.1:18086/health
+
+dependencies:
+  required:
+    - postgresql
+  optional:
+    - aidp-controller
+
+configSchema:
+  type: object
+  properties:
+    controllerUrl:
+      type: string
+      default: http://localhost:8883
+    maxFileSizeMb:
+      type: integer
+      default: 5
+    urlTimeoutSeconds:
+      type: integer
+      default: 15
+
+capabilities:
+  - name: importer.import
+    description: Import a single item (text/url/file) with auto-classify, quality check, and persist.
+    endpoint: POST /tool/invoke
+    timeoutMs: 30000
+    permission: importer:write
+    inputSchema:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: object
+          properties:
+            type: { type: string, enum: [text, url, file] }
+            content: { type: string }
+            url: { type: string }
+            path: { type: string }
+            name: { type: string }
+        session_id: { type: string }
+        confirm: { type: object }
+        auto_confirm: { type: boolean }
+    outputSchema:
+      type: object
+      properties:
+        session_id: { type: string }
+        status: { type: string }
+        classification: { type: object }
+        quality_check: { type: object }
+        result: { type: object }
+
+  - name: importer.import_batch
+    description: Scan a directory and batch-import all matching files.
+    endpoint: POST /tool/invoke
+    timeoutMs: 120000
+    permission: importer:write
+    inputSchema:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: object
+          properties:
+            type: { type: string, enum: [directory] }
+            path: { type: string }
+            pattern: { type: string }
+        confirm: { type: array }
+    outputSchema:
+      type: object
+      properties:
+        session_id: { type: string }
+        status: { type: string }
+        items: { type: array }
+        summary: { type: object }
+
+  - name: importer.classify
+    description: Classify content without importing.
+    endpoint: POST /tool/invoke
+    timeoutMs: 5000
+    permission: importer:read
+    inputSchema:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        filename: { type: string }
+    outputSchema:
+      type: object
+      properties:
+        type: { type: string }
+        confidence: { type: string }
+        title: { type: string }
+        suggested_tags: { type: array }
+        suggested_category: { type: string }
+
+  - name: importer.status
+    description: Get import session status.
+    endpoint: POST /tool/invoke
+    timeoutMs: 3000
+    permission: importer:read
+    inputSchema:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: { type: string }
+    outputSchema:
+      type: object
+      properties:
+        session_id: { type: string }
+        status: { type: string }
+        items: { type: array }
+
+  - name: promotion.review
+    description: Submit content for AI-powered promotion review.
+    endpoint: POST /tool/invoke
+    timeoutMs: 120000
+    permission: promotion:write
+    inputSchema:
+      type: object
+      required: [entity_type, entity_id, content]
+      properties:
+        entity_type: { type: string, enum: [skill, rule, knowledge] }
+        entity_id: { type: string }
+        content: { type: string }
+        from_scope: { type: string, default: personal }
+        triggered_by: { type: string }
+        user_id: { type: string }
+    outputSchema:
+      type: object
+      properties:
+        action: { type: string }
+        from_scope: { type: string }
+        to_scope: { type: string }
+        review_report: { type: object }
+        log_id: { type: string }
+
+  - name: promotion.execute
+    description: Execute promotion after review passes.
+    endpoint: POST /tool/invoke
+    timeoutMs: 30000
+    permission: promotion:write
+    inputSchema:
+      type: object
+      required: [entity_type, entity_id]
+      properties:
+        entity_type: { type: string, enum: [skill, rule, knowledge] }
+        entity_id: { type: string }
+    outputSchema:
+      type: object
+      properties:
+        status: { type: string }
+        entity_id: { type: string }
+
+  - name: promotion.config.save
+    description: Save or update user's AI review configuration.
+    endpoint: POST /tool/invoke
+    timeoutMs: 5000
+    permission: promotion:write
+    inputSchema:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+        provider: { type: string }
+        api_base: { type: string }
+        model_name: { type: string }
+        api_key: { type: string }
+        max_tokens: { type: integer }
+        temperature: { type: number }
+        redact_regexes: { type: array, items: { type: string } }
+    outputSchema:
+      type: object
+      properties:
+        config_id: { type: string }
+        status: { type: string }
+
+  - name: promotion.config.get
+    description: Get user's current AI review configuration.
+    endpoint: POST /tool/invoke
+    timeoutMs: 3000
+    permission: promotion:read
+    inputSchema:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+    outputSchema:
+      type: object
+      properties:
+        config: { type: object }
+
+  - name: promotion.logs
+    description: Get promotion audit logs for a given entity or user.
+    endpoint: POST /tool/invoke
+    timeoutMs: 5000
+    permission: promotion:read
+    inputSchema:
+      type: object
+      properties:
+        entity_type: { type: string }
+        entity_id: { type: string }
+        limit: { type: integer }
+    outputSchema:
+      type: object
+      properties:
+        logs: { type: array }
+        total: { type: integer }
+
+health:
+  endpoint: GET /health

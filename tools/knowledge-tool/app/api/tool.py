@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.config import settings
-from app.services import search_service, indexing_service
+from app.services.search_service import SearchService
+from app.services import indexing_service
 from app.schemas.search import SearchRequest
 
 router = APIRouter(tags=["tool"])
@@ -76,7 +77,7 @@ async def get_capabilities():
         "capabilities": [
             {
                 "name": "knowledge.search",
-                "description": "Search indexed document chunks.",
+                "description": "Search indexed document chunks with metadata filtering.",
                 "permission": "knowledge:search",
                 "endpoint": "POST /api/knowledge/search",
                 "timeout_ms": 3000,
@@ -86,6 +87,7 @@ async def get_capabilities():
                     "properties": {
                         "query": {"type": "string"},
                         "top_k": {"type": "integer", "default": 8},
+                        "search_mode": {"type": "string", "default": "hybrid"},
                     },
                 },
                 "output_schema": {
@@ -93,6 +95,25 @@ async def get_capabilities():
                     "properties": {
                         "items": {"type": "array"},
                         "degraded": {"type": "boolean"},
+                        "matched_kb_ids": {"type": "array"},
+                    },
+                },
+            },
+            {
+                "name": "knowledge.create_document",
+                "description": "Create and index a knowledge document.",
+                "permission": "knowledge:write",
+                "endpoint": "POST /api/documents",
+                "timeout_ms": 15000,
+                "input_schema": {
+                    "type": "object",
+                    "required": ["title", "content"],
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "doc_type": {"type": "string", "default": "markdown"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "knowledge_base_id": {"type": "string"},
                     },
                 },
             },
@@ -107,15 +128,43 @@ async def invoke_tool(req: ToolInvokeRequest, db: AsyncSession = Depends(get_db)
 
     try:
         if req.capability == "knowledge.search":
-            search_req = SearchRequest(
-                workspace_id=req.context.get("workspace_id", ""),
-                project_id=req.context.get("project_id"),
+            workspace_id = req.context.get("workspace_id", "")
+            project_id = req.context.get("project_id")
+            knowledge_base_ids = req.context.get("knowledge_base_ids")
+            task_domains = req.context.get("task_domains")
+
+            svc = SearchService(db)
+            result = await svc.search(
                 query=req.input.get("query", ""),
+                workspace_id=workspace_id or None,
+                project_id=project_id,
+                knowledge_base_ids=knowledge_base_ids,
+                task_domains=task_domains,
                 top_k=req.input.get("top_k", 8),
-                search_mode=req.input.get("search_mode", "hybrid"),
+                min_score=req.input.get("min_score", 0.1),
             )
-            result = await search_service.search(db, search_req)
-            output = result.model_dump()
+            output = result
+        elif req.capability == "knowledge.create_document":
+            from app.schemas.document import DocumentCreateRequest
+            from app.services.document_service import create_document
+            inp = req.input
+            doc_req = DocumentCreateRequest(
+                workspace_id=req.context.get("workspace_id", "default"),
+                title=inp.get("title", ""),
+                content=inp.get("content", ""),
+                doc_type=inp.get("doc_type", "markdown"),
+                tags=inp.get("tags") or [],
+                knowledge_base_id=inp.get("knowledge_base_id"),
+            )
+            doc = await create_document(db, doc_req)
+            if doc and doc.id:
+                try:
+                    await indexing_service.create_index_job(db, doc_id=doc.id, workspace_id=doc.workspace_id)
+                except Exception:
+                    pass
+                output = {"id": doc.id, "title": doc.title, "status": "created"}
+            else:
+                output = {"error": "create failed"}
         elif req.capability == "document.index":
             from app.schemas.document import IndexJobRequest
             doc_id = req.input.get("document_id")

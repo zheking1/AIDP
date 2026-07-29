@@ -6,9 +6,9 @@
 
 | 属性 | 值 |
 |------|-----|
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 创建日期 | 2026-07-07 |
-| 最后更新 | 2026-07-07 |
+| 最后更新 | 2026-07-28 |
 | 状态 | 进行中 |
 | 编写者 | AIDP Team |
 
@@ -105,24 +105,26 @@
 | SQLite 兼容性 | ✅ | 所有工具支持 SQLite |
 | File Watcher 服务 | ✅ | 自动代码索引 |
 
-### Phase 2: Web UI 生产级改造 🚧 (进行中)
+### Phase 2: Web UI 生产级改造 (统一 Controller UI) 🚧 (进行中)
 
 | 任务 | 优先级 | 预估工时 | 状态 |
 |------|--------|----------|------|
-| **Knowledge Tool Web UI** | P0 | 3 周 | 🚧 计划中 |
-| **Memory Tool Web UI** | P0 | 2 周 | 🚧 计划中 |
-| **Evolution Engine 重构** | P1 | 2 周 | 🚧 计划中 |
-| Asset Tool Web UI | P2 | 1 周 | ⏳ 待排期 |
-| Quality Tool Web UI | P2 | 3 天 | ⏳ 待排期 |
+| **Knowledge Tool Web UI** | P0 | 3 周 | ✅ 基本完成 |
+| **Memory Tool Web UI** | P0 | 2 周 | ✅ 基本完成 |
+| **Evolution Engine 重构** | P1 | 2 周 | ⚠️ 骨架阶段 |
+| Asset Tool Web UI | P2 | 1 周 | ⚠️ 基础版 |
+| Quality Tool Web UI | P2 | 3 天 | ⚠️ 基础版 |
 
-### Phase 3: 上下文优化管线 🚧 (进行中)
+> 注：所有工具 Web UI 已整合至 Controller 统一 UI（`apps/controller/app/web/templates/modules/`），不再维护独立工具 UI。
+
+### Phase 3: 上下文优化管线 ✅ (已完成)
 
 | 任务 | 优先级 | 预估工时 | 状态 |
 |------|--------|----------|------|
-| Agent Instructions 系统 | P0 | 1 周 | 🚧 开发中 |
-| 分段检索管线 (Stage 0-4) | P0 | 2 周 | 🚧 开发中 |
-| Intent Analysis 增强 | P0 | 3 天 | 🚧 开发中 |
-| MCP 集成优化 | P1 | 1 周 | ⏳ 待排期 |
+| Agent Instructions 系统 | P0 | 1 周 | ✅ 已完成 |
+| 分段检索管线 (Stage 0-4) | P0 | 2 周 | ✅ 已完成 |
+| Intent Analysis 增强 | P0 | 3 天 | ✅ 已完成 |
+| MCP 集成优化 | P1 | 1 周 | ✅ 已完成 |
 
 ### Phase 4: 高级功能 ⏳ (待排期)
 
@@ -145,14 +147,15 @@
 | **Controller** | ✅ 生产级 | ✅ 完整 | ✅ PostgreSQL | 统一入口 |
 | **Sandbox** | ✅ 完整 | ✅ 完整 | ✅ SQLite | 代码执行 |
 
-### 4.2 需要生产级 Web UI 的工具
+### 4.2 需要进一步完善的模块
 
-| 工具 | 当前 Web UI | 目标 | 关键功能 | 优先级 |
-|------|------------|------|---------|--------|
-| **Knowledge** | 基础列表 | 生产级 | 文档预览、分块可视化、搜索中心 | P0 |
-| **Memory** | 基础 CRUD | 生产级 | 记忆图谱、时间轴、上下文包 | P0 |
-| **Asset** | 基础列表 | 完整 | 模板预览、变量配置、资产市场 | P2 |
-| **Quality** | 基础表单 | 完整 | 质量报告、历史趋势、规则配置 | P2 |
+| 工具 | 当前 Web UI (统一 Controller 内) | 待完善功能 | 优先级 |
+|------|------------|---------|--------|
+| **Knowledge** | 完整（stats/层级树/文档CRUD/搜索/导入） | 分块可视化、知识图谱 | P2 |
+| **Memory** | 完整（CRUD/D3.js图谱/stats/搜索） | 时间轴、上下文包生成器、向量搜索UI | P2 |
+| **Asset** | 基础（列表/stats/搜索/创建） | 详情弹窗、模板预览 | P2 |
+| **Quality** | 基础（表单/执行/结果） | 趋势图表、报告页面 | P2 |
+| **Evolution** | 骨架（18行路由） | 两级进化系统、审核流程、版本管理 | P1 |
 
 ### 4.3 后台服务工具（无需 Web UI）
 
@@ -167,45 +170,26 @@
 
 ## 5. 详细开发计划
 
-### 5.1 Knowledge Tool Web UI (P0)
+### 5.1 Knowledge Tool (P0) ✅ 基本完成
 
-**目标**：构建生产级文档知识库管理界面
+**已完成**：在 Controller 统一 UI 中实现了知识库管理层级树、文档CRUD（新建/上传/网页导入）、分类筛选、搜索和统计仪表盘。
 
-**核心功能**：
-- 文档管理仪表盘（项目/分类/标签视图）
-- 文档预览与分块可视化
-- 高级搜索中心（语义+关键词）
-- 索引状态监控
-- 知识图谱（文档关联）
+**待完善**：
+- 文档分块可视化
+- 知识图谱
 
-**参考 SkillRouter 功能**：
-- 类似 Skill 管理的文档列表
-- 类似 Test Bench 的搜索测试
-- 类似 Statistics 的索引监控
-
-**文档**：详见 `docs/plans/KNOWLEDGE-WEB-UI-PLAN.md`
+**文档**：详见 `docs/plans/KNOWLEDGE-WEB-UI-PLAN.md` (v2.0)
 
 ---
 
-### 5.2 Memory Tool Web UI (P0)
+### 5.2 Memory Tool Web UI (P0) ✅ 基本完成
 
-**目标**：构建生产级记忆管理和可视化界面
+**已完成**：在 Controller 统一 UI 中实现了记忆条目 CRUD、统计仪表盘、D3.js 力导向图谱可视化（含缩放/物理模拟控制/图例）。
 
-**核心功能**：
-- 记忆管理器（列表/卡片/图谱视图）
-- 记忆图谱可视化（D3.js 力导向图）
-- 时间轴视图（记忆演变）
-- 上下文包生成器（交互式）
-- 记忆审核队列
-
-**参考项目**：
-- AgentMemory / MemGPT 的记忆分层
-- LLM Memory 的向量检索
-
-**增强功能**：
-- 向量搜索（pgvector）
-- 记忆合并（相似记忆自动合并）
-- 记忆关联推荐
+**待完善**：
+- 时间轴视图
+- 上下文包生成器
+- 向量搜索 UI
 
 **文档**：详见 `docs/plans/MEMORY-WEB-UI-PLAN.md`
 
@@ -305,19 +289,21 @@ Evolution v1.2.3
 
 ## 8. 未完成工作清单
 
-### 8.1 高优先级 (P0)
+### 8.1 高优先级 (P0) - 已完成
 
-- [ ] **Knowledge Tool Web UI** - 生产级文档管理界面
-- [ ] **Memory Tool Web UI** - 生产级记忆管理界面
-- [ ] **Agent Instructions 系统** - 完整的 Stage 0-4 管线
-- [ ] **Intent Analysis 增强** - 意图分析扩展
+- [x] **Knowledge Tool Web UI** - 知识库管理、文档CRUD、搜索、统计
+- [x] **Memory Tool Web UI** - 记忆CRUD、D3.js图谱、统计
+- [x] **Agent Instructions 系统** - Stage 0-4 完整管线
+- [x] **Intent Analysis 增强** - 意图分析 + fallback
+- [x] **MCP 集成优化** - aidp_context / aidp_instructions
 
 ### 8.2 中优先级 (P1)
 
-- [ ] **Evolution Engine 重构** - 两级进化系统
-- [ ] **Asset Tool Web UI** - 模板管理界面
-- [ ] **Quality Tool Web UI** - 质量报告界面
-- [ ] **MCP 集成优化** - 完整的 MCP 协议支持
+- [ ] **Evolution Engine 重构** - 两级进化系统（目前仅骨架）
+- [ ] Knowledge Tool 分块可视化
+- [ ] Memory Tool 时间轴/上下文包生成器
+- [ ] **Asset Tool Web UI 完善** - 详情弹窗、模板预览
+- [ ] **Quality Tool Web UI 完善** - 趋势图表、报告页面
 
 ### 8.3 低优先级 (P2)
 

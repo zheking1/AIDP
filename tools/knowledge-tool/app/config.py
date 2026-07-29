@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "mock-embedding-v1"
     EMBEDDING_DIMENSION: int = 384
 
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    LOCAL_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+
     CHUNK_DEFAULT_SIZE: int = 800
     CHUNK_DEFAULT_OVERLAP: int = 120
     CHUNK_MAX_SIZE: int = 1600

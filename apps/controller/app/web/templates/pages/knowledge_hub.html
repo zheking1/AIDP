@@ -1,0 +1,103 @@
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/base.html" %}{% endif %}
+
+{% block title %}知识中心 - AIDP{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-900 flex flex-col" x-data="knowledgeHub()" x-init="init()">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col flex-1" style="min-height: 0;">
+    <div class="flex items-center justify-between mb-6 flex-shrink-0">
+      <div>
+        <h1 class="text-2xl font-bold text-white">知识中心</h1>
+        <p class="text-gray-400 text-sm mt-1">管理全局知识与资产</p>
+      </div>
+    </div>
+
+    <div class="flex gap-1 bg-gray-800 p-1 rounded-lg mb-6 overflow-x-auto">
+      <template x-for="tab in tabs" :key="tab.id">
+        <button @click="switchTab(tab)"
+                class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition"
+                :class="activeTab === tab.id ? 'bg-gray-700 text-indigo-400 shadow' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'">
+          <i :class="'fas ' + tab.icon" class="text-xs"></i>
+          <span x-text="tab.label"></span>
+        </button>
+      </template>
+    </div>
+
+    <div class="bg-gray-800/50 rounded-lg border border-gray-700 flex-1 flex flex-col" style="min-height: 400px;">
+      <div x-show="loading" class="flex items-center justify-center py-20">
+        <div class="loading-spinner w-8 h-8"></div>
+      </div>
+      <div id="hub-content" class="flex-1" x-show="!loading"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+.loading-spinner {
+    border: 2px solid #374151;
+    border-top: 2px solid #6366f1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+<script>
+function knowledgeHub() {
+  return {
+    activeTab: 'hub-knowledge-bases',
+    tabs: [
+      { id: 'hub-knowledge-bases', label: '知识库管理', icon: 'fa-database', route: '/knowledge/bases' },
+      { id: 'hub-knowledge-docs',   label: '文档管理',   icon: 'fa-file-text',  route: '/knowledge/documents' },
+      { id: 'hub-knowledge-search', label: '高级搜索',   icon: 'fa-search',     route: '/knowledge/search' },
+      { id: 'hub-knowledge-templates', label: '文档模板', icon: 'fa-file-alt', route: '/knowledge/templates' },
+      { id: 'hub-assets-list',      label: '代码资产',   icon: 'fa-archive',   route: '/assets' },
+    ],
+    loading: false,
+
+    init() {
+      const m = window.location.search.match(/tab=([^&]+)/);
+      if (m) { const f = this.tabs.find(t => t.id === m[1]); if (f) this.activeTab = f.id; }
+      this.loadTab(this.activeTab);
+    },
+
+    switchTab(tab) {
+      this.activeTab = tab.id;
+      this.loadTab(tab.id);
+    },
+
+    async loadTab(tabId) {
+      const tab = this.tabs.find(t => t.id === tabId);
+      if (!tab) return;
+      this.loading = true;
+      try {
+        const url = tab.route + '?partial=1';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        let html = await resp.text();
+        const scripts = [];
+        html = html.replace(/<script>([\s\S]*?)<\/script>/g, (m, code) => { scripts.push(code); return ''; });
+        const el = document.getElementById('hub-content');
+        if (el) {
+          scripts.forEach(code => {
+            try {
+              const trimmed = code.trim();
+              if (trimmed.startsWith('function ')) {
+                const match = trimmed.match(/^function\s+(\w+)/);
+                if (match) eval('window.' + match[1] + ' = ' + trimmed);
+                else eval(code);
+              } else { eval(code); }
+            } catch(e) { console.warn(e.message); }
+          });
+          el.innerHTML = html;
+          if (window.Alpine) Alpine.initTree(el);
+        }
+      } catch(e) { console.error('Load failed:', e); }
+      finally { this.loading = false; }
+    }
+  };
+}
+</script>
+{% endblock %}

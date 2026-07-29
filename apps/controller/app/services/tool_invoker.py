@@ -1,120 +1,175 @@
-import time
-import uuid
-import logging
-from typing import Optional
+"""
+Tool Invoker Service - Calls external tools via HTTP API
+"""
 
+import os
+import json
 import httpx
+from typing import Optional, Any
 from sqlalchemy import select
-from app.db.models import ToolRegistry, ToolInvocation
-from app.db.database import async_session_factory as async_session
-from app.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+from app.db.models import ToolRegistry
 
 
-async def invoke_tool(
-    tool_name: str,
-    capability: str,
-    arguments: dict,
-    user_id: Optional[int] = None,
-) -> dict:
-    tool_result = await _find_tool(tool_name)
-    if "error" in tool_result:
-        return tool_result
+class ToolInvoker:
+    """Invokes tool capabilities via HTTP"""
+    
+    def __init__(self, db: Optional[AsyncSession] = None):
+        self.db = db
+        self._client = httpx.AsyncClient(timeout=30.0)
+        self._endpoint_cache = {}
+    
+    async def invoke(self, tool_name: str, capability: str, 
+                    arguments: dict = None) -> dict:
+        """Invoke a tool capability"""
+        
+        # Get tool endpoint
+        endpoint = await self._get_tool_endpoint(tool_name)
+        if not endpoint:
+            return {
+                "success": False,
+                "error": f"Tool '{tool_name}' not found or not registered"
+            }
+        
+        # Build request
+        url = f"{endpoint}/tool/invoke"
+        payload = {
+            "capability": capability,
+            "input": arguments or {},
+            "trace_id": self._generate_trace_id()
+        }
+        
+        try:
+            response = await self._client.post(
+                url,
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}: {response.text}"
+                }
+                
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "error": "Request timeout"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def _get_tool_endpoint(self, tool_name: str) -> Optional[str]:
+        """Get tool endpoint from registry or cache"""
+        
+        # Check cache first
+        if tool_name in self._endpoint_cache:
+            return self._endpoint_cache[tool_name]
+        
+        # Look up in database
+        if self.db:
+            result = await self.db.execute(
+                select(ToolRegistry).where(
+                    ToolRegistry.name == tool_name,
+                    ToolRegistry.status == "healthy"
+                )
+            )
+            tool = result.scalar_one_or_none()
+            if tool:
+                self._endpoint_cache[tool_name] = tool.endpoint
+                return tool.endpoint
+        
+        # Fallback to environment/config
+        endpoints = {
+            "skill-router": os.getenv("SKILLROUTER_URL", "http://localhost:8788"),
+            "knowledge-tool": os.getenv("KNOWLEDGE_URL", "http://localhost:18081"),
+            "memory-tool": os.getenv("MEMORY_URL", "http://localhost:18085"),
+            "asset-tool": os.getenv("ASSET_URL", "http://localhost:18082"),
+            "sandbox-tool": os.getenv("SANDBOX_URL", "http://localhost:18083"),
+            "quality-tool": os.getenv("QUALITY_URL", "http://localhost:18084"),
+        }
+        
+        endpoint = endpoints.get(tool_name)
+        if endpoint:
+            self._endpoint_cache[tool_name] = endpoint
+            
+        return endpoint
+    
+    def _generate_trace_id(self) -> str:
+        """Generate a short trace ID"""
+        import uuid
+        return str(uuid.uuid4())[:8]
+    
+    async def close(self):
+        """Close HTTP client"""
+        await self._client.aclose()
 
-    tool = tool_result["tool"]
-    endpoint = tool.endpoint
-    invoke_url = f"{endpoint.rstrip('/')}/tool/invoke"
-    trace_id = f"tr_{uuid.uuid4().hex[:12]}"
 
-    start = time.time()
-    status = "success"
-    result = None
-    error = None
+# Singleton instance
+_tool_invoker: Optional[ToolInvoker] = None
+
+
+def get_tool_invoker(db: Optional[AsyncSession] = None) -> ToolInvoker:
+    """Get or create tool invoker singleton"""
+    global _tool_invoker
+    if _tool_invoker is None:
+        _tool_invoker = ToolInvoker(db)
+    return _tool_invoker
+
+
+async def invoke_tool(tool_name: str, capability: str, arguments: dict = None, user_id: Optional[int] = None) -> dict:
+    """Standalone wrapper to invoke a tool"""
+    import uuid
+    from datetime import datetime, timezone
+    from app.db.database import async_session_factory
+    from app.db.models import ToolInvocation
+
+    async with async_session_factory() as db:
+        invoker = get_tool_invoker(db)
+        result = await invoker.invoke(tool_name, capability, arguments)
 
     try:
-        payload = {
-            "trace_id": trace_id,
-            "capability": capability,
-            "context": {"user_id": user_id},
-            "input": arguments if isinstance(arguments, dict) else {},
-        }
-        async with httpx.AsyncClient(timeout=settings.INVOCATION_TIMEOUT) as client:
-            resp = await client.post(invoke_url, json=payload)
+        async with async_session_factory() as db:
+            record = ToolInvocation(
+                id=str(uuid.uuid4()),
+                tool_name=tool_name,
+                capability=capability,
+                arguments=json.dumps(arguments or {}),
+                result=json.dumps(result),
+                success=result.get("success", False),
+                user_id=user_id,
+                duration_ms=None,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(record)
+            await db.commit()
+    except Exception:
+        pass
 
-        if resp.status_code == 200:
-            result = resp.json()
-        else:
-            status = "error"
-            error = f"HTTP {resp.status_code}: {resp.text[:500]}"
-    except httpx.TimeoutException:
-        status = "error"
-        error = "Timeout"
-    except Exception as e:
-        status = "error"
-        error = str(e)
-
-    duration_ms = int((time.time() - start) * 1000)
-
-    async with async_session() as session:
-        record = ToolInvocation(
-            tool_name=tool_name,
-            capability=capability,
-            arguments=arguments,
-            result=result,
-            status=status,
-            duration_ms=duration_ms,
-            error=error,
-            user_id=user_id,
-        )
-        session.add(record)
-        await session.commit()
-        await session.refresh(record)
-
-    return {
-        "id": record.id,
-        "toolName": tool_name,
-        "capability": capability,
-        "status": status,
-        "result": result,
-        "error": error,
-        "durationMs": duration_ms,
-    }
+    return result
 
 
 async def get_invocation_history(tool_name: Optional[str] = None, limit: int = 20) -> list:
-    async with async_session() as session:
-        q = select(ToolInvocation)
-        if tool_name:
-            q = q.where(ToolInvocation.tool_name == tool_name)
-        q = q.order_by(ToolInvocation.id.desc()).limit(limit)
-        result = await session.execute(q)
-        return [
-            {
-                "id": r.id,
-                "toolName": r.tool_name,
-                "capability": r.capability,
-                "status": r.status,
-                "durationMs": r.duration_ms,
-                "error": r.error,
-                "createdAt": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in result.scalars().all()
-        ]
+    """Get invocation history"""
+    from app.db.database import async_session_factory
+    from app.db.models import ToolInvocation
 
-
-async def _find_tool(tool_name: str) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(ToolRegistry).where(ToolRegistry.name == tool_name))
-        tool = result.scalar_one_or_none()
-
-        if not tool:
-            return {"error": f"Tool not found: {tool_name}"}
-
-        if tool.status == "disabled":
-            return {"error": f"Tool is disabled: {tool_name}"}
-
-        if tool.status == "unreachable":
-            return {"error": f"Tool is unreachable: {tool_name}"}
-
-        return {"tool": tool}
+    try:
+        async with async_session_factory() as db:
+            from sqlalchemy import select, desc
+            query = select(ToolInvocation)
+            if tool_name:
+                query = query.where(ToolInvocation.tool_name == tool_name)
+            query = query.order_by(desc(ToolInvocation.created_at)).limit(limit)
+            result = await db.execute(query)
+            records = result.scalars().all()
+            return [r.to_dict() if hasattr(r, 'to_dict') else {"id": r.id, "tool_name": r.tool_name, "capability": r.capability, "success": r.success, "created_at": r.created_at.isoformat() if r.created_at else None} for r in records]
+    except Exception:
+        return []

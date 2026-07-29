@@ -10,6 +10,9 @@ from app.api.tool import router as tool_router
 from app.api.documents import router as documents_router
 from app.api.ingest import router as ingest_router
 from app.api.search import router as search_router
+from app.api.knowledge_bases import router as kb_router
+from app.api.bindings import router as bindings_router, kb_bindings_router
+from app.api.import_web import router as import_web_router
 from app.web.routes import router as web_router
 
 
@@ -38,4 +41,8 @@ app.include_router(tool_router)
 app.include_router(documents_router)
 app.include_router(ingest_router)
 app.include_router(search_router)
+app.include_router(kb_router)
+app.include_router(kb_bindings_router)
+app.include_router(bindings_router)
+app.include_router(import_web_router)
 app.include_router(web_router)

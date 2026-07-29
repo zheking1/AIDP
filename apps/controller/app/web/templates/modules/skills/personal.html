@@ -1,0 +1,326 @@
+﻿<div x-data="personalSkillsPage()" x-init="init()">
+<!-- Header -->
+<div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">我的技能</h1>
+        <p class="text-gray-400 text-sm mt-1">个人自定义技能，可导入导出、分组管理</p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="showImportModal = true" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">
+          <i class="fas fa-download mr-2"></i>导入
+        </button>
+        <button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">
+          <i class="fas fa-plus mr-2"></i>创建技能
+        </button>
+       
+    </div>
+</div>
+<!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-6">
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">技能总数</div><div class="text-xl font-bold text-white" x-text="stats.total || 0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">已审核</div><div class="text-xl font-bold text-green-400" x-text="stats.approved || 0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">待审核</div><div class="text-xl font-bold text-yellow-400" x-text="stats.pending || 0"></div></div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-3"><div class="text-xs text-gray-500">分组</div><div class="text-xl font-bold text-indigo-400" x-text="groups.length || 0"></div></div>
+    </div>
+
+    <!-- Search + Filter -->
+    <div class="flex gap-3 mb-4">
+      <div class="flex-1 relative">
+        <i class="fas fa-search absolute left-3 top-2.5 text-gray-500"></i>
+        <input type="text" x-model="searchQuery" @input.debounce.300ms="loadSkills()" placeholder="搜索技能..." class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 placeholder-gray-600">
+      </div>
+      <select x-model="statusFilter" @change="loadSkills()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300"><option value="">全部</option><option value="approved">已审核</option><option value="pending">待审核</option></select>
+      <button @click="showGroupManager = true" class="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-sm transition"><i class="fas fa-folder mr-1"></i>分组</button>
+    </div>
+
+    <!-- Skills List -->
+    <div class="space-y-2">
+      <template x-for="skill in skills" :key="skill.id">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewSkill(skill)">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <span class="w-9 h-9 bg-yellow-500/10 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-bolt text-yellow-500 text-sm"></i></span>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-medium text-white truncate" x-text="skill.name"></h3>
+                  <span class="px-1.5 py-0.5 text-xs rounded" :class="skill.review_status==='approved'?'bg-green-900/50 text-green-300':'bg-yellow-900/50 text-yellow-300'" x-text="skill.review_status==='approved'?'已审核':'待审核'"></span>
+                </div>
+                <p class="text-sm text-gray-400 truncate mt-0.5" x-text="skill.description || '无描述'"></p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-shrink-0 ml-4">
+              <div class="flex gap-1"><template x-for="tag in ((skill && skill.tags) || []).slice(0,2)" :key="tag"><span class="px-1.5 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span></template></div>
+              <span class="text-xs text-gray-600">v<span x-text="skill.version"></span></span>
+              <button @click.stop="deleteSkill(skill)" class="text-gray-600 hover:text-red-400 transition"><i class="fas fa-trash text-xs"></i></button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div x-show="skills.length === 0 && !loading" class="text-center py-16">
+      <i class="fas fa-bolt text-5xl text-gray-700 mb-4"></i>
+      <p class="text-gray-500 mb-4">还没有个人技能</p>
+      <button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm transition"><i class="fas fa-plus mr-2"></i>创建第一个技能</button>
+    </div>
+
+  <!-- Create Modal -->
+  <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 flex flex-col max-h-[85vh]">
+      <h2 class="text-xl font-bold text-white px-6 pt-6 pb-4 flex-shrink-0" x-text="editingSkill ? '编辑技能' : '创建技能'"></h2>
+      <div class="overflow-y-auto px-6 pb-4 space-y-4 flex-1 min-h-0">
+        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="form.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">指令 / 提示词</label><textarea x-model="form.instruction" rows="6" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder="定义 AI Agent 的行为规则..."></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">脚本内容</label><textarea x-model="form.content" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder="可选的可执行脚本..."></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">运行参数 (JSON)</label><textarea x-model="form.execConfigStr" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder='{"model":"gpt-4","temperature":0.7}'></textarea></div>
+        <div><label class="block text-sm text-gray-400 mb-1">标签（逗号分隔）</label><input type="text" x-model="form.tagsInput" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="python, automation, deploy"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">分组</label><select x-model="form.group_id" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="">无分组</option><template x-for="g in groups" :key="g.id"><option :value="g.id" x-text="g.name"></option></template></select></div>
+      </div>
+      <div class="flex justify-end gap-3 px-6 pb-6 pt-4 border-t border-gray-700 flex-shrink-0">
+        <button @click="showCreateModal = false; editingSkill = null; form = {name:'',description:'',instruction:'',content:'',execConfigStr:'{}',tagsInput:'',group_id:''}" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
+        <button @click="createSkill()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition" x-text="editingSkill ? '保存' : '创建'"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center gap-3 min-w-0">
+          <i class="fas fa-bolt text-yellow-500 flex-shrink-0"></i>
+          <h2 class="text-xl font-semibold text-white truncate" x-text="detail?.name"></h2>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-blue-900/50 text-blue-300">个人</span>
+          <span class="px-2 py-0.5 text-xs rounded" :class="detail?.review_status==='approved'?'bg-green-900/50 text-green-300':'bg-yellow-900/50 text-yellow-300'" x-text="detail?.review_status==='approved'?'已审核':'待审核'"></span>
+        </div>
+        <div class="flex items-center gap-2"><span class="text-xs text-gray-500">v<span x-text="detail?.version"></span></span><button @click="showDetailModal = false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button></div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex gap-4 border-b border-gray-700 mb-4">
+          <button @click="detailTab='info'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='info'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">信息</button>
+          <button @click="detailTab='instruction'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='instruction'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">指令</button>
+          <button @click="detailTab='content'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='content'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">脚本</button>
+          <button @click="detailTab='files'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='files'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">文件</button>
+          <button @click="detailTab='review'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='review'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">审核</button>
+          <button @click="detailTab='evolutions'" class="pb-2 text-sm font-medium border-b-2 transition" :class="detailTab==='evolutions'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent hover:text-gray-300'">版本</button>
+        </div>
+
+        <div x-show="detailTab==='info'" class="space-y-4">
+          <div><h3 class="text-sm font-medium text-gray-400 mb-1">描述</h3><p class="text-gray-300" x-text="detail?.description||'无'"></p></div>
+          <div><h3 class="text-sm font-medium text-gray-400 mb-1">标签</h3><div class="flex gap-1 flex-wrap"><template x-for="tag in (detail?.tags||[])" :key="tag"><span class="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span></template></div></div>
+          <div class="grid grid-cols-2 gap-4">
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">版本</h3><p class="text-gray-300 text-sm" x-text="detail?.version"></p></div>
+            <div><h3 class="text-sm font-medium text-gray-400 mb-1">使用次数</h3><p class="text-gray-300 text-sm" x-text="detail?.access_count||0"></p></div>
+          </div>
+        </div>
+        <div x-show="detailTab==='instruction'"><pre class="bg-gray-900 p-4 rounded-lg text-sm text-green-400 overflow-x-auto whitespace-pre-wrap font-mono" x-text="detail?.instruction||'无指令'"></pre></div>
+        <div x-show="detailTab==='content'"><pre class="bg-gray-900 p-4 rounded-lg text-sm text-blue-300 overflow-x-auto whitespace-pre-wrap font-mono" x-text="detail?.content||'无脚本'"></pre></div>
+        <div x-show="detailTab==='files'">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm text-gray-400">关联文件</span>
+            <button @click="openFileManager()" class="text-indigo-400 hover:text-indigo-300 text-sm"><i class="fas fa-edit mr-1"></i>管理文件</button>
+          </div>
+          <div x-show="!detail?.files?.length" class="text-gray-500 text-sm py-8 text-center">无关联文件</div>
+          <div x-show="(detail?.files||[]).length" class="flex gap-4 min-h-0">
+            <div class="w-48 flex-shrink-0 space-y-1 overflow-y-auto max-h-96">
+              <template x-for="f in (detail?.files||[])" :key="f.id">
+                <div @click="selectedFile = f" class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition" :class="selectedFile?.id === f.id ? 'bg-gray-700 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'">
+                  <i class="fas fa-file-code text-xs"></i>
+                  <span class="truncate flex-1" x-text="f.path"></span>
+                  <span x-show="f.is_entry" class="px-1 py-0.5 text-xs bg-indigo-900/50 text-indigo-300 rounded flex-shrink-0">入口</span>
+                </div>
+              </template>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div x-show="!selectedFile" class="text-gray-500 text-sm py-8 text-center">选择一个文件查看内容</div>
+              <div x-show="selectedFile" class="bg-gray-900 rounded-lg p-4">
+                <div class="flex items-center gap-2 mb-3">
+                  <i class="fas fa-file-code text-gray-500"></i>
+                  <span class="text-sm text-white font-medium" x-text="selectedFile?.path"></span>
+                  <span class="text-xs text-gray-500" x-text="selectedFile?.language"></span>
+                </div>
+                <pre class="text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono max-h-80 overflow-y-auto" x-text="selectedFile?.content || ''"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div x-show="detailTab==='review'" class="space-y-4">
+          <div>
+            <h3 class="text-sm font-medium text-gray-400 mb-1">审核状态</h3>
+            <span class="px-2 py-0.5 text-xs rounded" :class="detail?.review_status==='approved'?'bg-green-900/50 text-green-300':'bg-yellow-900/50 text-yellow-300'" x-text="detail?.review_status==='approved'?'已审核':'待审核'"></span>
+          </div>
+          <div x-show="detail?.review_report">
+            <h3 class="text-sm font-medium text-gray-400 mb-1">审核报告</h3>
+            <pre class="bg-gray-900 p-4 rounded-lg text-sm text-gray-300 whitespace-pre-wrap font-mono" x-text="detail?.review_report"></pre>
+          </div>
+          <div x-show="(detail?.review_log||[]).length">
+            <h3 class="text-sm font-medium text-gray-400 mb-1">审核日志</h3>
+            <div class="space-y-1"><template x-for="log in (detail?.review_log||[])" :key="log"><div class="text-xs text-gray-500 bg-gray-900 rounded px-3 py-2" x-text="log"></div></template></div>
+          </div>
+          <div x-show="(detail?.allow_risk_patterns||[]).length">
+            <h3 class="text-sm font-medium text-gray-400 mb-1">允许的风险模式</h3>
+            <div class="flex gap-1 flex-wrap"><template x-for="p in (detail?.allow_risk_patterns||[])" :key="p"><span class="px-2 py-0.5 text-xs bg-amber-900/30 text-amber-400 rounded" x-text="p"></span></template></div>
+          </div>
+        </div>
+        <div x-show="detailTab==='evolutions'" class="space-y-2">
+          <div x-show="!evolutions.length" class="text-gray-500 text-sm py-8 text-center">无版本记录</div>
+          <template x-for="evo in evolutions" :key="evo.id">
+            <div class="bg-gray-900 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-gray-500" x-text="'v'+evo.old_version+' → v'+((evo.old_version||0)+1)"></span>
+                <span class="text-xs text-gray-600" x-text="formatDate(evo.created_at)"></span>
+              </div>
+              <p class="text-xs text-gray-400" x-text="evo.diff_summary||'无摘要'"></p>
+              <p class="text-xs text-gray-600 mt-1">触发: <span x-text="evo.trigger_reason"></span></p>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="flex justify-between px-6 py-4 border-t border-gray-700">
+        <button @click="deleteSkill(detail)" class="text-red-400 hover:text-red-300 text-sm"><i class="fas fa-trash mr-1"></i>删除</button>
+        <div class="flex gap-2">
+          <button @click="editSkill(detail)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-edit mr-1"></i>编辑</button>
+          <a :href="'/api/skills/'+detail?.id+'/package'" target="_blank" class="text-gray-400 hover:text-white text-sm px-3 py-2"><i class="fas fa-download mr-1"></i>下载</a>
+          <button @click="reviewSkill()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm transition" x-show="detail?.review_status!=='approved'"><i class="fas fa-check mr-1"></i>审核</button>
+          <button @click="showDetailModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div x-show="showImportModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6">
+      <h2 class="text-xl font-bold text-white mb-4">导入技能</h2>
+      <div class="flex gap-2 border-b border-gray-700 mb-4">
+        <button @click="importTab='url'" class="pb-2 text-sm font-medium border-b-2 transition" :class="importTab==='url'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">URL 导入</button>
+        <button @click="importTab='github'" class="pb-2 text-sm font-medium border-b-2 transition" :class="importTab==='github'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'">GitHub 搜索</button>
+      </div>
+      <div class="space-y-4">
+        <div x-show="importTab==='url'">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">来源 URL</label>
+            <input type="text" x-model="importUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder="https://github.com/user/repo/tree/main/skills/my-skill">
+            <p class="text-xs text-gray-500 mt-1">支持 GitHub 仓库路径或 .tar.gz 包链接</p>
+          </div>
+          <button @click="previewImport()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition" x-show="importUrl && !importPreview">
+            <i class="fas fa-eye mr-2"></i>预览
+          </button>
+          <div x-show="importPreview" class="bg-gray-900 rounded-lg p-3 text-sm">
+            <div class="text-green-400 mb-1"><i class="fas fa-check-circle mr-1"></i><span x-text="importPreview?.name"></span></div>
+            <p class="text-gray-400 text-xs" x-text="importPreview?.description"></p>
+            <div class="flex gap-1 mt-2"><template x-for="t in ((importPreview && importPreview.tags)||[])" :key="t"><span class="px-1.5 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="t"></span></template></div>
+          </div>
+        </div>
+        <div x-show="importTab==='github'">
+          <div class="flex gap-2">
+            <input type="text" x-model="githubQuery" @keydown.enter="searchGithub()" class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="搜索 GitHub 技能库...">
+            <button @click="searchGithub()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition" x-text="searching?'搜索中...':'搜索'" :disabled="searching"></button>
+          </div>
+          <div x-show="searching" class="text-center py-8"><i class="fas fa-spinner fa-spin text-gray-500 text-2xl"></i></div>
+          <div x-show="!searching && githubResults.length" class="max-h-60 overflow-y-auto space-y-2">
+            <template x-for="r in githubResults" :key="r.url">
+              <div @click="selectGithubResult(r)" class="bg-gray-700/50 hover:bg-gray-700 rounded-lg p-3 cursor-pointer transition">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-white font-medium" x-text="r.name"></span>
+                  <span class="text-xs text-yellow-400"><i class="fas fa-star mr-0.5"></i><span x-text="r.stars||0"></span></span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1 truncate" x-text="r.description||'无描述'"></p>
+              </div>
+            </template>
+          </div>
+          <div x-show="!searching && !githubResults.length && githubQuery" class="text-center py-8 text-gray-500 text-sm">未找到匹配的技能</div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showImportModal = false; importUrl = ''; importPreview = null; githubQuery = ''; githubResults = []" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
+        <button @click="doImport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition" x-show="importPreview">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group Manager Modal -->
+  <!-- File Manager Modal -->
+  <div x-show="showFileManager" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showFileManager = false">
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <h2 class="text-xl font-bold text-white">管理文件</h2>
+        <button @click="showFileManager = false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6 space-y-3">
+        <template x-for="(file, i) in editFiles" :key="i">
+          <div class="bg-gray-900 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <input type="text" x-model="file.path" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white font-mono" placeholder="文件路径 (如 main.py)">
+              <input type="text" x-model="file.language" class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white" placeholder="语言">
+              <label class="flex items-center gap-1 text-xs text-gray-400 cursor-pointer whitespace-nowrap">
+                <input type="checkbox" x-model="file.is_entry" class="form-checkbox rounded">
+                入口
+              </label>
+              <button @click="editFiles.splice(i, 1)" class="text-red-400 hover:text-red-300 text-xs p-1"><i class="fas fa-trash"></i></button>
+            </div>
+            <textarea x-model="file.content" rows="6" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-300" placeholder="文件内容..."></textarea>
+          </div>
+        </template>
+        <button @click="editFiles.push({path:'',content:'',language:'',is_entry:false,sort_order:editFiles.length})" class="w-full border-2 border-dashed border-gray-600 hover:border-gray-500 rounded-lg py-4 text-gray-400 hover:text-white text-sm transition">
+          <i class="fas fa-plus mr-2"></i>添加文件
+        </button>
+      </div>
+      <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700">
+        <button @click="showFileManager = false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
+        <button @click="saveFiles()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">保存文件</button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="showGroupManager" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md mx-4 p-6">
+      <h2 class="text-xl font-bold text-white mb-4">分组管理</h2>
+      <div class="space-y-2 mb-4">
+        <template x-for="g in groups" :key="g.id">
+          <div class="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-2">
+            <span class="text-sm text-white"><i class="fas fa-folder text-yellow-600 mr-2"></i><span x-text="g.name"></span></span>
+            <button @click="deleteGroup(g)" class="text-gray-500 hover:text-red-400 text-xs"><i class="fas fa-times"></i></button>
+          </div>
+        </template>
+      </div>
+      <div class="flex gap-2">
+        <input type="text" x-model="newGroupName" @keydown.enter="createGroup()" class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="新分组名称">
+        <button @click="createGroup()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-plus"></i></button>
+      </div>
+      <div class="flex justify-end mt-4"><button @click="showGroupManager = false" class="text-gray-400 hover:text-white text-sm">关闭</button></div>
+    </div>
+  </div>
+</div>
+
+<script>window.personalSkillsPage=function personalSkillsPage(params){
+params=params||{};var scope=params.scope||'personal';var projectId=params.project_id||null;
+return {
+skills:[],groups:[],searchQuery:'',statusFilter:'',loading:false,
+showCreateModal:false,showDetailModal:false,showImportModal:false,showGroupManager:false,
+editingSkill:null,detailTab:'info',detail:null,selectedFile:null,stats:{},evolutions:[],
+form:{name:'',description:'',instruction:'',content:'',execConfigStr:'{}',tagsInput:'',group_id:''},
+importUrl:'',importPreview:null,newGroupName:'',
+showFileManager:false,editFiles:[],
+importTab:'url',githubQuery:'',githubResults:[],searching:false,
+async init(){await Promise.all([this.loadSkills(),this.loadGroups(),this.loadStats()])},
+async loadSkills(){this.loading=true;try{const p=new URLSearchParams({scope:scope,limit:'100'});if(this.searchQuery)p.set('search',this.searchQuery);if(projectId)p.set('project_id',projectId);const r=await fetch('/api/skills/list?'+p);if(r.ok)this.skills=(await r.json()).items||[]}finally{this.loading=false}},
+async loadGroups(){try{const u='/api/skills/groups/list?scope='+scope+(projectId?'&project_id='+projectId:'');const r=await fetch(u);if(r.ok)this.groups=(await r.json()).items||[]}catch(e){}},
+async loadStats(){try{const r=await fetch('/api/skills/stats');if(r.ok)this.stats=await r.json()}catch(e){}},
+async createSkill(){const tags=this.form.tagsInput.split(',').map(function(t){return t.trim()}).filter(Boolean);let execConfig={};try{execConfig=JSON.parse(this.form.execConfigStr||'{}')}catch(e){execConfig={}}try{const body={name:this.form.name,description:this.form.description,instruction:this.form.instruction,content:this.form.content,tags:tags,exec_config:execConfig,group_id:this.form.group_id||null};const isEdit=this.editingSkill;let url,method;if(isEdit){url='/api/skills/'+isEdit;method='PUT'}else{body.scope=scope;url='/api/skills/create'+(projectId?'?project_id='+projectId:'');method='POST'}const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){this.showCreateModal=false;this.editingSkill=null;this.form={name:'',description:'',instruction:'',content:'',execConfigStr:'{}',tagsInput:'',group_id:''};if(isEdit){const dr=await fetch('/api/skills/'+isEdit);if(dr.ok)this.detail=await dr.json()}await this.loadSkills();await this.loadStats()}}catch(e){console.error(e)}},
+openFileManager(){var files=this.detail?.files||[];this.editFiles=files.map(function(f){return{path:f.path,content:f.content||'',language:f.language||'',is_entry:!!f.is_entry,sort_order:f.sort_order||0}});if(!this.editFiles.length)this.editFiles.push({path:'',content:'',language:'',is_entry:true,sort_order:0});this.showFileManager=true},
+async saveFiles(){if(!this.detail)return;try{var r=await fetch('/api/skills/'+this.detail.id+'/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.editFiles)});if(r.ok){this.showFileManager=false;this.selectedFile=null;var dr=await fetch('/api/skills/'+this.detail.id);if(dr.ok)this.detail=await dr.json()}else alert('保存失败')}catch(e){alert('保存失败: '+e.message)}},
+editSkill(s){this.showDetailModal=false;this.form={name:s.name,description:s.description||'',instruction:s.instruction||'',content:s.content||'',execConfigStr:JSON.stringify(s.exec_config||{},null,2),tagsInput:(s.tags||[]).join(', '),group_id:s.group_id||''};this.editingSkill=s.id;this.showCreateModal=true},
+async viewSkill(s){this.detailTab='info';this.selectedFile=null;this.evolutions=[];try{const r=await fetch('/api/skills/'+s.id);if(r.ok){this.detail=await r.json();this.showDetailModal=true}const evo=await fetch('/api/skills/'+s.id+'/evolutions');if(evo.ok)this.evolutions=(await evo.json()).items||[]}catch(e){}},
+async deleteSkill(s){if(!s||!confirm('确定删除'+s.name+'？'))return;try{const r=await fetch('/api/skills/'+s.id,{method:'DELETE'});if(r.ok){this.showDetailModal=false;await this.loadSkills();await this.loadStats()}}catch(e){}},
+async previewImport(){if(!this.importUrl)return;try{const r=await fetch('/api/skills/import/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:this.importUrl})});if(r.ok)this.importPreview=await r.json();else alert('预览失败，请检查 URL')}catch(e){alert('预览失败: '+e.message)}},
+async doImport(){try{const body={url:this.importUrl,scope:scope};const qs=projectId?'?project_id='+projectId:'';const r=await fetch('/api/skills/import'+qs,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){this.showImportModal=false;this.importUrl='';this.importPreview=null;await this.loadSkills();await this.loadStats()}else alert('导入失败')}catch(e){alert('导入失败: '+e.message)}},
+async createGroup(){if(!this.newGroupName.trim())return;try{const body={name:this.newGroupName,scope:scope};const qs=projectId?'?project_id='+projectId:'';const r=await fetch('/api/skills/groups/create'+qs,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){this.newGroupName='';await this.loadGroups()}}catch(e){}},
+async deleteGroup(g){if(!confirm('删除分组'+g.name+'？技能不会删除'))return;try{await fetch('/api/skills/groups/'+g.id,{method:'DELETE'});await this.loadGroups()}catch(e){}},
+async searchGithub(){if(!this.githubQuery.trim())return;this.searching=true;this.githubResults=[];try{const r=await fetch('/api/skills/import/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:this.githubQuery})});if(r.ok)this.githubResults=(await r.json()).items||[]}catch(e){console.error(e)}finally{this.searching=false}},
+selectGithubResult(r){this.importUrl=r.url;this.importTab='url';this.importPreview=null},
+async reviewSkill(){if(!this.detail)return;try{const r=await fetch('/api/skills/'+this.detail.id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report:'Auto-approved',status:'approved'})});if(r.ok){this.detail.review_status='approved';await this.loadSkills();await this.loadStats()}else alert('审核失败')}catch(e){alert('审核失败: '+e.message)}}
+}
+};
+</script>

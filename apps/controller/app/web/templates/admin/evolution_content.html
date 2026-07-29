@@ -1,0 +1,179 @@
+<div x-data="adminEvolutionPage()" x-init="init()">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">进化管理</h1>
+            <p class="text-gray-400 text-sm mt-1">管理项目级进化提案 → 审核 → 系统级发布</p>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-6">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">待审核</div>
+            <div class="text-xl font-bold text-yellow-400" x-text="stats.pending || 0">0</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">已批准</div>
+            <div class="text-xl font-bold text-green-400" x-text="stats.approved || 0">0</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">系统级</div>
+            <div class="text-xl font-bold text-indigo-400" x-text="stats.system_level || 0">0</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-3">
+            <div class="text-xs text-gray-500">项目级</div>
+            <div class="text-xl font-bold text-gray-300" x-text="stats.project_level || 0">0</div>
+        </div>
+    </div>
+
+    <!-- Tab Filter -->
+    <div class="flex gap-2 mb-4">
+        <button @click="filter='pending'" :class="filter==='pending'?'bg-yellow-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded-lg text-sm transition">待审核</button>
+        <button @click="filter='approved'" :class="filter==='approved'?'bg-green-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded-lg text-sm transition">已批准</button>
+        <button @click="filter='system'" :class="filter==='system'?'bg-indigo-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded-lg text-sm transition">系统级</button>
+        <button @click="filter='rejected'" :class="filter==='rejected'?'bg-red-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded-lg text-sm transition">已拒绝</button>
+        <button @click="filter=''" :class="filter===''?'bg-gray-600 text-white':'bg-gray-700 text-gray-400'" class="px-3 py-1.5 rounded-lg text-sm transition">全部</button>
+    </div>
+
+    <!-- Version List -->
+    <div class="space-y-3" x-show="!loading">
+        <template x-for="v in displayedVersions" :key="v.id">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/30 transition cursor-pointer" @click="viewDetail(v)">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-white" x-text="v.title"></span>
+                            <span class="px-2 py-0.5 text-xs rounded-full" :class="statusBadgeClass(v.review_status)" x-text="statusLabel(v.review_status)"></span>
+                            <span class="px-2 py-0.5 text-xs rounded-full" :class="v.level==='system'?'bg-indigo-500/20 text-indigo-400':'bg-gray-600/30 text-gray-400'" x-text="v.level==='system'?'系统级':'项目级'"></span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1" x-text="v.description?.substring(0, 120)"></p>
+                        <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                            <span><i class="far fa-clock mr-1"></i><span x-text="v.created_at?.substring(0, 10)"></span></span>
+                            <span x-show="v.created_by_name"><i class="far fa-user mr-1"></i><span x-text="v.created_by_name"></span></span>
+                            <span x-show="v.affected_tools?.length">影响工具: <span x-text="v.affected_tools.join(', ')"></span></span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 ml-4" x-show="v.review_status==='pending'">
+                        <button @click.stop="review(v, 'approve')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs transition">批准</button>
+                        <button @click.stop="review(v, 'reject')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs transition">拒绝</button>
+                    </div>
+                    <div class="flex gap-2 ml-4" x-show="v.review_status==='approved' && v.level!=='system'">
+                        <button @click.stop="publishVersion(v)" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs transition">发布</button>
+                    </div>
+                    <div class="flex gap-2 ml-4" x-show="v.level==='system'">
+                        <button @click.stop="rollbackVersion(v)" class="bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1 rounded text-xs transition">回退</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <div x-show="!displayedVersions.length" class="text-center py-12 text-gray-500">
+            <i class="fas fa-code-branch text-4xl text-gray-700 mb-4"></i>
+            <p>暂无进化版本</p>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div x-show="showDetail" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition @click.self="showDetail=false">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 sticky top-0 bg-gray-800">
+                <h3 class="text-white font-medium" x-text="detail?.title"></h3>
+                <button @click="showDetail=false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs text-gray-500 uppercase">版本号</label>
+                    <p class="text-white text-sm" x-text="detail?.version"></p>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 uppercase">描述</label>
+                    <p class="text-white text-sm whitespace-pre-wrap" x-text="detail?.description"></p>
+                </div>
+                <div x-show="detail?.changes && Object.keys(detail?.changes || {}).length">
+                    <label class="text-xs text-gray-500 uppercase">变更内容</label>
+                    <pre class="text-xs text-gray-300 bg-gray-900 rounded p-3 mt-1 overflow-auto" x-text="JSON.stringify(detail?.changes, null, 2)"></pre>
+                </div>
+                <div x-show="detail?.affected_tools?.length">
+                    <label class="text-xs text-gray-500 uppercase">影响工具</label>
+                    <div class="flex gap-1 mt-1"><template x-for="t in detail?.affected_tools"><span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded text-xs" x-text="t"></span></template></div>
+                </div>
+                <div x-show="detail?.review_log?.length">
+                    <label class="text-xs text-gray-500 uppercase">审核日志</label>
+                    <div class="space-y-2 mt-1">
+                        <template x-for="log in detail?.review_log">
+                            <div class="flex items-start gap-2 text-xs bg-gray-900 rounded p-2">
+                                <span class="text-gray-400" x-text="log.timestamp?.substring(0, 19)"></span>
+                                <span class="font-medium" :class="log.action==='approve'?'text-green-400':log.action==='reject'?'text-red-400':'text-yellow-400'" x-text="log.action"></span>
+                                <span class="text-gray-300" x-text="log.comment"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end" x-show="detail?.review_status==='pending'">
+                <button @click="review(detail, 'reject'); showDetail=false" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm mr-2">拒绝</button>
+                <button @click="review(detail, 'approve'); showDetail=false" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm">批准</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+window.adminEvolutionPage = function() {
+    return {
+        versions: [], stats: {}, loading: false, filter: 'pending', showDetail: false, detail: null,
+        async init() { await this.load() },
+        get displayedVersions() {
+            if (!this.filter) return this.versions
+            if (this.filter === 'system') return this.versions.filter(v => v.level === 'system')
+            return this.versions.filter(v => v.review_status === this.filter)
+        },
+        async load() {
+            this.loading = true
+            try {
+                const [vr, sr] = await Promise.all([
+                    fetch('/api/evolution/versions').then(r => r.json()),
+                    fetch('/api/evolution/stats').then(r => r.json())
+                ])
+                this.versions = vr.versions || []
+                this.stats = sr
+            } catch(e) { console.error(e) }
+            finally { this.loading = false }
+        },
+        statusBadgeClass(s) {
+            return {pending:'bg-yellow-500/20 text-yellow-400', approved:'bg-green-500/20 text-green-400', rejected:'bg-red-500/20 text-red-400', needs_modification:'bg-orange-500/20 text-orange-400'}[s]||'bg-gray-500/20 text-gray-400'
+        },
+        statusLabel(s) {
+            return {pending:'待审核', approved:'已批准', rejected:'已拒绝', needs_modification:'需修改'}[s]||s
+        },
+        async viewDetail(v) {
+            try {
+                const r = await fetch('/api/evolution/versions/' + v.id)
+                if (r.ok) { this.detail = await r.json(); this.showDetail = true }
+            } catch(e) {}
+        },
+        async review(v, action) {
+            const comment = prompt(action==='approve'?'批准理由（可选）：':'拒绝理由：')
+            try {
+                const r = await fetch('/api/evolution/review', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({version_id: v.id, action, comment: comment||'', reviewer_name: 'Admin'})
+                })
+                if (r.ok) await this.load()
+            } catch(e) {}
+        },
+        async publishVersion(v) {
+            if (!confirm('确定发布版本「' + v.title + '」到系统级？')) return
+            try {
+                const r = await fetch('/api/evolution/versions/' + v.id + '/publish', { method: 'POST' })
+                if (r.ok) await this.load()
+            } catch(e) {}
+        },
+        async rollbackVersion(v) {
+            if (!confirm('确定回退系统级版本「' + v.title + '」？此操作不可撤销。')) return
+            try {
+                const r = await fetch('/api/evolution/versions/' + v.id + '/rollback', { method: 'POST' })
+                if (r.ok) await this.load()
+            } catch(e) {}
+        }
+    }
+}
+</script>

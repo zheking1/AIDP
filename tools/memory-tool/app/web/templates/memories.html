@@ -1,73 +1,383 @@
 {% extends "base.html" %}
-{% block title %}记忆列表{% endblock %}
+{% block title %}记忆列表 - Memory Tool{% endblock %}
+
 {% block content %}
-<div x-data="memoryList()" x-init="init()">
-    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div class="flex flex-wrap gap-3 items-end">
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">Project ID</label>
-                <input x-model="filters.project_id" type="text" class="border rounded px-2 py-1 text-sm w-32">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">类型</label>
-                <select x-model="filters.memory_type" class="border rounded px-2 py-1 text-sm">
-                    <option value="">全部</option>
-                    <option value="decision">决策</option>
-                    <option value="pattern">模式</option>
-                    <option value="bug">Bug</option>
-                    <option value="workflow">工作流</option>
-                    <option value="fact">事实</option>
-                </select>
-            </div>
-            <button @click="load()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">查询</button>
-            <a href="/memories/new" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ 新建</a>
+<div x-data="memoryList()" x-init="init()" class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-800">📚 记忆列表</h1>
+        <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <span>+</span>
+            <span>新建记忆</span>
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-blue-600" x-text="stats.total_memories || 0"></div>
+            <div class="text-sm text-gray-500">总记忆数</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-green-600" x-text="(stats.by_tier?.semantic || 0)"></div>
+            <div class="text-sm text-gray-500">语义记忆</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-purple-600" x-text="stats.ai_suggested_count || 0"></div>
+            <div class="text-sm text-gray-500">AI生成</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-orange-600" x-text="stats.total_relations || 0"></div>
+            <div class="text-sm text-gray-500">关系数</div>
         </div>
     </div>
-    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-        <table class="w-full text-sm">
-            <thead class="text-left text-gray-500 bg-gray-50">
-                <tr><th class="px-4 py-2">标题</th><th class="px-4 py-2">类型</th><th class="px-4 py-2">重要性</th><th class="px-4 py-2">标签</th><th class="px-4 py-2">操作</th></tr>
-            </thead>
-            <tbody>
-                <template x-for="item in items" :key="item.id">
-                    <tr class="border-t hover:bg-gray-50">
-                        <td class="px-4 py-2"><a :href="'/memories/' + item.id" class="text-blue-600 hover:underline" x-text="item.title"></a></td>
-                        <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700" x-text="item.memory_type"></span></td>
-                        <td class="px-4 py-2 text-yellow-500" x-text="'★'.repeat(item.importance || 0)"></td>
-                        <td class="px-4 py-2 text-xs text-gray-500" x-text="(item.tags || []).join(', ')"></td>
-                        <td class="px-4 py-2">
-                            <a :href="'/memories/' + item.id" class="text-blue-600 hover:underline mr-2">查看</a>
-                            <button @click="deleteItem(item.id)" class="text-red-600 hover:underline">删除</button>
-                        </td>
-                    </tr>
-                </template>
-                <tr x-show="items.length === 0"><td colspan="5" class="px-4 py-8 text-center text-gray-400">暂无记忆</td></tr>
-            </tbody>
-        </table>
+
+    <!-- Search and Filters -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">搜索</label>
+                <input x-model="filters.search" @keyup.enter="loadMemories()" type="text" 
+                       placeholder="搜索标题或内容..." 
+                       class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div class="w-40">
+                <label class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                <select x-model="filters.category" @change="loadMemories()" 
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">所有分类</option>
+                    <option value="architecture">架构</option>
+                    <option value="decision">决策</option>
+                    <option value="pattern">模式</option>
+                    <option value="issue">问题</option>
+                    <option value="bug">Bug</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+            <div class="w-40">
+                <label class="block text-sm font-medium text-gray-700 mb-1">层级</label>
+                <select x-model="filters.memory_tier" @change="loadMemories()" 
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">所有层级</option>
+                    <option value="episodic">情景</option>
+                    <option value="semantic">语义</option>
+                    <option value="procedural">程序</option>
+                </select>
+            </div>
+            <button @click="resetFilters()" class="px-4 py-2 text-gray-600 hover:text-gray-800 border rounded-lg hover:bg-gray-50">
+                重置
+            </button>
+        </div>
+    </div>
+
+    <!-- Memories List -->
+    <div class="bg-white rounded-lg shadow">
+        <div x-show="loading" class="p-8 text-center text-gray-500">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            加载中...
+        </div>
+
+        <div x-show="!loading && memories.length === 0" class="p-8 text-center text-gray-500">
+            <div class="text-4xl mb-2">📝</div>
+            <p>暂无记忆，点击"新建记忆"创建</p>
+        </div>
+
+        <div x-show="!loading && memories.length > 0" class="divide-y">
+            <template x-for="memory in memories" :key="memory.id">
+                <div class="p-4 hover:bg-gray-50 transition-colors cursor-pointer" @click="viewMemory(memory.id)">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium"
+                                      :class="getCategoryClass(memory.category)"
+                                      x-text="getCategoryLabel(memory.category)"></span>
+                                <span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
+                                      x-text="getTierLabel(memory.memory_tier)"></span>
+                                <span x-show="memory.ai_suggested" class="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-600">AI</span>
+                            </div>
+                            <h3 class="font-semibold text-gray-800 mb-1" x-text="memory.title"></h3>
+                            <p class="text-sm text-gray-500 line-clamp-2" x-text="memory.content_preview"></p>
+                            <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                <span x-show="memory.project" x-text="'项目: ' + memory.project"></span>
+                                <span x-text="'访问: ' + (memory.access_count || 0)"></span>
+                                <span x-text="formatDate(memory.created_at)"></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 ml-4">
+                            <button @click.stop="editMemory(memory.id)" 
+                                    class="p-2 text-blue-600 hover:bg-blue-50 rounded">
+                                ✏️
+                            </button>
+                            <button @click.stop="deleteMemory(memory.id)" 
+                                    class="p-2 text-red-600 hover:bg-red-50 rounded">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="!loading && pagination.pages > 1" class="p-4 border-t flex items-center justify-between">
+            <div class="text-sm text-gray-500">
+                共 <span x-text="pagination.total"></span> 条，
+                第 <span x-text="pagination.page"></span> / <span x-text="pagination.pages"></span> 页
+            </div>
+            <div class="flex gap-2">
+                <button @click="goToPage(pagination.page - 1)" 
+                        :disabled="pagination.page <= 1"
+                        :class="pagination.page <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="px-3 py-1 border rounded hover:bg-gray-50">上一页</button>
+                <button @click="goToPage(pagination.page + 1)" 
+                        :disabled="pagination.page >= pagination.pages"
+                        :class="pagination.page >= pagination.pages ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="px-3 py-1 border rounded hover:bg-gray-50">下一页</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Memory Modal -->
+    <div x-show="showCreateModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b flex items-center justify-between">
+                <h2 class="text-xl font-bold">新建记忆</h2>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">标题 *</label>
+                    <input x-model="newMemory.title" type="text" 
+                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="输入记忆标题">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
+                        <select x-model="newMemory.category" 
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">选择分类</option>
+                            <option value="architecture">架构</option>
+                            <option value="decision">决策</option>
+                            <option value="pattern">模式</option>
+                            <option value="issue">问题</option>
+                            <option value="bug">Bug</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">层级</label>
+                        <select x-model="newMemory.memory_tier" 
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="semantic">语义</option>
+                            <option value="episodic">情景</option>
+                            <option value="procedural">程序</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">项目</label>
+                    <input x-model="newMemory.project" type="text" 
+                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="项目名称（可选）">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">内容 *</label>
+                    <textarea x-model="newMemory.content" rows="6" 
+                              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                              placeholder="输入记忆内容..."></textarea>
+                </div>
+            </div>
+            <div class="p-6 border-t flex justify-end gap-3">
+                <button @click="showCreateModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                    取消
+                </button>
+                <button @click="createMemory()" 
+                        :disabled="!canCreate"
+                        :class="!canCreate ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    创建
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
-{% block scripts %}
+
+{% block extra_scripts %}
 <script>
 function memoryList() {
     return {
-        items: [],
-        filters: { project_id: '', memory_type: '' },
-        async init() { await this.load(); },
-        async load() {
-            const p = new URLSearchParams();
-            if (this.filters.project_id) p.set('project_id', this.filters.project_id);
-            const resp = await fetch('/api/memory?' + p);
-            const data = await resp.json();
-            let items = data.items || [];
-            if (this.filters.memory_type) items = items.filter(i => i.memory_type === this.filters.memory_type);
-            this.items = items;
+        memories: [],
+        loading: true,
+        filters: {
+            search: '',
+            category: '',
+            memory_tier: '',
+            project: '',
         },
-        async deleteItem(id) {
-            if (!confirm('确认删除?')) return;
-            await fetch('/api/memory/' + id, { method: 'DELETE' });
-            await this.load();
-        }
+        pagination: {
+            page: 1,
+            page_size: 20,
+            total: 0,
+            pages: 0,
+        },
+        stats: {},
+        showCreateModal: false,
+        newMemory: {
+            title: '',
+            content: '',
+            category: '',
+            memory_tier: 'semantic',
+            project: '',
+        },
+
+        get canCreate() {
+            return this.newMemory.title && this.newMemory.content && this.newMemory.category;
+        },
+
+        async init() {
+            await this.loadStats();
+            await this.loadMemories();
+        },
+
+        async loadMemories() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams();
+                params.append('page', this.pagination.page);
+                params.append('page_size', this.pagination.page_size);
+                
+                if (this.filters.search) params.append('search', this.filters.search);
+                if (this.filters.category) params.append('category', this.filters.category);
+                if (this.filters.memory_tier) params.append('memory_tier', this.filters.memory_tier);
+                if (this.filters.project) params.append('project', this.filters.project);
+
+                const resp = await fetch(`/api/memories?${params}`);
+                const data = await resp.json();
+                
+                if (data.success !== false) {
+                    this.memories = data.data?.items || [];
+                    this.pagination = {
+                        page: data.data?.page || 1,
+                        page_size: data.data?.page_size || 20,
+                        total: data.data?.total || 0,
+                        pages: data.data?.pages || 0,
+                    };
+                }
+            } catch (e) {
+                console.error('Failed to load memories:', e);
+            }
+            this.loading = false;
+        },
+
+        async loadStats() {
+            try {
+                const resp = await fetch('/api/memories/stats/overview');
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.stats = data.data || {};
+                }
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        },
+
+        async createMemory() {
+            try {
+                const resp = await fetch('/api/memories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.newMemory),
+                });
+                
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.showCreateModal = false;
+                    this.newMemory = { title: '', content: '', category: '', memory_tier: 'semantic', project: '' };
+                    await this.loadMemories();
+                    await this.loadStats();
+                } else {
+                    alert('创建失败: ' + (data.message || '未知错误'));
+                }
+            } catch (e) {
+                alert('创建出错: ' + e.message);
+            }
+        },
+
+        async deleteMemory(id) {
+            if (!confirm('确定要删除这个记忆吗？')) return;
+            
+            try {
+                const resp = await fetch(`/api/memories/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success !== false) {
+                    await this.loadMemories();
+                    await this.loadStats();
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
+        },
+
+        goToPage(page) {
+            if (page < 1 || page > this.pagination.pages) return;
+            this.pagination.page = page;
+            this.loadMemories();
+        },
+
+        resetFilters() {
+            this.filters = { search: '', category: '', memory_tier: '', project: '' };
+            this.pagination.page = 1;
+            this.loadMemories();
+        },
+
+        viewMemory(id) {
+            window.location.href = `/memories/${id}`;
+        },
+
+        editMemory(id) {
+            window.location.href = `/memories/${id}/edit`;
+        },
+
+        getCategoryClass(category) {
+            const map = {
+                'architecture': 'bg-blue-100 text-blue-700',
+                'decision': 'bg-green-100 text-green-700',
+                'pattern': 'bg-amber-100 text-amber-700',
+                'issue': 'bg-red-100 text-red-700',
+                'bug': 'bg-red-100 text-red-800',
+                'other': 'bg-gray-100 text-gray-700',
+            };
+            return map[category] || 'bg-gray-100 text-gray-700';
+        },
+
+        getCategoryLabel(category) {
+            const map = {
+                'architecture': '架构',
+                'decision': '决策',
+                'pattern': '模式',
+                'issue': '问题',
+                'bug': 'Bug',
+                'other': '其他',
+            };
+            return map[category] || category;
+        },
+
+        getTierLabel(tier) {
+            const map = {
+                'episodic': '情景',
+                'semantic': '语义',
+                'procedural': '程序',
+            };
+            return map[tier] || tier;
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('zh-CN');
+        },
     };
 }
 </script>

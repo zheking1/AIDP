@@ -1,4 +1,4 @@
-{% extends "layouts/unified_base.html" %}
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/unified_base.html" %}{% endif %}
 {% block title %}用户管理{% endblock %}
 
 {% block content %}
@@ -211,7 +211,7 @@
     <!-- Delete Confirmation Modal -->
     <div x-show="showDeleteModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/60" @click="showDeleteModal = false"></div>
-        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+        <div class="relative bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-7xl shadow-2xl">
             <h3 class="text-lg font-bold text-white mb-2">确认删除</h3>
             <p class="text-gray-400 text-sm mb-6">
                 确定要删除用户 <span class="text-white font-medium" x-text="deleteTarget?.username"></span> 吗？此操作不可撤销。

@@ -1,690 +1,530 @@
-# Knowledge Tool Web UI - 详细开发计划
+# Knowledge Tool — 完整设计与开发计划
 
 ## 文档信息
 
 | 属性 | 值 |
 |------|-----|
-| 版本 | v1.0 |
+| 版本 | v2.0 |
 | 创建日期 | 2026-07-07 |
+| 最后更新 | 2026-07-07 |
 | 优先级 | P0 (最高) |
-| 预估工时 | 3 周 |
-| 状态 | 待开发 |
+| 预估工时 | 4 周 |
+| 状态 | 开发中 |
 
 ---
 
-## 1. 项目概述
+## 1. 设计目标
 
-### 1.1 目标
+构建一个**生产级文档知识库管理与检索系统**，核心解决3个问题：
 
-构建一个**生产级的文档知识库管理界面**，提供完整的文档生命周期管理、智能搜索和知识可视化能力。
-
-### 1.2 参考标准
-
-以 **SkillRouter** 的 Web UI 为标杆，实现：
-- 专业的外观和交互体验
-- 完整的 CRUD 操作
-- 高级搜索和过滤
-- 数据可视化
-- 多语言支持 (i18n)
-
-### 1.3 核心原则
-
-1. **用户友好**：直观的操作界面，低学习成本
-2. **功能完整**：覆盖文档管理的所有场景
-3. **性能优异**：快速响应，支持大文档
-4. **视觉专业**：统一的暗色主题设计
+| 问题 | 当前状态 | 目标 |
+|------|---------|------|
+| **知识无层级** | 文档平铺在 `workspace_id` + `project_id` 字符串上 | framework → template → project 三层知识体系 |
+| **项目无法匹配知识库** | 无关联表，靠字符串约定 | ProjectKnowledgeBinding 显式+隐式+自动绑定 |
+| **检索带入大量噪音** | 全量chunk搜索，无LLM过滤 | 2-step检索：元数据过滤向量搜索 → Reranker精选 |
 
 ---
 
-## 2. 功能需求
+## 2. 三层知识体系
 
-### 2.1 文档管理仪表盘
+### 2.1 架构概览
 
-#### 2.1.1 项目/知识库选择器
+```
+┌─────────────────────────────────────────────────────────┐
+│  Layer 1: 框架级知识 (Framework Knowledge)               │
+│  kb_level = "framework", parent = null                   │
+│  ─────────────────────────────────────────────────────  │
+│  通用框架/库的官方知识，跨所有项目共享                       │
+│  例: Spring Boot, MyBatis-Plus, Nacos, Sa-Token          │
+│  可见性: public (全平台)                                  │
+└─────────────────────────────────────────────────────────┘
+                          ▲ 继承
+┌─────────────────────────────────────────────────────────┐
+│  Layer 2: 模板级知识 (Template Knowledge)                 │
+│  kb_level = "template", parent = framework_kb             │
+│  ─────────────────────────────────────────────────────  │
+│  框架的特定实现/脚手架约定                                 │
+│  例: ruoyi-cloud-plus, Spring-Cloud-Microservice         │
+│  可见性: public 或 workspace                              │
+└─────────────────────────────────────────────────────────┘
+                          ▲ 继承
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3: 项目级知识 (Project Knowledge)                  │
+│  kb_level = "project", parent = template_kb               │
+│  ─────────────────────────────────────────────────────  │
+│  具体项目的私有业务知识                                     │
+│  例: my-erp-system, my-crm-system                        │
+│  可见性: private (仅项目成员)                              │
+└─────────────────────────────────────────────────────────┘
+```
 
-**功能描述**：
-- 左侧边栏显示项目/知识库树形结构
-- 支持多层级分类（类似 SkillRouter 的技能组）
-- 支持创建、编辑、删除知识库
+### 2.2 具体示例：ruoyi-cloud-plus
 
-**界面布局**：
+```
+spring-boot (framework)
+  domains: [orm, web, security, config]
+  tech_stack: [java, spring-boot, maven]
+    │
+    └── ruoyi-cloud-plus (template)
+        domains: [system, auth, generator, monitor]
+        tech_stack: [java, spring-boot, mybatis-plus, nacos, sa-token, ruoyi]
+          │
+          ├── ruoyi-auth (template, sub-module)
+          │   domains: [auth, oauth, security]
+          │   keywords: [Sa-Token, JWT, OAuth2, 微信, 社交登录]
+          │
+          ├── ruoyi-system (template, sub-module)
+          │   domains: [system, user, role, menu]
+          │   keywords: [RBAC, BaseEntity, CRUD, 数据权限]
+          │
+          ├── ruoyi-generator (template, sub-module)
+          │   domains: [codegen, template]
+          │   keywords: [代码生成, Velocity, 表结构]
+          │
+          ├── my-erp-system (project, parent=ruoyi-cloud-plus)
+          │   domains: [erp, procurement, finance]
+          │   kb_level: project
+          │
+          └── my-crm-system (project, parent=ruoyi-cloud-plus)
+              domains: [crm, customer, sales]
+              kb_level: project
+```
+
+---
+
+## 3. 项目→知识库匹配机制
+
+### 3.1 三级绑定
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  绑定方式           │  触发条件           │  优先级          │
+├─────────────────────────────────────────────────────────────┤
+│  explicit (显式)    │  管理员手动选择      │  100            │
+│  inherited (继承)   │  通过 parent_id 链   │  50             │
+│  auto_matched (自动)│  tech_stack 标签匹配  │  10             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 自动匹配流程
+
+```
+项目: my-erp-system
+  tech_stack: [java, spring-boot, mybatis-plus, nacos, ruoyi]
+
+  Step 1: 显式绑定
+    my-erp-system → ruoyi-cloud-plus (binding_type=explicit)
+
+  Step 2: 继承链 (parent_id)
+    ruoyi-cloud-plus.parent → spring-boot (binding_type=inherited)
+
+  Step 3: 技术栈自动匹配
+    tech_stack 包含 "mybatis-plus" → mybatis-plus知识库 (auto_matched)
+    tech_stack 包含 "nacos"        → nacos知识库 (auto_matched)
+
+  最终绑定列表 (按优先级排序):
+    1. my-erp-system      (project,   priority=200)
+    2. ruoyi-cloud-plus   (template,  priority=100)
+    3. spring-boot         (framework, priority=50)
+    4. mybatis-plus        (framework, priority=10)
+    5. nacos               (framework, priority=10)
+```
+
+---
+
+## 4. 优化检索管线（2-step, 0次LLM）
+
+### 4.1 管线总览
+
+```
+aidp_context(project="my-erp", task="添加微信登录")
+    │
+    ▼
+Step 0: 准备工作 (复用已有数据, ~0ms)
+    │  project_bindings → relevant_kb_ids [my-erp, ruoyi, spring-boot, ...]
+    │  Stage 1 intent → task_domains: [auth, oauth]
+    │  Stage 1 intent → tech_keywords: [微信, OAuth2, Sa-Token]
+    │
+    ▼
+Step 1: 元数据过滤 + 层级向量搜索 (单次SQL, ~100ms)
+    │  ┌─────────────────────────────────────────────────────┐
+    │  │ 1a. 文档摘要索引 (先搜文档，缩小范围)               │
+    │  │     WHERE kb_id IN ($relevant_kb_ids)                │
+    │  │       AND kb.domains ?| $task_domains                │
+    │  │     ORDER BY summary_embedding <=> $query_vec        │
+    │  │     LIMIT 10                                         │
+    │  │                                                      │
+    │  │ 1b. Chunk索引 (仅搜匹配文档的chunks)                 │
+    │  │     WHERE document_id IN ($matched_doc_ids)           │
+    │  │     ORDER BY chunk_embedding <=> $query_vec          │
+    │  │     LIMIT 30                                         │
+    │  └─────────────────────────────────────────────────────┘
+    │  产出: 30 候选 chunks
+    │
+    ▼
+Step 2: Cross-Encoder Reranker 精选 (1次批量推理, ~50ms)
+    │  ┌─────────────────────────────────────────────────────┐
+    │  │ bge-reranker-v2-m3(query, 30_chunks)                │
+    │  │                                                      │
+    │  │ → 过滤: score < 0.5 的丢弃                          │
+    │  │ → 排序: score 降序                                  │
+    │  │ → 截断: token_budget 控制                           │
+    │  │ → 去重: 高层覆盖低层 (同主题取项目级 > 模板级)       │
+    │  └─────────────────────────────────────────────────────┘
+    │  产出: 5-8 精选 chunks, ~2000 tokens
+    │
+    ▼
+上下文: [Knowledge: 5 chunks, 1800 tokens]  ← 精准、紧凑
+```
+
+### 4.2 为什么用 Reranker 而非 LLM 裁判
+
+| | LLM 裁判 | Reranker (bge-v2-m3) |
+|---|---|---|
+| **30个chunk耗时** | ~1500ms | **~50ms** (30x快) |
+| **准确度** | 中 (不稳定) | **高** (专门训练) |
+| **成本** | 高 (API调用) | **零** (本地推理) |
+| **调用方式** | N次串行 | 1次批量 |
+| **部署** | 大模型API | 568M参数, 2G内存 |
+| **MTEB排名** | — | Reranking top-3 |
+
+### 4.3 跨层去重
+
+```
+规则: 同一主题的知识，高层级的覆盖低层级
+
+例: "用户认证配置"
+  spring-boot: "用 Spring Security 配置认证"  → 保留 (无覆盖)
+  ruoyi:       "用 Sa-Token 替代 Security"     → 覆盖 spring-boot 的
+  my-erp:      "Sa-Token + 微信OAuth2"         → 最终保留
+
+结果: 只保留 my-erp 的认证配置，框架级/模板级的不再重复
+```
+
+---
+
+## 5. 数据模型
+
+### 5.1 新增: KnowledgeBase
+
+```python
+class KnowledgeBase(Base):
+    __tablename__ = "kt_knowledge_bases"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    name = Column(String(128), nullable=False)          # "ruoyi-cloud-plus"
+    slug = Column(String(128), unique=True, nullable=False)
+    description = Column(Text)
+    
+    # ★ 核心: 层级类型
+    kb_level = Column(String(32), nullable=False)        # framework | template | project
+    
+    # ★ 核心: 继承链 (parent_id)
+    parent_id = Column(String(36), ForeignKey("kt_knowledge_bases.id"), nullable=True)
+    
+    # ★ 核心: 领域标注 (用于KB筛选)
+    domains = Column(JSONB, default=list)               # ["auth","oauth","security"]
+    keywords = Column(JSONB, default=list)              # ["Sa-Token","JWT","OAuth2"]
+    tech_stack = Column(JSONB, default=list)            # ["java","spring-boot"]
+    
+    # 可见性
+    visibility = Column(String(20), default="private")  # private | workspace | public
+    owner_id = Column(String(128))
+    
+    # 索引默认配置
+    chunk_size = Column(Integer, default=512)
+    overlap_size = Column(Integer, default=50)
+    embedding_model = Column(String(128), default="text-embedding-3-small")
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    deleted_at = Column(DateTime(timezone=True))
+```
+
+### 5.2 新增: ProjectKnowledgeBinding
+
+```python
+class ProjectKnowledgeBinding(Base):
+    __tablename__ = "kt_project_knowledge_bindings"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    project_id = Column(String(128), nullable=False)    # AIDP Project ID (来自Controller)
+    knowledge_base_id = Column(String(36), ForeignKey("kt_knowledge_bases.id"), nullable=False)
+    
+    binding_type = Column(String(32), default="auto_matched")  # explicit | inherited | auto_matched
+    priority = Column(Integer, default=0)
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+```
+
+### 5.3 改造: KtDocument
+
+```python
+class KtDocument(Base):
+    __tablename__ = "kt_document"
+    
+    # ... 现有字段 ...
+    
+    # ★ 替换: workspace_id/project_id → knowledge_base_id
+    # workspace_id = Column(String(128), nullable=False)  ← 保留作为兼容
+    # project_id = Column(String(128))                    ← 保留作为兼容
+    knowledge_base_id = Column(String(36), ForeignKey("kt_knowledge_bases.id"))
+    
+    # ★ 新增: 文档摘要 (用于层级检索的摘要索引)
+    summary = Column(Text)
+    summary_embedding = Column(Text)  # 摘要的向量，JSON string of float[]
+```
+
+### 5.4 改造: KtDocumentChunk
+
+```python
+class KtDocumentChunk(Base):
+    # ... 现有字段 ...
+    # knowledge_base_id 从文档继承 (通过 JOIN 获取，不单独存)
+```
+
+---
+
+## 6. API 设计
+
+### 6.1 知识库管理
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/knowledge-bases` | 列表 (filter: kb_level, parent_id, visibility) |
+| POST | `/api/knowledge-bases` | 创建知识库 |
+| GET | `/api/knowledge-bases/{id}` | 详情 + 子KB列表 + 文档数量 |
+| PUT | `/api/knowledge-bases/{id}` | 更新 (name, domains, keywords等) |
+| DELETE | `/api/knowledge-bases/{id}` | 删除 (级联删除关联) |
+
+### 6.2 项目绑定管理
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/knowledge-bases/{id}/bindings` | KB的项目绑定列表 |
+| POST | `/api/projects/bindings` | 创建绑定 (project_id, kb_id, binding_type) |
+| DELETE | `/api/projects/bindings/{id}` | 删除绑定 |
+| GET | `/api/projects/{project_id}/knowledge-bases` | 获取项目的所有KB (含继承+自动) |
+| POST | `/api/projects/{project_id}/auto-match` | 触发自动匹配 |
+
+### 6.3 文档管理 (改造)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/documents` | 创建文档 (新增 knowledge_base_id) |
+| GET | `/api/documents` | 列表 (新增 kb_id 过滤) |
+
+### 6.4 优化检索 (改造)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/knowledge/search` | 元数据过滤向量搜索 |
+| POST | `/api/knowledge/search/rerank` | Reranker 重排 (内部调用) |
+
+---
+
+## 7. aidp_context 管线改造
+
+### 7.1 StagedRetriever 修改
+
+```python
+# 当前 (有问题的)
+payload = {
+    "trace_id": "",
+    "capability": "knowledge.search",
+    "context": {},                          # ← 空!
+    "input": {"query": query_text, "top_k": limit}
+}
+
+# 改造后
+payload = {
+    "trace_id": trace_id,
+    "capability": "knowledge.search",
+    "context": {
+        "workspace_id": workspace_id,        # ★ 从Stage 0传入
+        "project_id": project_id,            # ★ 从Stage 0传入
+        "knowledge_base_ids": kb_ids,        # ★ 项目绑定的KB列表
+        "task_domains": task_domains,        # ★ Stage 1意图分析产出的领域
+        "tech_keywords": tech_keywords,      # ★ Stage 1意图分析产出的关键词
+    },
+    "input": {
+        "query": query_text,
+        "top_k": limit,
+        "search_mode": "hybrid",
+        "enable_rerank": True,              # ★ 启用 reranker
+    }
+}
+```
+
+### 7.2 改造点汇总
+
+| 组件 | 改动 | 优先级 |
+|------|------|--------|
+| `staged_retriever.py` | 传递 project_id, kb_ids, domains | P0 |
+| `classification_service.py` (skill-router) | 产出 task_domains, tech_keywords | P0 |
+| `tool.py` (knowledge-tool) | 接收 context, 执行元数据过滤搜索 | P0 |
+| `search_service.py` | 实现真正的向量搜索 + reranker | P0 |
+
+---
+
+## 8. Web UI 设计
+
+### 8.1 布局
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  📁 知识库列表          │  📄 文档管理                      │
 │  ─────────────────────  │  ───────────────────────────────  │
-│  + 新建知识库           │                                   │
-│                         │  [列表视图 ▼] [筛选 ▼] [排序 ▼]   │
-│  ▼ 默认知识库           │  ┌─────────────────────────────┐  │
-│  ├─ 📂 API 文档        │  │ 🔍 搜索文档...              │  │
-│  ├─ 📂 技术规范        │  └─────────────────────────────┘  │
-│  ├─ 📂 产品文档        │                                   │
-│  │  ├─ 📄 用户手册      │  ┌──────────┐ ┌──────────┐      │
-│  │  └─ 📄 快速入门      │  │ 📄 Doc 1 │ │ 📄 Doc 2 │      │
-│  └─ 📂 开发文档        │  │ [PDF]    │ │ [MD]     │      │
-│      ├─ 📄 架构设计    │  │ 已索引   │ │ 处理中   │      │
-│      └─ 📄 数据库设计  │  └──────────┘ └──────────┘      │
+│  + 新建知识库           │  [卡片 ▼] [筛选 ▼] [排序 ▼]       │
+│                         │  ┌─────────────────────────────┐  │
+│  ▼ 框架级               │  │ 🔍 搜索文档...              │  │
+│  ├─ 📦 spring-boot      │  └─────────────────────────────┘  │
+│  ├─ 📦 mybatis-plus     │                                   │
+│  │                      │  ┌──────────┐ ┌──────────┐       │
+│  ▼ 模板级               │  │ 📄 Doc 1 │ │ 📄 Doc 2 │       │
+│  ├─ 📦 ruoyi-...        │  │ [kb:ruoyi]│ │ [kb:erp] │       │
+│  │  ├─ 📦 ruoyi-auth    │  │ ✅已索引  │ │ 🔄处理中 │       │
+│  │  ├─ 📦 ruoyi-system  │  └──────────┘ └──────────┘       │
+│  │  └─ 📦 ruoyi-gen     │                                   │
+│  │                      │  知识库详情:                        │
+│  ▼ 项目级               │  ┌─────────────────────────────┐  │
+│  ├─ 📦 my-erp-system    │  │ 级别: 项目级                 │  │
+│  │  ├─ 📂 API文档       │  │ 父KB: ruoyi-cloud-plus      │  │
+│  │  ├─ 📂 ER图          │  │ 领域: [erp, procurement]    │  │
+│  │  └─ 📂 部署文档      │  │ 文档数: 23 | 已索引: 20     │  │
+│  └─ 📦 my-crm-system    │  └─────────────────────────────┘  │
 │                         │                                   │
-│  🏷️ 标签云             │  [分页: < 1 2 3 ... 10 >]        │
-│  #API #Auth            │                                   │
-│  #Database             │                                   │
+│  🏷️ 领域标签:           │  继承链:                          │
+│  #auth #security        │  spring-boot → ruoyi → my-erp     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**数据模型扩展**：
-```python
-class KnowledgeBase(Base):
-    """知识库（类似 SkillRouter 的 Project）"""
-    __tablename__ = "knowledge_bases"
-    
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    name = Column(String(128), nullable=False)
-    slug = Column(String(128), unique=True)
-    description = Column(Text)
-    parent_id = Column(UUID, ForeignKey("knowledge_bases.id"))
-    owner_id = Column(UUID, ForeignKey("users.id"))
-    visibility = Column(String(20), default="private")  # private, workspace, public
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-    
-    # 关联
-    documents = relationship("KtDocument", back_populates="knowledge_base")
-```
+### 8.2 新增页面
 
----
-
-#### 2.1.2 文档卡片/列表视图
-
-**视图模式**：
-1. **卡片视图**：缩略图、标题、状态、标签
-2. **列表视图**：详细信息的表格展示
-3. **树形视图**：按目录结构展示
-
-**文档卡片元素**：
-```
-┌─────────────────────────────┐
-│  [📄 文档类型图标]          │
-│                             │
-│  文档标题                   │
-│  这是文档的描述...          │
-│                             │
-│  🏷️ API 🏷️ Auth            │
-│                             │
-│  ✅ 已索引  |  2026-07-07   │
-│                             │
-│  [👁️ 预览] [✏️ 编辑] [🗑️] │
-└─────────────────────────────┘
-```
-
-**文档状态**：
-- `pending` - 待处理（灰色）
-- `processing` - 处理中（黄色）
-- `indexed` - 已索引（绿色）
-- `failed` - 失败（红色）
-
----
-
-#### 2.1.3 批量操作
-
-**功能**：
-- 批量选择（复选框）
-- 批量删除
-- 批量移动到其他知识库
-- 批量重新索引
-- 批量导出
-
-**界面**：
-```
-已选择 5 项  [全选]  [取消选择]
-
-批量操作: [移动到... ▼] [重新索引] [导出] [删除]
-```
-
----
-
-### 2.2 文档预览与分块可视化
-
-#### 2.2.1 文档预览器
-
-**支持的格式**：
-- Markdown (渲染预览)
-- PDF (PDF.js 预览)
-- 纯文本 (语法高亮)
-- Word (转为 HTML 预览)
-
-**界面布局**：
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 📄 文档名称.md                              [✕] 关闭      │
-├─────────────────────────────────────────────────────────────┤
-│  📖 预览    │    🔍 分块视图    │    📊 索引详情          │
-├─────────────┴───────────────────────────────────────────────┤
-│                                                             │
-│  # 文档标题                                                 │
-│                                                             │
-│  这是文档的详细内容...                                      │
-│                                                             │
-│  ## 章节 1                                                  │
-│                                                             │
-│  章节内容...                                                │
-│                                                             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### 2.2.2 分块可视化（核心功能）
-
-**功能描述**：
-展示文档如何被切分成知识块，以及每个块的索引状态。
-
-**界面设计**：
-```
-🔍 分块视图
-
-分块策略: [固定长度 ▼]  块大小: 512 tokens  重叠: 50 tokens
-
-┌─────────────────────────────────────────────────────────────┐
-│ 块 #1 (tokens: 512)                          ✅ 已索引     │
-├─────────────────────────────────────────────────────────────┤
-│ 这是第一段的内容...                                         │
-│ 显示了如何被切分...                                         │
-│ [查看向量] [查看关键词]                                     │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│ 块 #2 (tokens: 498)                          ✅ 已索引     │
-├─────────────────────────────────────────────────────────────┤
-│ 这是第二段的内容...                                         │
-│ 与第一段有重叠部分...                                       │
-│ [查看向量] [查看关键词]                                     │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**技术实现**：
-- 使用 Monaco Editor 展示原文
-- 高亮显示分块边界
-- 点击块跳转到对应位置
-
----
-
-#### 2.2.3 索引详情面板
-
-**显示信息**：
-- 索引状态和时间
-- 分块数量
-- Token 总数
-- 存储大小
-- 关键词提取结果
-- 向量维度
-
-**界面**：
-```
-📊 索引详情
-
-基本信息
-━━━━━━━━━━━━━━━━━━━━
-状态:        ✅ 已索引
-索引时间:    2026-07-07 14:32:18
-分块数:      12
-Token 数:    6,240
-存储大小:    2.4 MB
-
-分块统计
-━━━━━━━━━━━━━━━━━━━━
-平均块大小:  520 tokens
-最小块:      256 tokens
-最大块:      512 tokens
-重叠率:      10%
-
-关键词 (Top 10)
-━━━━━━━━━━━━━━━━━━━━
-1. API (45次)
-2. Authentication (32次)
-3. Token (28次)
-...
-```
-
----
-
-### 2.3 高级搜索中心
-
-#### 2.3.1 搜索界面
-
-**设计目标**：类似 Google 的简洁搜索 + 高级过滤
-
-**界面布局**：
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│                    🔍 AIDP 知识库搜索                       │
-│                                                             │
-│    ┌─────────────────────────────────────────────────┐     │
-│    │  搜索知识库...                           [🔍]  │     │
-│    └─────────────────────────────────────────────────┘     │
-│                                                             │
-│    过滤器: [全部知识库 ▼] [全部类型 ▼] [全部标签 ▼] [时间 ▼] │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### 2.3.2 搜索结果展示
-
-**混合搜索结果**：
-```
-找到 15 个相关结果 (耗时 0.23s)
-
-📄 文档结果 (8)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1.  API 设计规范.md                          相似度: 95%
-    ...用户认证应该使用 JWT Token，有效期设置为 24 小时...
-    来源: 技术规范 > API 文档 | 2026-06-15
-
-2.  认证流程说明.md                          相似度: 87%
-    ...Token 的生成和验证流程如下...
-    来源: 产品文档 > 用户手册 | 2026-06-10
-
-🔍 知识块结果 (7)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1.  来自 "Authentication Service.md"
-    ...JWT Token 包含 header、payload、signature 三部分...
-    相似度: 92% | 块 #3
-
-2.  来自 "Security Best Practices.md"
-    ...Token 不应该包含敏感信息，应该设置合理的过期时间...
-    相似度: 89% | 块 #7
-```
-
-#### 2.3.3 搜索过滤器和排序
-
-**过滤器**：
-- 知识库范围（单选/多选）
-- 文档类型（PDF/Markdown/Word/...）
-- 标签（多选）
-- 时间范围（最近1天/7天/30天/自定义）
-- 索引状态（已索引/未索引）
-
-**排序选项**：
-- 相关度（默认）
-- 创建时间
-- 更新时间
-- 访问次数
-- 文档名称
-
----
-
-#### 2.3.4 搜索高亮和预览
-
-**功能**：
-- 关键词高亮显示
-- 搜索结果预览（带上下文）
-- 点击跳转到原文位置
-
-**实现**：
-```python
-# 后端返回带高亮标记的结果
-{
-    "results": [
-        {
-            "type": "document",
-            "title": "API 设计规范.md",
-            "preview": "用户认证应该使用 <mark>JWT Token</mark>，有效期设置为 24 小时...",
-            "highlights": ["JWT Token", "认证"],
-            "score": 0.95,
-            "url": "/documents/123#section-2"
-        }
-    ]
-}
-```
-
----
-
-### 2.4 文档上传与导入
-
-#### 2.4.1 上传界面
-
-**支持方式**：
-1. 点击上传
-2. 拖拽上传
-3. 批量上传
-
-**上传界面**：
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│     ┌─────────────────────────────────────────────────┐    │
-│     │                                                 │    │
-│     │              📁 拖拽文件到此处                  │    │
-│     │                                                 │    │
-│     │         或 [点击选择文件] 支持多选             │    │
-│     │                                                 │    │
-│     │    支持格式: PDF, Markdown, Word, TXT, HTML    │    │
-│     │    单文件最大: 50MB | 批量最多: 100 个文件     │    │
-│     │                                                 │    │
-│     └─────────────────────────────────────────────────┘    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### 2.4.2 上传队列和进度
-
-**上传队列显示**：
-```
-上传队列 (3/5 完成)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 📄 文档1.pdf                     [██████░░░░] 60% 上传中   │
-├─────────────────────────────────────────────────────────────┤
-│ 📄 文档2.md                      [██████████] 100% ✓ 完成  │
-├─────────────────────────────────────────────────────────────┤
-│ 📄 文档3.docx                    [░░░░░░░░░░] 0% 排队中    │
-└─────────────────────────────────────────────────────────────┘
-
-[全部取消]  [暂停]  [后台上传]
-```
-
-#### 2.4.3 导入设置
-
-**配置选项**：
-```
-导入设置
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-目标知识库:    [默认知识库 ▼]
-
-索引选项:
-  [x] 立即开始索引
-  [ ] 仅导入不索引
-  [ ] 增量更新（仅处理变更）
-
-分块策略:
-  策略: [固定长度 ▼]
-  块大小: [512 ▼] tokens
-  重叠: [50 ▼] tokens
-
-处理选项:
-  [x] 提取关键词
-  [x] 生成摘要
-  [ ] OCR 识别（PDF图片）
-  [ ] 翻译为英文
-
-冲突处理:
-  [同名跳过] [覆盖] [重命名] [询问]
-
-[开始导入]
-```
-
----
-
-### 2.5 知识图谱（高级功能）
-
-#### 2.5.1 文档关系图谱
-
-**功能**：展示文档之间的引用、关联关系
-
-**可视化**：
-```
-📊 知识图谱
-
-┌─────────────────────────────────────────────────────────────┐
-│  [力导向图]  [环形图]  [层次图]        [放大] [缩小] [重置] │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│                        ┌──────────┐                        │
-│                        │ API 规范 │                        │
-│                        └────┬─────┘                        │
-│                             │                              │
-│            ┌────────────────┼────────────────┐             │
-│            ▼                ▼                ▼             │
-│     ┌──────────┐     ┌──────────┐     ┌──────────┐        │
-│     │ 认证流程 │◄───►│ 授权设计 │◄───►│ Token设计│        │
-│     └──────────┘     └──────────┘     └──────────┘        │
-│            │                │                │             │
-│            └────────────────┼────────────────┘             │
-│                             ▼                              │
-│                        ┌──────────┐                        │
-│                        │ 安全规范 │                        │
-│                        └──────────┘                        │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 3. 技术架构
-
-### 3.1 后端 API 扩展
-
-#### 3.1.1 新增 API 端点
-
-```python
-# 知识库管理
-GET    /api/knowledge-bases              # 列表
-POST   /api/knowledge-bases              # 创建
-GET    /api/knowledge-bases/{id}         # 详情
-PUT    /api/knowledge-bases/{id}         # 更新
-DELETE /api/knowledge-bases/{id}         # 删除
-
-# 文档管理（已有基础上扩展）
-GET    /api/documents/{id}/chunks        # 获取文档分块
-GET    /api/documents/{id}/preview       # 预览文档
-GET    /api/documents/{id}/index-info    # 索引详情
-POST   /api/documents/bulk-index         # 批量索引
-
-# 搜索（增强）
-GET    /api/search                       # 混合搜索
-GET    /api/search/suggest               # 搜索建议
-GET    /api/search/filters               # 获取过滤器选项
-
-# 统计
-GET    /api/statistics/overview          # 概览统计
-GET    /api/statistics/trend             # 趋势统计
-```
-
-#### 3.1.2 数据模型扩展
-
-```python
-# 知识库模型（新增）
-class KnowledgeBase(Base):
-    __tablename__ = "knowledge_bases"
-    
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    name = Column(String(128), nullable=False)
-    slug = Column(String(128), unique=True)
-    description = Column(Text)
-    parent_id = Column(UUID, ForeignKey("knowledge_bases.id"))
-    owner_id = Column(UUID, ForeignKey("users.id"))
-    visibility = Column(String(20), default="private")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-
-# 文档模型（扩展）
-class KtDocument(Base):
-    # ... 已有字段 ...
-    
-    # 新增字段
-    knowledge_base_id = Column(UUID, ForeignKey("knowledge_bases.id"))
-    thumbnail_url = Column(String(512))  # 缩略图
-    summary = Column(Text)               # 自动生成的摘要
-    keywords = Column(JSONB, default=list)  # 提取的关键词
-    metadata = Column(JSONB, default=dict)  # 扩展元数据
-    view_count = Column(Integer, default=0)
-```
-
----
-
-### 3.2 前端技术栈
-
-| 技术 | 用途 | 版本 |
+| 页面 | 路由 | 功能 |
 |------|------|------|
-| Alpine.js | 响应式框架 | 3.x |
-| Tailwind CSS | 样式框架 | 3.x |
-| Monaco Editor | 代码/文本预览 | Latest |
-| PDF.js | PDF 预览 | 3.x |
-| Chart.js | 统计图表 | 4.x |
-| D3.js | 知识图谱可视化 | 7.x |
+| KB管理 | `/knowledge-bases` | 三层树形结构 + CRUD |
+| KB详情 | `/knowledge-bases/{id}` | 领域标签、继承链、绑定项目、文档列表 |
+| 项目绑定 | `/projects/{id}/knowledge` | 管理项目的KB绑定，触发自动匹配 |
+| 检索测试 | `/search` | 完整检索管线测试入口 |
+| 检索结果 | `/search/results` | Reranker前后对比、分块高亮 |
 
-### 3.3 页面结构
+### 8.3 组件树
 
 ```
 tools/knowledge-tool/app/web/
 ├── static/
-│   ├── css/
-│   │   └── knowledge.css       # 知识库专用样式
-│   ├── js/
-│   │   ├── components.js       # 通用组件
-│   │   ├── search.js           # 搜索功能
-│   │   └── graph.js            # 图谱可视化
-│   └── components/
-│       ├── document-card.html  # 文档卡片组件
-│       ├── chunk-view.html     # 分块视图组件
-│       └── search-result.html  # 搜索结果组件
+│   ├── css/knowledge.css
+│   └── js/
+│       ├── kb-tree.js         # 知识库树形组件
+│       ├── search.js          # 检索管线前端
+│       └── graph.js           # 可视化
 │
 ├── templates/
-│   ├── layouts/
-│   │   └── base.html           # 基础布局
+│   ├── layouts/base.html
 │   ├── pages/
-│   │   ├── dashboard.html      # 仪表盘
-│   │   ├── documents.html      # 文档列表
-│   │   ├── document-detail.html # 文档详情
-│   │   ├── search.html         # 搜索中心
-│   │   ├── upload.html         # 上传页面
-│   │   └── statistics.html     # 统计页面
+│   │   ├── dashboard.html
+│   │   ├── documents.html
+│   │   ├── document-detail.html
+│   │   ├── knowledge-bases.html       # ★ 新增
+│   │   ├── knowledge-base-detail.html  # ★ 新增
+│   │   ├── project-bindings.html       # ★ 新增
+│   │   ├── search.html
+│   │   └── upload.html
 │   └── components/
-│       ├── knowledge-base-tree.html  # 知识库树
-│       ├── document-preview.html     # 文档预览
-│       └── search-filters.html       # 搜索过滤器
-│
-└── routes.py                   # Web 路由
+│       ├── kb-tree.html
+│       ├── inheritance-chain.html      # ★ 新增: 继承链可视化
+│       └── domain-tags.html            # ★ 新增: 领域标签编辑器
 ```
 
 ---
 
-## 4. 数据库迁移
+## 9. 开发任务拆分
 
-### 4.1 新增表
+### Phase 0: 数据模型 (1天)
 
-```sql
--- 知识库表
-CREATE TABLE knowledge_bases (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(128) NOT NULL,
-    slug VARCHAR(128) UNIQUE NOT NULL,
-    description TEXT,
-    parent_id UUID REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-    owner_id UUID REFERENCES users(id),
-    visibility VARCHAR(20) DEFAULT 'private',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+| ID | 任务 | 产出 |
+|----|------|------|
+| **T0-1** | 新增 `KnowledgeBase` 模型 | `models.py` |
+| **T0-2** | 新增 `ProjectKnowledgeBinding` 模型 | `models.py` |
+| **T0-3** | 改造 `KtDocument` — 新增 `knowledge_base_id`, `summary`, `summary_embedding` | `models.py` |
+| **T0-4** | 数据库迁移脚本 + `init_db.py` 更新 | `init_db.py` |
 
--- 文档标签关联表（多对多）
-CREATE TABLE document_tags (
-    document_id UUID REFERENCES kt_documents(id) ON DELETE CASCADE,
-    tag VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (document_id, tag)
-);
+### Phase 1: API 层 (2天)
 
--- 索引
-CREATE INDEX idx_knowledge_bases_owner ON knowledge_bases(owner_id);
-CREATE INDEX idx_knowledge_bases_parent ON knowledge_bases(parent_id);
-CREATE INDEX idx_document_tags_tag ON document_tags(tag);
-```
+| ID | 任务 | 产出 |
+|----|------|------|
+| **T1-1** | 知识库 CRUD API (`knowledge_bases.py`) | routes |
+| **T1-2** | 项目绑定 API (`bindings.py`) | routes |
+| **T1-3** | 自动匹配服务 (`auto_matcher.py`) | service + route |
+| **T1-4** | 文档API适配 — `knowledge_base_id` 替代 `workspace_id/project_id` | `documents.py` |
+| **T1-5** | 优化检索服务 — 元数据过滤向量搜索 | `search_service.py` 重写 |
+| **T1-6** | Reranker 集成 — `reranker.py` + Docker | 新service + compose |
 
-### 4.2 文档表扩展
+### Phase 2: 管线集成 (1天)
 
-```sql
--- 为 kt_documents 添加新列
-ALTER TABLE kt_documents 
-    ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id),
-    ADD COLUMN summary TEXT,
-    ADD COLUMN keywords JSONB DEFAULT '[]',
-    ADD COLUMN view_count INTEGER DEFAULT 0,
-    ADD COLUMN metadata JSONB DEFAULT '{}';
+| ID | 任务 | 产出 |
+|----|------|------|
+| **T2-1** | skill-router 产出 `task_domains` + `tech_keywords` | `classification_service.py` |
+| **T2-2** | `staged_retriever.py` 传递 project context | `staged_retriever.py` |
+| **T2-3** | knowledge-tool `tool/invoke` 接收新 context | `tool.py` |
 
--- 索引
-CREATE INDEX idx_documents_kb ON kt_documents(knowledge_base_id);
-```
+### Phase 3: Web UI (2-3天)
+
+| ID | 任务 | 产出 |
+|----|------|------|
+| **T3-1** | KB管理页面 — 三层树 + CRUD | `knowledge-bases.html` |
+| **T3-2** | KB详情 — 领域标签编辑、继承链展示 | `knowledge-base-detail.html` |
+| **T3-3** | 项目绑定管理页面 | `project-bindings.html` |
+| **T3-4** | 检索测试+结果页面 | `search.html` 改造 |
+| **T3-5** | Controller workspace iframe 集成 | workspace路由 |
 
 ---
 
-## 5. 开发计划
+## 10. 验收标准
 
-### Week 1: 基础架构与文档列表
+### 10.1 功能验收
 
-| 天数 | 任务 | 产出 |
-|------|------|------|
-| Day 1-2 | 数据库迁移、API 扩展 | 新的表结构和 API |
-| Day 3-4 | 知识库管理功能 | 知识库 CRUD 界面 |
-| Day 5 | 文档列表视图 | 卡片/列表视图 |
+- [ ] 三层知识库 (framework/template/project) 创建/编辑/删除
+- [ ] 知识库父子继承链正确 (parent_id)
+- [ ] 项目显式绑定 + 继承 + 自动匹配均正确
+- [ ] 元数据过滤向量搜索返回结果正确 (领域+KB过滤)
+- [ ] Reranker 过滤噪声，只保留相关chunk (score >= 0.5)
+- [ ] 跨层去重生效 (同主题取最高层级)
+- [ ] aidp_context 管线传入正确的 project/kb context
+- [ ] 检索回退 (reranker不可用时使用阈值过滤)
 
-### Week 2: 文档预览与搜索
+### 10.2 性能验收
 
-| 天数 | 任务 | 产出 |
-|------|------|------|
-| Day 1-2 | 文档预览功能 | Markdown/PDF 预览 |
-| Day 3-4 | 分块可视化 | 分块展示界面 |
-| Day 5 | 搜索中心 | 搜索界面和结果展示 |
+- [ ] 搜索响应 < 200ms (Step1 + Step2)
+- [ ] Reranker 推理 < 60ms (30 chunks)
+- [ ] KB树形结构加载 < 500ms
 
-### Week 3: 高级功能与优化
+### 10.3 UI验收
 
-| 天数 | 任务 | 产出 |
-|------|------|------|
-| Day 1-2 | 上传导入功能 | 拖拽上传、批量导入 |
-| Day 3 | 统计仪表盘 | 数据可视化 |
-| Day 4 | 知识图谱（可选） | 文档关系图 |
-| Day 5 | 测试与优化 | Bug 修复、性能优化 |
+- [ ] KB树正确展示三层结构 + 继承关系
+- [ ] 项目绑定页可手动选择KB + 查看继承链
+- [ ] 检索结果页展示 reranker 筛选前后对比
 
 ---
 
-## 6. 验收标准
+## 11. 风险评估
 
-### 6.1 功能验收
-
-- [ ] 知识库 CRUD 功能完整
-- [ ] 文档列表支持卡片/列表/树形视图
-- [ ] 文档预览支持 Markdown/PDF/文本
-- [ ] 分块可视化清晰展示索引状态
-- [ ] 搜索支持语义+关键词混合
-- [ ] 搜索结果高亮显示
-- [ ] 批量上传和导入功能正常
-- [ ] 统计仪表盘数据准确
-
-### 6.2 性能验收
-
-- [ ] 文档列表加载 < 1s（1000条）
-- [ ] 搜索响应 < 500ms
-- [ ] 文档预览加载 < 2s（10MB）
-- [ ] 批量上传支持 100 个文件同时处理
-
-### 6.3 体验验收
-
-- [ ] 界面风格与 SkillRouter 一致
-- [ ] 支持中英文切换
-- [ ] 移动端适配（响应式）
-- [ ] 键盘快捷键支持
+| 风险 | 影响 | 概率 | 缓解 |
+|------|------|------|------|
+| pgvector 搜索性能 | 高 | 低 | IVFFlat/HNSW 索引 |
+| Reranker 首次部署失败 | 中 | 中 | 回退到阈值过滤 |
+| 数据迁移兼容性 | 高 | 中 | 保留 workspace_id 字段，渐进切换 |
+| 大规模知识库搜索慢 | 中 | 中 | 层级摘要索引缩小搜索空间 |
 
 ---
 
-## 7. 风险评估
+## 12. 参考资料
 
-| 风险 | 影响 | 概率 | 缓解措施 |
-|------|------|------|----------|
-| PDF 预览兼容性 | 高 | 中 | 使用成熟的 PDF.js 库 |
-| 大文件上传性能 | 中 | 高 | 分片上传 + 进度显示 |
-| 搜索精度不足 | 高 | 中 | 混合搜索策略 + 调优 |
-| 数据库迁移失败 | 高 | 低 | 备份 + 回滚方案 |
-
----
-
-## 8. 参考资源
-
-- SkillRouter Web UI 实现
-- ElasticSearch Kibana 界面设计
-- Notion 文档管理界面
-- Obsidian 知识库界面
+- Reranker: [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)
+- 向量搜索: pgvector HNSW indexing
+- SkillRouter Web UI: 参考标杆
 
 ---
 
 **文档结束**
-
-*本计划将在开发过程中根据实际情况调整*

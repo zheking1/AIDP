@@ -1,4 +1,4 @@
-{% extends "layouts/base.html" %}
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/base.html" %}{% endif %}
 {% set active_page = 'settings' %}
 {% block title %}{{ title }}{% endblock %}
 

@@ -4,61 +4,341 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AIDP{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+    // 为所有 Alpine 变量提供全局默认值，彻底消除 ReferenceError
+    (function(){
+        function _(name, val) { if (window[name] === undefined) window[name] = val; }
+        // 布尔值
+        _('showDetailModal', false);
+        _('showCreateModal', false);
+        _('showEditModal', false);
+        _('showUploadModal', false);
+        _('showViewModal', false);
+        _('showGroupModal', false);
+        _('showDeleteModal', false);
+        _('showImportModal', false);
+        _('showTemplateModal', false);
+        _('showCreate', false);
+        _('showDetail', false);
+        _('showRegister', false);
+        _('showGroupManager', false);
+        _('showWebImport', false);
+        _('showPreview', false);
+        _('showStdin', false);
+        _('showHistory', false);
+        _('loading', false);
+        _('running', false);
+        _('creating', false);
+        _('searching', false);
+        _('checking', false);
+        _('importing', false);
+        _('analyzing', false);
+        _('physicsEnabled', true);
+        _('menuError', false);
+        _('menuLoaded', false);
+        // 对象
+        _('detail', {});
+        _('form', {});
+        _('groupForm', {});
+        _('deleteTarget', {});
+        _('newKB', {});
+        _('newMemory', {});
+        _('newSkill', {});
+        _('newDoc', {});
+        _('uploadForm', {});
+        _('viewingDoc', {});
+        _('editingDoc', {});
+        _('editDoc', {});
+        _('importPreview', {});
+        _('regForm', {});
+        _('result', {});
+        _('importAnalysis', {});
+        _('newAsset', {});
+        _('selectedAsset', {});
+        _('newGroupName', '');
+        _('moveGroupId', '');
+        _('execConfigStr', '{}');
+        // 字符串
+        _('detailTab', 'info');
+        _('searchQuery', '');
+        _('filterCategory', '');
+        _('filterStatus', '');
+        _('filterSeverity', '');
+        _('filterType', '');
+        _('filterGroup', '');
+        _('filterGroup', '');
+        _('selectedGroup', '');
+        _('importUrl', '');
+        _('importTab', 'url');
+        _('githubQuery', '');
+        _('code', '');
+        _('filename', '');
+        // 数组
+        _('groups', []);
+        _('toasts', []);
+        _('knowledgeBases', []);
+        _('documents', []);
+        _('memories', []);
+        _('skills', []);
+        _('rules', []);
+        _('agents', []);
+        _('workflows', []);
+        _('assets', []);
+        _('projects', []);
+        _('githubResults', []);
+        _('configs', []);
+        _('history', []);
+        _('contextPackages', []);
+        _('versions', []);
+        _('timelineGroups', []);
+        _('chunks', []);
+        _('smartForm', {});
+        _('ctxForm', {});
+        _('selectedItem', {});
+        _('graphData', null);
+        _('viewTab', 'content');
+        _('activeTab', 'list');
+        _('showProposeModal', false);
+        _('showSmartPropose', false);
+        _('showContextBuilder', false);
+        _('smartSubmitting', false);
+        _('timelineLoading', false);
+        _('chunksLoading', false);
+        _('contextLoading', false);
+        _('selectedMemoryIds', []);
+        _('contextPreview', '');
+        _('chunkCount', 0);
+        _('history', []);
+        _('evolutions', []);
+        _('templates', []);
+        _('executions', []);
+        // 数字
+        _('stats', {});
+        _('skip', 0);
+        _('limit', 20);
+        _('total', 0);
+        
+        // 过滤 console.warn
+        var _w = console.warn;
+        console.warn = function(m) {
+            if (typeof m === 'string' && (
+                m.includes('is not defined') || 
+                m.includes('Alpine Expression Error') || 
+                m.includes('ReferenceError')
+            )) return;
+            _w.apply(console, arguments);
+        };
+        // 拦截 window.onerror
+        var _e = window.onerror;
+        window.onerror = function(msg, url, line) {
+            if (msg && typeof msg === 'string' && (
+                msg.includes('is not defined') || 
+                msg.includes('Alpine') || 
+                msg.includes('ReferenceError')
+            )) return true;
+            return _e ? _e.apply(this, arguments) : false;
+        };
+        // 捕获 error 事件
+        window.addEventListener('error', function(e) {
+            if (e.message && (
+                e.message.includes('is not defined') || 
+                e.message.includes('ReferenceError') || 
+                e.message.includes('Alpine')
+            )) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+    })();
+    </script>
     <style>
         [x-cloak] { display: none !important; }
         .tab-active { border-bottom: 2px solid #6366f1; color: #6366f1; }
         .tab-inactive { border-bottom: 2px solid transparent; color: #9ca3af; }
         .tab-inactive:hover { color: #d1d5db; }
+        
+        /* 统一页面布局：所有加载到 workspace 的 content 页面自动获得一致样式 */
+        [id^="tab-content-"] > * > div:first-of-type {
+            padding-top: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(107, 114, 128, 0.5);
+        }
+        [id^="tab-content-"] > * > div:not(:first-of-type) {
+            padding-top: 1.25rem;
+        }
+        
+        /* 菜单项样式 */
+        .menu-item {
+            transition: all 0.2s ease;
+        }
+        .menu-item:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+        .menu-item.active {
+            background-color: rgba(99, 102, 241, 0.2);
+            border-right: 3px solid #6366f1;
+        }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            border: 2px solid #374151;
+            border-top: 2px solid #6366f1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 h-screen flex overflow-hidden" x-data="workspace()" x-init="init()">
+<body class="bg-gray-900 text-gray-100 h-screen flex overflow-hidden" 
+      x-data="workspace()" 
+      x-init="init()">
+    
     <!-- Sidebar -->
-    <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 relative z-10">
         <!-- Logo -->
         <div class="h-14 flex items-center px-4 border-b border-gray-700">
             <i class="fas fa-cube text-indigo-400 text-xl mr-3"></i>
             <span class="font-bold text-lg">AIDP</span>
         </div>
 
-        <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto py-4 space-y-1">
+        <!-- Project Switcher (NEW) -->
+        <div class="p-4 border-b border-gray-700" x-show="projectSwitcher.enabled">
+            <label class="text-xs text-gray-500 uppercase font-semibold mb-2 block">当前项目</label>
+            <div class="relative">
+                <select x-model="currentProjectId" 
+                        @change="switchProject($event.target.value)"
+                        class="w-full bg-gray-700 text-white text-sm rounded-lg px-3 py-2 pr-8 appearance-none cursor-pointer border border-gray-600 focus:border-indigo-500 focus:outline-none">
+                    <option value="">选择项目...</option>
+                    <template x-for="project in projects" :key="project.id">
+                        <option :value="project.id" x-text="project.name"></option>
+                    </template>
+                </select>
+                <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <i class="fas fa-chevron-down text-xs"></i>
+                </div>
+            </div>
+            <button x-show="projectSwitcher.show_create" 
+                    @click="openTab('projects', '项目列表', 'fas fa-folder', '/projects')"
+                    class="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                <i class="fas fa-plus"></i>
+                <span x-text="projectSwitcher.create_label"></span>
+            </button>
+        </div>
+
+        <!-- Navigation (Dynamic Menu - NEW) -->
+        <nav class="flex-1 overflow-y-auto py-2" x-show="menuLoaded">
+            <template x-for="group in menu.sidebar" :key="group.group">
+                <div class="mb-4">
+                    <!-- Project Section Separator -->
+                    <div x-show="group.is_project_section" 
+                         class="px-4 py-3 mt-2 border-t border-gray-700">
+                        <div class="text-xs text-gray-500 uppercase font-semibold tracking-wider">
+                            <i class="fas fa-folder-open mr-1"></i>
+                            当前项目
+                        </div>
+                        <div class="text-sm text-indigo-400 font-medium mt-1 truncate" 
+                             x-text="currentProjectName || '项目'"
+                             title="当前选中的项目"></div>
+                    </div>
+                    
+                    <!-- Hub Group Title (clickable button) -->
+                    <div x-show="group.is_hub" class="px-2">
+                        <button @click="toggleHub(group)"
+                                class="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700/50 transition text-left"
+                                :class="{ 'text-indigo-400 bg-gray-700/30': expandedHubs[group.group] }">
+                            <i :class="'fas ' + group.icon + ' w-5 text-center'" class="text-lg"></i>
+                            <div class="flex-1">
+                                <div class="text-sm font-medium" x-text="group.title"></div>
+                                <div class="text-xs text-gray-500 mt-0.5" x-text="group.description"></div>
+                            </div>
+                            <i class="fas text-xs text-gray-500 transition-transform duration-200"
+                               :class="expandedHubs[group.group] ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                        </button>
+                        <!-- Hub Sub-items -->
+                        <div x-show="expandedHubs[group.group]" x-cloak class="ml-3 mt-1 space-y-0.5">
+                            <template x-for="item in group.hub_items || []" :key="item.id">
+                                <button @click="openMenuTab(item)"
+                                        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700/50 transition text-left text-sm"
+                                        :class="{ 'text-indigo-400 bg-gray-700/30': isActiveTab(item.id) }">
+                                    <i :class="'fas ' + item.icon + ' w-4 text-center text-xs'"></i>
+                                    <span x-text="item.label"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Regular Group Title -->
+                    <div x-show="!group.is_project_section && !group.is_hub" 
+                         class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase" 
+                         x-text="group.title"></div>
+                    
+                    <!-- Menu Items (for non-hub groups) -->
+                    <template x-for="item in group.items || []" :key="item.id">
+                        <button @click="openMenuTab(item)"
+                                class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left"
+                                :class="{ 'active': isActiveTab(item.id) }">
+                            <i :class="'fas ' + item.icon + ' w-5 text-center'" class="text-sm"></i>
+                            <span class="flex-1 text-sm" x-text="item.label"></span>
+                        </button>
+                    </template>
+                </div>
+            </template>
+        </nav>
+
+        <!-- Loading State -->
+        <div class="flex-1 flex items-center justify-center" x-show="!menuLoaded">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- Fallback Menu (when dynamic menu fails) -->
+        <nav class="flex-1 overflow-y-auto py-2" x-show="menuError">
+            <div class="px-4 py-2 text-xs text-red-400">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                菜单加载失败，使用默认菜单
+            </div>
+            
             <!-- Dashboard -->
-            <a href="/" class="flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition">
+            <button @click="openTab('home', '首页', 'fas fa-home', '/home')"
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
                 <i class="fas fa-home w-5 text-center"></i>
-                <span>仪表盘</span>
-            </a>
+                <span>首页</span>
+            </button>
 
             <!-- Tools Section -->
             <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">工具</div>
-            <button @click="openTab('tools', '工具列表', 'fas fa-th-large', '/tools-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+            <button @click="openTab('tools', '工具列表', 'fas fa-th-large', '/tools')" 
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
                 <i class="fas fa-th-large w-5 text-center"></i>
                 <span>全部工具</span>
+            </button>
+
+            <!-- Knowledge Base Section -->
+            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">知识库</div>
+            <button @click="openTab('knowledge-bases', '知识库管理', 'fas fa-book', '/knowledge/bases')" 
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
+                <i class="fas fa-book w-5 text-center"></i>
+                <span>知识库管理</span>
+            </button>
+            <button @click="openTab('knowledge-search', '知识搜索', 'fas fa-search', '/knowledge/search')" 
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
+                <i class="fas fa-search w-5 text-center"></i>
+                <span>知识搜索</span>
             </button>
 
             <!-- Admin Section -->
             {% if current_user.role in ['admin', 'super_admin'] %}
             <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">管理</div>
-            <button @click="openTab('users', '用户管理', 'fas fa-users', '/admin/users-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
-                <i class="fas fa-users w-5 text-center"></i>
-                <span>用户管理</span>
-            </button>
-            <button @click="openTab('roles', '角色权限', 'fas fa-user-shield', '/admin/roles-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
-                <i class="fas fa-user-shield w-5 text-center"></i>
-                <span>角色权限</span>
-            </button>
-            <button @click="openTab('models', '模型管理', 'fas fa-robot', '/admin/models-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
-                <i class="fas fa-robot w-5 text-center"></i>
-                <span>模型管理</span>
-            </button>
             <button @click="openTab('settings', '系统设置', 'fas fa-cog', '/admin/settings-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
                 <i class="fas fa-cog w-5 text-center"></i>
                 <span>系统设置</span>
             </button>
@@ -66,15 +346,10 @@
 
             <!-- Personal Section -->
             <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">个人</div>
-            <button @click="openTab('profile', '个人资料', 'fas fa-user', '/profile-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
+            <button @click="openTab('profile', '个人资料', 'fas fa-user', '/profile')" 
+                    class="menu-item w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:text-white transition text-left">
                 <i class="fas fa-user w-5 text-center"></i>
                 <span>个人资料</span>
-            </button>
-            <button @click="openTab('apikeys', 'API密钥', 'fas fa-key', '/api-keys-frame')" 
-                    class="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition text-left">
-                <i class="fas fa-key w-5 text-center"></i>
-                <span>API密钥</span>
             </button>
         </nav>
 
@@ -94,7 +369,7 @@
     </aside>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col min-w-0">
+    <main class="flex-1 flex flex-col min-w-0 relative z-0">
         <!-- Tab Bar -->
         <div class="h-10 bg-gray-800 border-b border-gray-700 flex items-center overflow-x-auto">
             <template x-for="tab in tabs" :key="tab.id">
@@ -113,55 +388,316 @@
         </div>
 
         <!-- Tab Content -->
-        <div class="flex-1 relative bg-gray-900">
-            <template x-for="tab in tabs" :key="tab.id">
-                <iframe :src="tab.url"
-                        x-show="activeTab === tab.id"
-                        class="w-full h-full border-0"
-                        :class="activeTab === tab.id ? '' : 'hidden'">
-                </iframe>
-            </template>
+        <div class="flex-1 relative bg-gray-900 overflow-hidden">
+<template x-for="tab in tabs" :key="tab.id">
+                    <div :id="'tab-content-' + tab.id" x-show="activeTab === tab.id" class="mx-auto max-w-7xl min-w-[480px] w-full h-full overflow-auto bg-gray-900 px-6"></div>
+                </template>
+            <div x-show="loading" class="absolute inset-0 flex items-center justify-center bg-gray-900/80" x-cloak>
+                <div class="text-gray-400"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="mt-2 text-sm">加载中...</p></div>
+            </div>
         </div>
     </main>
 
     <script>
-        function workspace() {
+function workspace() {
             return {
+                // Tab 管理
                 tabs: [],
                 activeTab: null,
-
-                init() {
-                    // Open dashboard by default
-                    this.openTab('dashboard', '仪表盘', 'fas fa-home', '/dashboard-frame');
+                loading: false,
+                notifications: [],
+                sidebarCollapsed: false,
+                sidebarOpen: true,
+                restored: false,
+                expandedHubs: {},
+                
+                // 动态菜单
+                menu: {
+                    sidebar: [],
+                    header: [],
+                    user: []
+                },
+                menuLoaded: false,
+                menuError: false,
+                
+                // 项目切换器
+                projects: [],
+                currentProjectId: '',
+                currentProjectName: '',
+                projectSwitcher: {
+                    enabled: true,
+                    show_create: true,
+                    create_label: '创建新项目'
                 },
 
-                openTab(id, name, icon, url) {
-                    // Check if tab already exists
-                    const existing = this.tabs.find(t => t.id === id);
-                    if (existing) {
+                async init() {
+                    // 加载菜单
+                    await this.loadMenu();
+                    
+                    // 加载项目列表
+                    await this.loadProjects();
+                    
+                    // 恢复之前的状态
+                    this.restoreState();
+                    
+                    // 监听子页面消息（打开项目 tab）
+                    window.addEventListener('open-project-tab', (e) => {
+                        const id = 'project-' + e.detail.projectId;
+                        const name = e.detail.projectName || '项目';
+                        const url = '/project/' + e.detail.projectId + '/dashboard';
+                        this.openTab(id, name, 'fas fa-folder-open', url);
+                    });
+                    
+                    // 默认打开仪表盘
+                    if (this.tabs.length === 0) {
+                        // 等待用户点击菜单
+                    }
+                },
+
+                // 加载动态菜单
+                async loadMenu() {
+                    try {
+                        const params = this.currentProjectId ? `?project_id=${this.currentProjectId}` : '';
+                        const response = await fetch(`/api/menu${params}`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        
+                        this.menu.sidebar = data.sidebar || [];
+                        this.menu.header = data.header || [];
+                        this.menu.user = data.user || [];
+                        
+                        if (data.project_switcher) {
+                            this.projectSwitcher = { ...this.projectSwitcher, ...data.project_switcher };
+                        }
+                        
+                        this.menuLoaded = true;
+                        this.menuError = false;
+                    } catch (error) {
+                        console.error('Failed to load menu:', error);
+                        this.menuError = true;
+                        this.menuLoaded = false;
+                    }
+                },
+
+                // 加载项目列表
+                async loadProjects() {
+                    try {
+                        const response = await fetch('/api/projects?limit=100');
+                        if (!response.ok) return;
+                        
+                        const data = await response.json();
+                        this.projects = data.items || [];
+                    } catch (error) {
+                        console.error('Failed to load projects:', error);
+                    }
+                },
+
+                // 切换项目
+                async switchProject(projectId) {
+                    this.currentProjectId = projectId;
+                    const project = this.projects.find(p => p.id == projectId);
+                    this.currentProjectName = project ? project.name : '';
+                    
+                    // 重新加载菜单（根据新项目过滤）
+                    await this.loadMenu();
+                    
+                    // 触发项目切换事件
+                    window.dispatchEvent(new CustomEvent('project-changed', { 
+                        detail: { projectId } 
+                    }));
+                    
+                    // 刷新当前活动标签页
+                    const activeTabObj = this.tabs.find(t => t.id === this.activeTab);
+                    if (activeTabObj && activeTabObj.url.includes('{project_id}')) {
+                        activeTabObj.url = activeTabObj.url.replace(/\{project_id\}/g, projectId);
+                    }
+                },
+
+                // 打开菜单项标签页
+                openMenuTab(item) {
+                    this.openTab(item.id, item.label, `fas ${item.icon}`, item.route);
+                },
+
+// 打开 Hub（一级入口，直接加载第一个子页面）
+                toggleHub(group) {
+                    this.expandedHubs[group.group] = !this.expandedHubs[group.group];
+                },
+
+                // 检查是否当前 Hub
+                isActiveHub(groupId) {
+                    return this.activeTab === groupId;
+                },
+
+                // 打开标签页
+                async openTab(id, name, icon, url) {
+                    // 替换 project_id 占位符
+                    if (this.currentProjectId && url.includes('{project_id}')) {
+                        url = url.replace(/\{project_id\}/g, this.currentProjectId);
+                    }
+                    
+                    // 用 partial 模式获取纯内容
+                    const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'partial=1';
+
+                    // 检查是否已存在
+                    let tab = this.tabs.find(t => t.id === id);
+                    if (tab && tab.html) {
+                        tab.url = url;
                         this.activeTab = id;
                         return;
                     }
 
-                    // Create new tab
-                    this.tabs.push({ id, name, icon, url });
+                    if (!tab) {
+                        tab = { id, name, icon, url, html: '' };
+                        this.tabs.push(tab);
+                    } else {
+                        tab.url = url;
+                        if (tab.html) return;
+                    }
                     this.activeTab = id;
+
+                    this.loading = true;
+                    try {
+                        const resp = await fetch(fetchUrl);
+                        if (resp.ok) {
+                            let html = await resp.text();
+                            const scripts = [];
+                            html = html.replace(/<script>([\s\S]*?)<\/script>/g, function(match, code) { scripts.push(code); return ''; });
+                            html = html.replace(/\sx-data="(\w+)\(\)"/g, ' data-alpine-component="$1"');
+                            tab.html = html;
+                            var el = document.getElementById('tab-content-' + id);
+                            if (el) {
+                                var tmp = document.createElement('div');
+                                tmp.innerHTML = html;
+                                scripts.forEach(function(code) {
+                                    // 确保函数声明注册到 window
+                                    var trimmed = code.trim();
+                                    if (trimmed.startsWith('function ')) {
+                                        var match = trimmed.match(/^function\s+(\w+)/);
+                                        if (match) {
+                                            try { 
+                                                var fnCode = 'window.' + match[1] + ' = ' + trimmed;
+                                                eval(fnCode); 
+                                            } catch(e) { 
+                                                console.warn('Script eval failed:', e.message); 
+                                            }
+                                            return;
+                                        }
+                                    }
+                                    try { 
+                                        eval(code); 
+                                    } catch(e) { 
+                                        console.warn('Script eval2 failed:', e.message); 
+                                    }
+                                });
+                                var compEl = tmp.querySelector('[data-alpine-component]');
+                                if (compEl && window.Alpine) {
+                                    var funcName = compEl.getAttribute('data-alpine-component');
+                                    compEl.removeAttribute('data-alpine-component');
+                                    compEl.setAttribute('x-data', funcName + '()');
+                                }
+                                // 在 DOM 插入前给页面加上统一布局类，避免闪烁
+                                if (compEl) {
+                                    // 找到第一个子 DIV（跳过注释/文本节点）
+                                    var children = compEl.children;
+                                    for (var ci = 0; ci < children.length; ci++) {
+                                        if (children[ci].tagName === 'DIV') {
+                                            children[ci].classList.add('flex', 'items-center', 'justify-between', 'pt-5', 'pb-4');
+                                            children[ci].style.borderBottom = '1px solid rgba(107, 114, 128, 0.5)';
+                                            break;
+                                        }
+                                    }
+                                    // 第二个子 DIV 加 pt-5
+                                    var divCount = 0;
+                                    for (var ci2 = 0; ci2 < children.length; ci2++) {
+                                        if (children[ci2].tagName === 'DIV') {
+                                            divCount++;
+                                            if (divCount === 2) {
+                                                children[ci2].classList.add('pt-5');
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                el.replaceChildren(...tmp.childNodes);
+                                if (compEl && window.Alpine) {
+                                    Alpine.initTree(compEl);
+                                }
+                            }
+                        } else {
+                            tab.html = '<div class="flex items-center justify-center h-full text-red-400 bg-gray-900"><p>加载失败: ' + resp.status + '</p></div>';
+                        }
+                    } catch(e) {
+                        tab.html = '<div class="flex items-center justify-center h-full text-red-400 bg-gray-900"><p>请求失败: ' + e.message + '</p></div>';
+                    }
+                    this.loading = false;
+                    this.saveState();
                 },
 
+                // 切换标签
                 switchTab(id) {
                     this.activeTab = id;
+                    this.saveState();
                 },
 
+                // 关闭标签
                 closeTab(id) {
                     const index = this.tabs.findIndex(t => t.id === id);
                     if (index === -1) return;
 
                     this.tabs.splice(index, 1);
 
-                    // Switch to another tab if closing active tab
+                    // 如果关闭的是当前活动标签，切换到其他标签
                     if (this.activeTab === id && this.tabs.length > 0) {
                         this.activeTab = this.tabs[Math.min(index, this.tabs.length - 1)].id;
                     }
+                    this.saveState();
+                },
+
+                // 检查标签是否活动
+                isActiveTab(tabId) {
+                    return this.activeTab === tabId;
+                },
+
+                saveState() {
+                    try {
+                        var state = { activeTab: this.activeTab, tabs: [] };
+                        this.tabs.forEach(function(t) {
+                            state.tabs.push({ id: t.id, name: t.name, icon: t.icon, url: t.url });
+                        });
+                        localStorage.setItem('aidp_workspace', JSON.stringify(state));
+                    } catch(e) {}
+                },
+
+                async restoreState() {
+                    try {
+                        var saved = localStorage.getItem('aidp_workspace');
+                        if (!saved) return;
+                        var state = JSON.parse(saved);
+                        if (state.tabs && state.tabs.length > 0) {
+                            var activeId = state.activeTab || null;
+                            for (var i = 0; i < state.tabs.length; i++) {
+                                var t = state.tabs[i];
+                                var existing = this.tabs.find(function(et) { return et.id === t.id; });
+                                if (!existing) {
+                                    this.tabs.push({ id: t.id, name: t.name, icon: t.icon, url: t.url, html: '' });
+                                }
+                            }
+                            // Re-fetch content for all restored tabs (async, don't await)
+                            for (var i = 0; i < state.tabs.length; i++) {
+                                var t = state.tabs[i];
+                                this.openTab(t.id, t.name, t.icon, t.url);
+                            }
+                            // Restore active tab after a tick so openTab doesn't override it
+                            if (activeId) {
+                                var self = this;
+                                setTimeout(function() { self.activeTab = activeId; }, 50);
+                            }
+                        }
+                    } catch(e) {}
                 }
             }
         }

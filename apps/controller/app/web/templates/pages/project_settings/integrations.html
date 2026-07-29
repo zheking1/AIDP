@@ -1,0 +1,18 @@
+{% extends "pages/project_settings/base.html" %}
+{% block settings_content %}
+<h2 class="text-lg font-semibold text-gray-900 mb-4">集成配置</h2>
+<div class="max-w-7xl mx-auto px-4"><div class="space-y-6" x-data="settingsIntegrations()" x-init="init()">
+  <div class="border rounded-lg p-4"><h3 class="font-medium flex items-center gap-2"><i class="fab fa-github text-gray-700"></i>Git 集成</h3><p class="text-sm text-gray-500 mt-1">连接到 Git 仓库进行代码同步</p><div class="mt-3"><label class="text-sm text-gray-600">仓库地址</label><input type="text" x-model="form.git_url" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="https://github.com/user/repo.git"></div><button @click="save()" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">保存</button></div>
+  <div class="border rounded-lg p-4"><h3 class="font-medium flex items-center gap-2"><i class="fas fa-webhook text-gray-700"></i>Webhook</h3><p class="text-sm text-gray-500 mt-1">接收外部事件的 HTTP 回调</p><div class="mt-3"><label class="text-sm text-gray-600">Webhook 地址</label><input type="text" x-model="form.webhook_url" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="https://hooks.example.com/events"></div></div>
+  <p x-show="saved" class="text-green-600 text-sm"><i class="fas fa-check mr-1"></i>已保存</p>
+</div>
+<script>
+function settingsIntegrations() {
+  return { form: { git_url: '', webhook_url: '' }, saved: false,
+    async init() { try { const r = await fetch('/api/projects/{{project_id}}/settings'); if(r.ok) { const d = await r.json(); if(d.integrations) this.form = { git_url: d.integrations.git_url || '', webhook_url: d.integrations.webhook_url || '' }; } } catch(e){} },
+    async save() { try { const r = await fetch('/api/projects/{{project_id}}/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({integrations: this.form}) }); if(r.ok) { this.saved = true; setTimeout(()=>this.saved=false,3000); } } catch(e){} }
+  };
+}
+</script>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "instructions.md"
+  ],
+  "aidp": {
+    "project_id": "aidp",
+    "api_key": "aidp_059193d65f40d73362259df1cd3f373f0d4243300d83b92fa038ccfe49b8ea4b"
+  },
+  "mcp": {
+    "aidp-controller-v2": {
+      "type": "remote",
+      "url": "http://192.168.0.100:8883/mcp/",
+      "enabled": true,
+      "headers": {
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  }
+}

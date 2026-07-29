@@ -39,3 +39,18 @@ async def document_detail(request: Request, document_id: str):
 @router.get("/search", response_class=HTMLResponse)
 async def search_page(request: Request):
     return render("search.html", {"request": request})
+
+
+@router.get("/knowledge-bases", response_class=HTMLResponse)
+async def knowledge_bases_page(request: Request):
+    return render("knowledge-bases.html", {"request": request})
+
+
+@router.get("/knowledge-bases/{kb_id}", response_class=HTMLResponse)
+async def knowledge_base_detail(request: Request, kb_id: str):
+    return render("knowledge-base-detail.html", {"request": request, "kb_id": kb_id})
+
+
+@router.get("/project-bindings", response_class=HTMLResponse)
+async def project_bindings_page(request: Request):
+    return render("project-bindings.html", {"request": request})

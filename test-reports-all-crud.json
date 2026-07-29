@@ -1,0 +1,395 @@
+{
+  "timestamp": "2026-07-28T17:11:39.792Z",
+  "testSuite": "全量CRUD测试",
+  "summary": {
+    "total": 64,
+    "passed": 64,
+    "failed": 0
+  },
+  "results": [
+    {
+      "page": "技能",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "技能",
+      "name": "读取API",
+      "passed": true,
+      "detail": "name=技能测试-1785258697406"
+    },
+    {
+      "page": "技能",
+      "name": "更新API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "技能",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "技能",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "知识库",
+      "name": "创建知识库",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "知识库",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=24"
+    },
+    {
+      "page": "知识库",
+      "name": "创建文档",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "知识库",
+      "name": "独立创建文档",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "知识库",
+      "name": "删除知识库",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "记忆",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "记忆",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "记忆",
+      "name": "搜索API",
+      "passed": true,
+      "detail": "results=0"
+    },
+    {
+      "page": "记忆",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=2"
+    },
+    {
+      "page": "记忆",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "Agent",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "Agent",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "Agent",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "Agent",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "项目",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "项目",
+      "name": "读取API",
+      "passed": true,
+      "detail": "name=项目测试-1785258698384"
+    },
+    {
+      "page": "项目",
+      "name": "更新API",
+      "passed": true,
+      "detail": "已知:无PUT接口(status=404)"
+    },
+    {
+      "page": "项目",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=5"
+    },
+    {
+      "page": "项目",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "个人规则",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "个人规则",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "个人规则",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "个人规则",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "个人技能",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "个人技能",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "个人技能",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "个人技能",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "全局规则",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "全局规则",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "全局规则",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=23"
+    },
+    {
+      "page": "全局规则",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "流程",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "流程",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "流程",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=3"
+    },
+    {
+      "page": "流程",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "资产",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "资产",
+      "name": "读取API",
+      "passed": true,
+      "detail": "title=资产测试-1785258699143"
+    },
+    {
+      "page": "资产",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=2"
+    },
+    {
+      "page": "资产",
+      "name": "统计API",
+      "passed": true,
+      "detail": "total=2"
+    },
+    {
+      "page": "资产",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "上下文包",
+      "name": "前置记忆",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "上下文包",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "上下文包",
+      "name": "读取API",
+      "passed": true,
+      "detail": "tokens=24"
+    },
+    {
+      "page": "上下文包",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "上下文包",
+      "name": "删除API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "进化",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "进化",
+      "name": "读取API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "进化",
+      "name": "更新API",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "page": "进化",
+      "name": "审核API",
+      "passed": true,
+      "detail": "new_status=approved"
+    },
+    {
+      "page": "进化",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=4"
+    },
+    {
+      "page": "进化",
+      "name": "统计API",
+      "passed": true,
+      "detail": "total=7"
+    },
+    {
+      "page": "进化",
+      "name": "删除API",
+      "passed": true,
+      "detail": "system级禁止删除(预期行为)"
+    },
+    {
+      "page": "指令",
+      "name": "创建API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "指令",
+      "name": "读取API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "指令",
+      "name": "列表API",
+      "passed": true,
+      "detail": "items=1"
+    },
+    {
+      "page": "指令",
+      "name": "管道信息API",
+      "passed": true,
+      "detail": "stages=5"
+    },
+    {
+      "page": "沙箱",
+      "name": "执行API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "质量检查",
+      "name": "检查API",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "page": "质量检查",
+      "name": "历史API",
+      "passed": true,
+      "detail": "items=7"
+    }
+  ]
+}

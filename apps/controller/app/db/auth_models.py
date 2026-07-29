@@ -9,12 +9,16 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Column, String, Text, DateTime, Boolean, JSON, 
-    ForeignKey, Integer, Index, UniqueConstraint
+    ForeignKey, Integer, Index, Float, UniqueConstraint
 )
-from sqlalchemy.dialects.postgresql import UUID, INET
+from sqlalchemy import func
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
+
+
+def generate_uuid():
+    return str(uuid.uuid4())
 
 
 # ============================================================================
@@ -56,7 +60,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     username = Column(String(64), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=True, index=True)
@@ -105,8 +109,8 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Session tokens
     session_token = Column(String(255), unique=True, nullable=False, index=True)
@@ -144,8 +148,8 @@ class LoginLog(Base):
     __tablename__ = "login_logs"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     username = Column(String(64), nullable=True)  # Attempted username
     
     action = Column(String(32), nullable=False)
@@ -185,7 +189,7 @@ class Permission(Base):
     __tablename__ = "permissions"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     code = Column(String(64), unique=True, nullable=False, index=True)  # e.g., "tool:read", "user:write"
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
@@ -216,7 +220,7 @@ class RolePermission(Base):
     __table_args__ = {'extend_existing': True}
     
     role = Column(String(32), primary_key=True)  # UserRole value
-    permission_id = Column(UUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
+    permission_id = Column(String(36), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
     
     def __repr__(self):
         return f"<RolePermission(role={self.role}, permission_id={self.permission_id})>"
@@ -231,12 +235,13 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     label = Column(String(128), nullable=True)
     key_hash = Column(String(255), unique=True, nullable=False, index=True)  # SHA256 of the key
     key_preview = Column(String(20), nullable=True)  # First few chars for display
+    raw_key = Column(String(255), nullable=True)  # Encrypted raw key (internal use)
     
     scopes = Column(JSON, default=list)  # ["read", "write"]
     rate_limit_req_per_min = Column(Integer, default=60)
@@ -277,8 +282,8 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     
     action = Column(String(64), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN, etc.
     resource_type = Column(String(64), nullable=True, index=True)  # user, model, tool, etc.
@@ -323,13 +328,13 @@ class SystemSetting(Base):
     __tablename__ = "system_settings"
     __table_args__ = {'extend_existing': True}
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     key = Column(String(128), unique=True, nullable=False, index=True)
     value = Column(JSON, nullable=True)
     description = Column(Text, nullable=True)
     is_encrypted = Column(Boolean, default=False)
     
-    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     def __repr__(self):
@@ -355,3 +360,52 @@ class SystemSetting(Base):
 Index("idx_audit_logs_user_action", AuditLog.user_id, AuditLog.action)
 Index("idx_audit_logs_resource", AuditLog.resource_type, AuditLog.resource_id)
 Index("idx_audit_logs_created", AuditLog.created_at)
+
+
+# ── Projects Table ──
+class Project(Base):
+    """Projects table - maps project name to numeric ID"""
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    tech_stack = Column(String(256), nullable=True)
+    nas_path = Column(String(512), nullable=True)
+    docs = Column(JSON, default=list)
+    key_files = Column(JSON, default=list)
+    architecture_summary = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "tech_stack": self.tech_stack,
+            "nas_path": self.nas_path,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ── Unified Model Registry ──
+class AidpModel(Base):
+    """统一模型注册表 - 所有工具共享"""
+    __tablename__ = "aidp_models"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False, comment="Display name")
+    provider = Column(String(64), nullable=False, comment="Provider: OpenAI/DeepSeek/Local")
+    model_name = Column(String(256), nullable=False, comment="Actual model ID")
+    api_base = Column(String(512), nullable=True, comment="API base URL, null = use default")
+    api_key = Column(String(512), nullable=True, comment="API key, encrypted")
+    task_types = Column(JSON, default=list, comment="Assigned tasks: [chat, embedding, code]")
+    status = Column(String(32), default="active")
+    priority = Column(Integer, default=0, comment="Higher = preferred")
+    max_tokens = Column(Integer, default=4096, comment="Max output tokens")
+    temperature = Column(Float, default=0.7, comment="0=precise, 1=creative")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

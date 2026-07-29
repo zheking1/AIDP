@@ -1,64 +1,166 @@
 {% extends "base.html" %}
-{% block title %}Memory Tool - 仪表盘{% endblock %}
+{% block title %}仪表盘 - Memory Tool{% endblock %}
+
 {% block content %}
-<div x-data="dashboard()" x-init="init()">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white rounded-lg shadow-sm p-4">
-            <div class="text-sm text-gray-500">记忆总数</div>
-            <div class="text-2xl font-bold text-gray-800" x-text="stats.total">-</div>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm p-4">
-            <div class="text-sm text-gray-500">决策</div>
-            <div class="text-2xl font-bold text-blue-600" x-text="stats.decision">-</div>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm p-4">
-            <div class="text-sm text-gray-500">模式</div>
-            <div class="text-2xl font-bold text-green-600" x-text="stats.pattern">-</div>
-        </div>
+<div x-data="dashboard()" x-init="init()" class="space-y-6">
+    <!-- Welcome -->
+    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-8 text-white">
+        <h1 class="text-3xl font-bold mb-2">🧠 Memory Tool</h1>
+        <p class="text-blue-100">AI驱动的记忆管理系统 - 存储、关联、检索您的知识</p>
     </div>
-    <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h2 class="text-lg font-semibold mb-3">快捷操作</h2>
-        <div class="flex space-x-3">
-            <a href="/memories/new" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">创建记忆</a>
-            <a href="/memories" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">管理记忆</a>
-            <a href="/context" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">上下文查询</a>
-        </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <a href="/memories" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <div class="text-3xl mb-2">📚</div>
+            <div class="text-2xl font-bold text-blue-600" x-text="stats.total_memories || 0"></div>
+            <div class="text-sm text-gray-500">总记忆数</div>
+        </a>
+        <a href="/memories/graph" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <div class="text-3xl mb-2">🕸️</div>
+            <div class="text-2xl font-bold text-purple-600" x-text="stats.total_relations || 0"></div>
+            <div class="text-sm text-gray-500">关系连接</div>
+        </a>
+        <a href="/context" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <div class="text-3xl mb-2">📦</div>
+            <div class="text-2xl font-bold text-green-600" x-text="stats.context_packages || 0"></div>
+            <div class="text-sm text-gray-500">上下文包</div>
+        </a>
+        <a href="/review" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <div class="text-3xl mb-2">🔍</div>
+            <div class="text-2xl font-bold text-orange-600" x-text="stats.pending_review || 0"></div>
+            <div class="text-sm text-gray-500">待审核</div>
+        </a>
     </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <h2 class="text-lg font-semibold mb-3">最近记忆</h2>
-        <table class="w-full text-sm">
-            <thead class="text-left text-gray-500 border-b">
-                <tr><th class="pb-2">标题</th><th class="pb-2">类型</th><th class="pb-2">重要性</th><th class="pb-2">创建时间</th></tr>
-            </thead>
-            <tbody>
-                <template x-for="item in recent" :key="item.id">
-                    <tr class="border-b hover:bg-gray-50">
-                        <td class="py-2"><a :href="'/memories/' + item.id" class="text-blue-600 hover:underline" x-text="item.title"></a></td>
-                        <td class="py-2"><span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700" x-text="item.memory_type"></span></td>
-                        <td class="py-2 text-yellow-500" x-text="'★'.repeat(item.importance || 0)"></td>
-                        <td class="py-2 text-gray-500" x-text="new Date(item.created_at).toLocaleString()"></td>
-                    </tr>
+
+    <!-- Recent Memories & Quick Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent Memories -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow">
+            <div class="p-4 border-b flex items-center justify-between">
+                <h2 class="font-semibold text-gray-800">最近记忆</h2>
+                <a href="/memories" class="text-sm text-blue-600 hover:text-blue-800">查看全部 →</a>
+            </div>
+            <div class="divide-y">
+                <template x-for="memory in recentMemories" :key="memory.id">
+                    <a :href="`/memories/${memory.id}`" class="block p-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="px-2 py-0.5 rounded text-xs"
+                                  :class="MemoryUtils.Category.getClass(memory.category)"
+                                  x-text="MemoryUtils.Category.getLabel(memory.category)">
+                            </span>
+                            <span x-show="memory.ai_suggested" class="text-xs text-purple-600">AI</span>
+                        </div>
+                        <h3 class="font-medium text-gray-900" x-text="memory.title"></h3>
+                        <p class="text-sm text-gray-500 mt-1 line-clamp-2" x-text="memory.content_preview || memory.content"></p>
+                        <div class="text-xs text-gray-400 mt-2" x-text="MemoryUtils.Format.date(memory.created_at, true)"></div>
+                    </a>
                 </template>
-                <tr x-show="recent.length === 0"><td colspan="4" class="py-4 text-center text-gray-400">暂无记忆</td></tr>
-            </tbody>
-        </table>
+                <div x-show="recentMemories.length === 0" class="p-8 text-center text-gray-500">
+                    <div class="text-4xl mb-2">📝</div>
+                    <p>暂无记忆</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="space-y-4">
+            <div class="bg-white rounded-lg shadow p-4">
+                <h2 class="font-semibold text-gray-800 mb-4">快速操作</h2>
+                <div class="space-y-2">
+                    <a href="/memories/new" class="flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors">
+                        <span class="text-xl">➕</span>
+                        <span>新建记忆</span>
+                    </a>
+                    <a href="/memories/graph" class="flex items-center gap-3 p-3 rounded-lg hover:bg-purple-50 text-gray-700 hover:text-purple-700 transition-colors">
+                        <span class="text-xl">🕸️</span>
+                        <span>查看图谱</span>
+                    </a>
+                    <a href="/context" class="flex items-center gap-3 p-3 rounded-lg hover:bg-green-50 text-gray-700 hover:text-green-700 transition-colors">
+                        <span class="text-xl">📦</span>
+                        <span>构建上下文</span>
+                    </a>
+                    <a href="/review" class="flex items-center gap-3 p-3 rounded-lg hover:bg-orange-50 text-gray-700 hover:text-orange-700 transition-colors">
+                        <span class="text-xl">🔍</span>
+                        <span>审核队列</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Category Distribution -->
+            <div class="bg-white rounded-lg shadow p-4" x-show="categoryStats.length > 0">
+                <h2 class="font-semibold text-gray-800 mb-4">分类分布</h2>
+                <div class="space-y-2">
+                    <template x-for="cat in categoryStats" :key="cat.category">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span x-text="MemoryUtils.Category.getIcon(cat.category)"></span>
+                                <span class="text-sm text-gray-700" x-text="MemoryUtils.Category.getLabel(cat.category)"></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-24 bg-gray-200 rounded-full h-2">
+                                    <div class="bg-blue-600 h-2 rounded-full" :style="`width: ${cat.percentage}%`"></div>
+                                </div>
+                                <span class="text-sm text-gray-500 w-8 text-right" x-text="cat.count"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-{% endblock %}
-{% block scripts %}
+
 <script>
 function dashboard() {
     return {
-        stats: { total: 0, decision: 0, pattern: 0 },
-        recent: [],
+        stats: {},
+        recentMemories: [],
+        categoryStats: [],
+
         async init() {
-            const resp = await fetch('/api/memory?limit=5');
-            const data = await resp.json();
-            this.recent = data.items || [];
-            this.stats.total = data.total || 0;
-            this.stats.decision = this.recent.filter(i => i.memory_type === 'decision').length;
-            this.stats.pattern = this.recent.filter(i => i.memory_type === 'pattern').length;
-        }
+            await this.loadStats();
+            await this.loadRecentMemories();
+            await this.loadCategoryStats();
+        },
+
+        async loadStats() {
+            try {
+                const result = await MemoryUtils.API.get('/api/memories/stats/overview');
+                if (result.success) {
+                    this.stats = result.data || {};
+                }
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        },
+
+        async loadRecentMemories() {
+            try {
+                const result = await MemoryUtils.API.get('/api/memories?page=1&page_size=5');
+                if (result.success) {
+                    this.recentMemories = result.data?.items || [];
+                }
+            } catch (e) {
+                console.error('Failed to load memories:', e);
+            }
+        },
+
+        async loadCategoryStats() {
+            try {
+                const result = await MemoryUtils.API.get('/api/memories/stats/categories');
+                if (result.success) {
+                    const data = result.data || [];
+                    const total = data.reduce((sum, cat) => sum + cat.count, 0);
+                    this.categoryStats = data.map(cat => ({
+                        ...cat,
+                        percentage: total > 0 ? (cat.count / total * 100) : 0,
+                    }));
+                }
+            } catch (e) {
+                console.error('Failed to load category stats:', e);
+            }
+        },
     };
 }
 </script>

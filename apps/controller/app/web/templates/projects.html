@@ -248,10 +248,11 @@
                 this.creating = true;
                 this.error = '';
                 try {
-                    const r = await fetch('/api/projects', {
+                    const params = new URLSearchParams();
+                    params.set('name', this.newProject.name);
+                    if (this.newProject.description) params.set('description', this.newProject.description);
+                    const r = await fetch('/api/projects?' + params.toString(), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.newProject)
                     });
                     const data = await r.json();
                     if (r.ok) {

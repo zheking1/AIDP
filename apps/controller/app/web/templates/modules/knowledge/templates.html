@@ -1,0 +1,74 @@
+﻿<div x-data="templatesPage()" x-init="init()">
+<div><h1 class="text-2xl font-bold text-white">文档模板</h1><p class="text-gray-400 text-sm mt-1">PRD / 架构文档 / 计划 / 报告的标准化模板</p>
+      <button @click="showCreate=true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-plus mr-2"></i>创建模板</button>
+    </div>
+
+<div class="flex gap-2 mb-4">
+      <button @click="category='';loadTemplates()" class="px-3 py-1.5 rounded-lg text-sm transition" :class="category===''?'bg-indigo-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'">全部</button>
+      <template x-for="c in ['research','prd','arch','plan','dev','test','ops','meeting']" :key="c">
+        <button @click="category=c;loadTemplates()" class="px-3 py-1.5 rounded-lg text-sm capitalize transition" :class="category===c?'bg-indigo-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'" x-text="c"></button>
+      </template>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <template x-for="t in templates" :key="t.id">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewTemplate(t)">
+          <div class="flex items-start gap-3 mb-2">
+            <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
+                  :class="{'bg-blue-900/30 text-blue-400':t.category==='prd','bg-purple-900/30 text-purple-400':t.category==='arch','bg-green-900/30 text-green-400':t.category==='plan','bg-yellow-900/30 text-yellow-400':t.category==='dev','bg-red-900/30 text-red-400':t.category==='test','bg-indigo-900/30 text-indigo-400':t.category==='ops','bg-gray-700 text-gray-400':true}">
+              <i :class="{'fas fa-file-alt':t.category==='prd','fas fa-sitemap':t.category==='arch','fas fa-tasks':t.category==='plan','fas fa-code':t.category==='dev','fas fa-vial':t.category==='test','fas fa-rocket':t.category==='ops','fas fa-file':true}"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-white text-sm truncate" x-text="t.name"></h3>
+              <p class="text-xs text-gray-500 mt-0.5 capitalize" x-text="t.category"></p>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 line-clamp-2" x-text="t.description||t.content?.substring(0,80)"></p>
+        </div>
+      </template>
+    </div>
+    <div x-show="templates.length===0&&!loading" class="text-center py-16 text-gray-500"><i class="fas fa-file-alt text-5xl text-gray-700 mb-4"></i><p>暂无模板</p></div>
+
+  <div x-show="showCreate" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-white mb-4">创建模板</h2>
+      <div class="space-y-4">
+        <div><label class="block text-sm text-gray-400 mb-1">名称</label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">分类</label><select x-model="form.category" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="prd">PRD 需求文档</option><option value="arch">架构设计</option><option value="plan">项目计划</option><option value="dev">开发文档</option><option value="test">测试文档</option><option value="ops">运维文档</option><option value="research">调研报告</option><option value="meeting">会议记录</option></select></div>
+        <div><label class="block text-sm text-gray-400 mb-1">描述</label><input type="text" x-model="form.description" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+        <div><label class="block text-sm text-gray-400 mb-1">模板内容（支持 {{变量}} 占位符）</label><textarea x-model="form.content" rows="10" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6"><button @click="showCreate=false" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button><button @click="createTemplate()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition">创建</button></div>
+    </div>
+  </div>
+
+  <div x-show="showDetail" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center gap-3"><i class="fas fa-file-alt text-indigo-400"></i><h2 class="text-xl font-semibold text-white" x-text="detail?.name"></h2><span class="px-2 py-0.5 text-xs rounded bg-gray-700 capitalize text-gray-300" x-text="detail?.category"></span></div>
+        <button @click="showDetail=false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <pre class="bg-gray-900 p-4 rounded-lg text-sm text-green-400 whitespace-pre-wrap font-mono" x-text="detail?.content"></pre>
+      </div>
+      <div class="flex justify-between px-6 py-4 border-t border-gray-700">
+        <button @click="deleteTemplate(detail)" class="text-red-400 hover:text-red-300 text-sm"><i class="fas fa-trash mr-1"></i>删除</button>
+        <button @click="showDetail=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+
+<script>// Component function not extracted</script>
+<script>window.templatesPage=function() {
+  return {templates: [], category: "", loading: false, showCreate: false, showDetail: false, detail: null, form: {name:"",category:"prd",description:"",content:""},  templates:[], category:'', loading:false, showCreate:false, showDetail:false, detail:null,
+    form:{name:'',category:'prd',description:'',content:''},
+    async init(){this.loadTemplates()},
+    async loadTemplates(){this.loading=true;try{const p=new URLSearchParams();if(this.category)p.set('category',this.category);const r=await fetch(`/api/knowledge/templates/list?${p}`);if(r.ok)this.templates=(await r.json()).items||[]}finally{this.loading=false}},
+    async createTemplate(){try{const r=await fetch('/api/knowledge/templates/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.form)});if(r.ok){this.showCreate=false;this.form={name:'',category:'prd',description:'',content:''};this.loadTemplates()}}catch(e){}},
+    async viewTemplate(t){try{const r=await fetch(`/api/knowledge/templates/${t.id}`);if(r.ok){this.detail=await r.json();this.showDetail=true}}catch(e){}},
+    async deleteTemplate(t){if(!t||!confirm('删除模板？'))return;try{await fetch(`/api/knowledge/templates/${t.id}`,{method:'DELETE'});this.showDetail=false;this.loadTemplates()}catch(e){}}
+  };
+}
+</script>
+</script>

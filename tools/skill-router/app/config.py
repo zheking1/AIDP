@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     embedding_endpoint: str = Field(default="http://localhost:8000/v1", description="Embedding API endpoint")
     embedding_api_key: str = Field(default="sk-xxx", description="Embedding API key")
     embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model name")
-    embedding_dim: int = Field(default=384, gt=0, le=1536, description="Embedding dimension")
+    embedding_dim: int = Field(default=1024, gt=0, le=1536, description="Embedding dimension")
     
     # Timeout配置
     llm_timeout: int = Field(default=30, gt=0, le=300, description="LLM timeout in seconds")

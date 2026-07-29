@@ -3,7 +3,6 @@ AIDP Unified Web UI - Authentication API Routes
 Phase 1: Infrastructure
 """
 
-import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -341,12 +340,8 @@ async def api_toggle_user(request: Request, user_id: str):
     if not current_user or not PermissionService.is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    try:
-        target_user_id = uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+    target_user_id = user_id
     
-    # Can't disable yourself
     if target_user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot disable yourself")
     
@@ -377,12 +372,8 @@ async def api_delete_user(request: Request, user_id: str):
     if not current_user or not PermissionService.is_super_admin(current_user):
         raise HTTPException(status_code=403, detail="Super admin access required")
     
-    try:
-        target_user_id = uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+    target_user_id = user_id
     
-    # Can't delete yourself
     if target_user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
@@ -409,14 +400,9 @@ async def api_update_user(request: Request, user_id: str, data: UpdateUserReques
     if not current_user or not PermissionService.is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    try:
-        target_user_id = uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-    
     async with async_session_factory() as session:
         from sqlalchemy import select
-        result = await session.execute(select(User).where(User.id == target_user_id))
+        result = await session.execute(select(User).where(User.id == user_id))
         target_user = result.scalar_one_or_none()
         
         if not target_user:
@@ -499,12 +485,7 @@ async def api_revoke_api_key(request: Request, key_id: str):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    try:
-        key_uuid = uuid.UUID(key_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid key ID")
-    
-    success = await AuthService.revoke_api_key(key_uuid, user.id)
+    success = await AuthService.revoke_api_key(key_id, user.id)
     
     if success:
         return {"success": True, "message": "API key revoked"}
@@ -512,7 +493,22 @@ async def api_revoke_api_key(request: Request, key_id: str):
         raise HTTPException(status_code=404, detail="API key not found")
 
 
-# ============================================================================
+@router.get("/api-keys/{key_id}/reveal")
+async def api_reveal_api_key(request: Request, key_id: str):
+    """获取 API Key 明文（内部系统可随时查看）"""
+    from sqlalchemy import select
+    session_token = request.cookies.get("aidp_session")
+    user = await AuthService.validate_session(session_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id, ApiKey.is_active == True)
+        )
+        api_key = result.scalar_one_or_none()
+        if not api_key:
+            raise HTTPException(status_code=404, detail="API key not found")
+        return {"success": True, "key": api_key.raw_key or ""}
 # Dependency for protecting routes
 # ============================================================================
 

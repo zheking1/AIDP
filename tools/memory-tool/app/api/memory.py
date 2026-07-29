@@ -46,6 +46,22 @@ async def list(project: str = None, tier: str = None, user_id: int = None,
     return JSONResponse(content={"memories": memories, "total": len(memories)})
 
 
+@router.get("/search")
+async def search_memories(project: str = Query(None), query: str = Query(""), limit: int = Query(5), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import or_
+    from app.db.models import MemoryEntry
+    stmt = select(MemoryEntry).where(MemoryEntry.deleted_at.is_(None))
+    if project:
+        stmt = stmt.where(MemoryEntry.project == project)
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(or_(MemoryEntry.title.ilike(pattern), MemoryEntry.content.ilike(pattern)))
+    stmt = stmt.limit(limit).order_by(MemoryEntry.created_at.desc())
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+    return JSONResponse(content=[e.to_dict() for e in entries])
+
+
 @router.get("/{memory_id}")
 async def get(memory_id: int, db: AsyncSession = Depends(get_db)):
     svc = MemoryConsolidationService(db)

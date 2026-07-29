@@ -46,20 +46,20 @@ docs/
 
 ## 📋 快速导航
 
-### 当前开发重点（P0）
+### 当前开发重点
 
-1. **Knowledge Tool Web UI** (`plans/KNOWLEDGE-WEB-UI-PLAN.md`)
-   - 文档预览与分块可视化
-   - 高级搜索中心
-   - 知识库管理
+**Phase 3 已完成** ✅ — Agent Instructions + Stage 0-4 上下文管线 + MCP 集成均已实装。
 
-2. **Memory Tool Web UI** (`plans/MEMORY-WEB-UI-PLAN.md`)
-   - 记忆图谱可视化
-   - 向量搜索
-   - 上下文包生成器
+**P1 - 下一步**：
 
-3. **Agent Instructions 系统** (`MASTER-PLAN-2026.md` 第3节)
-   - Stage 0-4 完整管线
+1. **Evolution Engine 重构** (`plans/EVOLUTION-REFACTOR-PLAN.md`)
+   - 两级进化系统（项目级 + 系统级）
+   - 版本管理、审核流程、回退
+
+2. **模块 Web UI 完善**
+   - Knowledge 分块可视化
+   - Memory 时间轴/上下文包生成器
+   - Asset/Quality 详情页和图表
 
 ### 查看任务清单
 
@@ -72,4 +72,4 @@ docs/
 
 ---
 
-**最后更新**: 2026-07-07
+**最后更新**: 2026-07-28

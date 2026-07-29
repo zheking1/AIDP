@@ -1,0 +1,64 @@
+{% if embed %}{% extends "layouts/embed.html" %}{% else %}{% extends "layouts/base.html" %}{% endif %}
+
+{% block title %}记忆中心 - AIDP{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-900 flex flex-col" x-data="memoryHub()" x-init="init()">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col flex-1" style="min-height:0">
+    <div class="flex items-center justify-between mb-6">
+      <div><h1 class="text-2xl font-bold text-white">记忆中心</h1><p class="text-gray-400 text-sm mt-1">记忆列表 / 图谱 / 搜索</p></div>
+    </div>
+    <div class="flex gap-1 bg-gray-800 p-1 rounded-lg mb-6 overflow-x-auto">
+      <template x-for="tab in tabs" :key="tab.id">
+        <button @click="switchTab(tab)" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition"
+                :class="activeTab===tab.id?'bg-gray-700 text-indigo-400 shadow':'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'">
+          <i :class="'fas '+tab.icon" class="text-xs"></i><span x-text="tab.label"></span>
+        </button>
+      </template>
+    </div>
+    <div class="bg-gray-800/50 rounded-lg border border-gray-700 flex-1 flex flex-col" style="min-height:400px">
+      <div x-show="loading" class="flex items-center justify-center py-20"><div class="loading-spinner w-8 h-8"></div></div>
+      <div id="hub-content" class="flex-1" x-show="!loading"></div>
+    </div>
+  </div>
+</div>
+<style>.loading-spinner{border:2px solid #374151;border-top:2px solid #6366f1;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+<script>
+function memoryHub() {
+  return {
+    activeTab:'hub-memory-list', loading:false,
+    tabs:[
+      {id:'hub-memory-list', label:'记忆列表', icon:'fa-list', route:'/memory/memories'},
+      {id:'hub-memory-graph', label:'记忆图谱', icon:'fa-share-2', route:'/memory/graph'},
+      {id:'hub-memory-search', label:'记忆检索', icon:'fa-search', route:'/memory/search'},
+    ],
+    init(){const m=window.location.search.match(/tab=([^&]+)/);if(m){const f=this.tabs.find(t=>t.id===m[1]);if(f)this.activeTab=f.id}this.loadTab(this.activeTab)},
+    switchTab(t){this.activeTab=t.id;this.loadTab(t.id)},
+    async loadTab(tabId){
+      const tab=this.tabs.find(t=>t.id===tabId);if(!tab)return;
+      this.loading=true;
+      try{
+        const resp=await fetch(tab.route+'?partial=1');
+        if(!resp.ok)throw new Error('HTTP '+resp.status);
+        let html=await resp.text();
+        const scripts=[];
+        html=html.replace(/<script>([\s\S]*?)<\/script>/g,(m,c)=>{scripts.push(c);return''});
+        const el=document.getElementById('hub-content');
+        if(el){
+          scripts.forEach(code=>{
+            try{
+              const t=code.trim();
+              if(t.startsWith('function ')){const m=t.match(/^function\s+(\w+)/);if(m)eval('window.'+m[1]+'='+t);else eval(code)}
+              else eval(code);
+            }catch(e){console.warn(e.message)}
+          });
+          el.innerHTML=html;
+          if(window.Alpine)Alpine.initTree(el);
+        }
+      }catch(e){console.error('Load failed:',e)}
+      finally{this.loading=false}
+    }
+  };
+}
+</script>
+{% endblock %}

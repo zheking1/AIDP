@@ -28,7 +28,7 @@ mcp = FastMCP(
 
 
 @mcp.tool()
-async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, arguments: str = "{}", user_id: int = 0) -> str:
+async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, arguments: str = "{}", user_id: int = 0, api_key: str = "") -> str:
     """通用工具调用器 — 调用 AIDP 注册的任意工具及其能力。
 
     通过此工具可以调用 AIDP 平台中注册的所有工具的特定能力。
@@ -43,6 +43,7 @@ async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, argumen
                     "memory.search", "memory.create", "knowledge.search"
         arguments: JSON 格式的参数字符串，例如 '{"code": "print(1)", "language": "python"}'
         user_id: 用户 ID (可选，默认 0 表示系统调用)
+        api_key: API Key 用于用户认证 (可选，从 .opencode/opencode.jsonc 获取)
 
     Returns:
         JSON 格式的工具调用结果。成功时包含 "success": true 和 "output" 字段。
@@ -61,6 +62,15 @@ async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, argumen
         # 技能路由
         invoke_tool_mcp("skillrouter", "resolve_task", '{"task": "修复登录bug", "api_key": "sk-xxx"}')
     """
+    # 从 headers 读取 api_key 和 project_id (如果参数未提供)
+    if not api_key:
+        try:
+            request = ctx.request
+            if hasattr(request, 'headers'):
+                api_key = request.headers.get("x-api-key", "")
+        except Exception:
+            pass
+
     # 强制检查: 是否已调用 aidp_context
     session_id = ctx.session_id or "default"
     allowed, reason = session_manager.can_call_tool(session_id, tool_name)
@@ -155,6 +165,89 @@ async def sync_tool_capabilities(tool_name: str) -> str:
 
 
 @mcp.tool()
+async def manage_models(
+    action: str = "list",
+    task_type: str = "",
+    model_id: int = 0,
+    name: str = "",
+    provider: str = "",
+    model_name: str = "",
+    api_base: str = "",
+    task_types: str = "[]",
+    priority: int = 0,
+) -> str:
+    """管理模型配置 — 增删改查统一管理，所有工具共用。
+
+    Args:
+        action: 操作类型 — "list"(全部), "get"(单个), "create", "update", "delete"
+        task_type: 按任务类型过滤，如 "chat", "embedding", "code"。用于 "list" 和 "get_best"
+        model_id: 模型ID，用于 "get", "update", "delete"
+        name: 模型显示名称
+        provider: 提供商，如 OpenAI, DeepSeek, Local
+        model_name: 模型标识，如 deepseek-chat, text-embedding-3-small
+        api_base: API地址，如 https://api.deepseek.com/v1
+        task_types: JSON数组，分配的任务类型，如 ["chat","code"]
+        priority: 优先级，数值越高越优先
+
+    Returns:
+        JSON 格式的模型列表或操作结果。
+
+    使用场景:
+        - 查看所有模型: manage_models(action="list")
+        - 获取聊天模型: manage_models(action="list", task_type="chat")
+        - 创建新模型: manage_models(action="create", name="GPT-4", provider="OpenAI", model_name="gpt-4", task_types='["chat"]')
+    """
+    from app.services.model_service import ModelService
+
+    try:
+        if action == "list":
+            if task_type:
+                items = await ModelService.get_by_task(task_type)
+            else:
+                items = await ModelService.list_models()
+            return json.dumps({"items": items, "total": len(items)}, indent=2)
+
+        elif action == "get_best":
+            if not task_type:
+                return json.dumps({"error": "task_type required for get_best"})
+            model = await ModelService.get_best_for_task(task_type)
+            return json.dumps({"model": model}, indent=2)
+
+        elif action == "get":
+            model = await ModelService.get_model(model_id)
+            return json.dumps({"model": model}, indent=2)
+
+        elif action == "create":
+            parsed_tasks = json.loads(task_types) if isinstance(task_types, str) else task_types
+            model = await ModelService.create_model({
+                "name": name, "provider": provider, "model_name": model_name,
+                "api_base": api_base or None, "task_types": parsed_tasks, "priority": priority,
+            })
+            return json.dumps({"success": True, "model": model}, indent=2)
+
+        elif action == "update":
+            updates = {}
+            if name: updates["name"] = name
+            if provider: updates["provider"] = provider
+            if model_name: updates["model_name"] = model_name
+            if api_base: updates["api_base"] = api_base
+            if task_types:
+                updates["task_types"] = json.loads(task_types) if isinstance(task_types, str) else task_types
+            if priority: updates["priority"] = priority
+            model = await ModelService.update_model(model_id, updates)
+            return json.dumps({"success": True, "model": model}, indent=2)
+
+        elif action == "delete":
+            await ModelService.delete_model(model_id)
+            return json.dumps({"success": True, "message": "Deleted"}, indent=2)
+
+        else:
+            return json.dumps({"error": f"Unknown action: {action}"})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
 async def aidp_init(
     project_name: str,
     description: str = "",
@@ -197,6 +290,30 @@ async def aidp_init(
     except json.JSONDecodeError:
         pass
 
+    # Create or update project record in aidp_projects (unified project table)
+    from app.db.database import async_session_factory
+    from app.models.project_new import Project as AidpProject
+    from sqlalchemy import select
+
+    async with async_session_factory() as db:
+        result_proj = await db.execute(
+            select(AidpProject).where(AidpProject.name == project_name)
+        )
+        project = result_proj.scalar_one_or_none()
+
+        if not project:
+            project = AidpProject(
+                name=project_name,
+                description=description,
+                status="active",
+            )
+            db.add(project)
+            await db.commit()
+            await db.refresh(project)
+        else:
+            project.description = description or project.description
+            await db.commit()
+
     result = await init_project(
         project_name=project_name,
         description=description,
@@ -206,6 +323,7 @@ async def aidp_init(
         key_files=parsed_files,
         architecture_summary=architecture_summary,
     )
+    result["project_id"] = project.id
     return json.dumps(result, indent=2)
 
 
@@ -238,122 +356,72 @@ async def aidp_context(
         2. 再调用 invoke_tool_mcp 执行具体工具
         3. 完成后可选调用 invoke_tool_mcp("memory-tool", "memory.create", {...}) 归档经验
     """
-    import httpx
+    from app.services.context_pipeline import ContextPipeline
+    from app.db.database import async_session_factory
+    from app.models.project_new import Project as AidpProject
+    from sqlalchemy import select
 
     result = {"project_name": project_name, "task": task, "agent_type": agent_type, "stages": {}}
 
     try:
-        # Stage 0: Load Instructions
-        instructions = await load_agent_instructions(project_name, agent_type)
-        result["stages"]["stage0_instructions"] = {
-            "role": instructions.get("role", "")[:100],
-            "rules_count": len(instructions.get("rules", [])),
-        }
-
-        if not task:
-            result["instructions"] = instructions
-            return json.dumps(result, indent=2)
-
-        # Stage 1: Intent Analysis via skill-router
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "http://127.0.0.1:8788/tool/invoke",
-                json={
-                    "trace_id": "",
-                    "capability": "analyze_intent",
-                    "context": {},
-                    "input": {"task": task, "instructions": instructions},
-                },
-                headers={"Content-Type": "application/json"},
+        # Execute 5-Stage Pipeline using local implementation
+        async with async_session_factory() as db:
+            # Look up project ID by name
+            proj_result = await db.execute(
+                select(AidpProject).where(AidpProject.name == project_name)
             )
-            intent = {}
-            if resp.status_code == 200:
-                data = resp.json()
-                intent = data.get("output", {}) if data.get("success") else {}
+            project = proj_result.scalar_one_or_none()
+            project_id = str(project.id) if project else "0"
 
-            if not intent or not intent.get("required_tools"):
-                intent = {
-                    "intent": {"primary": "understand", "domain": project_name},
-                    "required_tools": ["memory-tool"],
-                    "search_queries": {"memory-tool": [task[:100]]},
-                    "budget_hints": {"total": 6000, "memory-tool": 6000},
-                    "relevant_rules": [],
-                }
-
+            pipeline = ContextPipeline(db)
+            ctx_result = await pipeline.execute(
+                task=task,
+                project_id=project_id,
+                session_id=ctx.session_id
+            )
+            
+            # Build response from pipeline result
+            result["trace_id"] = ctx_result.trace_id
+            result["stages"]["stage0_instructions"] = {
+                "role": (ctx_result.instructions.get("role", "")[:100]) if ctx_result.instructions else "",
+                "rules_count": len(ctx_result.instructions.get("rules", [])) if ctx_result.instructions else 0,
+                "loaded_from_db": ctx_result.instructions.get("loaded_from_db", False) if ctx_result.instructions else False,
+            }
+            
             result["stages"]["stage1_intent"] = {
-                "primary": intent.get("intent", {}).get("primary", "?"),
-                "domain": intent.get("intent", {}).get("domain", "?"),
-                "required_tools": intent.get("required_tools", []),
+                "intent": ctx_result.intent.get("intent", "unknown"),
+                "domains": ctx_result.intent.get("domains", []),
+                "complexity": ctx_result.intent.get("complexity", "simple"),
+                "is_compound": ctx_result.intent.get("is_compound", False),
             }
-
-            # Stage 2: Staged Retrieval via context-optimizer
-            resp2 = await client.post(
-                "http://127.0.0.1:18088/api/staged-retrieve",
-                json={
-                    "required_tools": intent.get("required_tools", []),
-                    "search_queries": intent.get("search_queries", {}),
-                    "budget_hints": intent.get("budget_hints", {}),
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            staged_results = {}
-            if resp2.status_code == 200:
-                staged_results = resp2.json()
-
+            
             result["stages"]["stage2_retrieval"] = {
-                "tools_queried": list(staged_results.keys()),
+                "memories": len(ctx_result.memories),
+                "knowledge": len(ctx_result.knowledge),
+                "assets": len(ctx_result.assets),
             }
-
-            # Stage 3: Skill Matching
-            skills = []
-            try:
-                resp3 = await client.post(
-                    "http://127.0.0.1:8788/tool/invoke",
-                    json={
-                        "trace_id": "",
-                        "capability": "resolve_task",
-                        "context": {},
-                        "input": {"task": task, "mode": "auto", "top_k": 3, "api_key": "sk-1234567890"},
-                    },
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp3.status_code == 200:
-                    data3 = resp3.json()
-                    if data3.get("success") and data3.get("output"):
-                        out = data3["output"]
-                        if isinstance(out, dict):
-                            skills = out.get("data", {}).get("skills", [])[:3]
-            except Exception:
-                pass
-
+            
             result["stages"]["stage3_skills"] = {
-                "matched": len(skills),
+                "matched": len(ctx_result.skills),
+                "rules": len(ctx_result.rules),
             }
-
-            # Stage 4: Context Assembly via context-optimizer
-            resp4 = await client.post(
-                "http://127.0.0.1:18088/api/assemble-context",
-                json={
-                    "instructions": instructions,
-                    "intent": intent,
-                    "staged_results": staged_results,
-                    "skills": skills,
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            assembled = {}
-            if resp4.status_code == 200:
-                assembled = resp4.json()
-
-            result["context"] = assembled.get("context", "No context assembled")[:5000]
-            result["estimated_tokens"] = assembled.get("estimated_tokens", 0)
+            
             result["stages"]["stage4_assembly"] = {
-                "sections": assembled.get("sections", 0),
-                "estimated_tokens": assembled.get("estimated_tokens", 0),
+                "token_estimate": ctx_result.token_estimate,
+                "timing_ms": ctx_result.stage_timings.get("stage_4", 0),
             }
+            
+            # Include assembled context
+            result["context"] = ctx_result.assembled_context.get("system_prompt", "")[:5000]
+            result["user_message"] = ctx_result.assembled_context.get("user_message", task)
+            result["estimated_tokens"] = ctx_result.token_estimate
+            result["stage_timings"] = ctx_result.stage_timings
+            result["metadata"] = ctx_result.assembled_context.get("metadata", {})
 
     except Exception as e:
+        import traceback
         result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
 
     # 标记该会话已加载上下文
     session_id = ctx.session_id or "default"
@@ -398,93 +466,265 @@ async def aidp_instructions(
         2. 用返回的 instructions 创建 subagent
         3. Subagent 内部也会调用 aidp_context 加载自己的上下文
     """
-    import httpx
+    from app.services.context_pipeline import ContextPipeline
+    from app.db.database import async_session_factory
+    from app.db.auth_models import Project
+    from sqlalchemy import select
 
     result = {"project_name": project_name, "task": task, "agent_type": agent_type}
 
     try:
-        # Stage 0: Load parent instructions
-        parent_instructions = await load_agent_instructions(project_name, "main")
-
-        # Stage 1: Intent analysis
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "http://127.0.0.1:8788/tool/invoke",
-                json={
-                    "trace_id": "",
-                    "capability": "analyze_intent",
-                    "context": {},
-                    "input": {"task": task, "instructions": parent_instructions},
-                },
-                headers={"Content-Type": "application/json"},
+        # Execute pipeline for subagent
+        async with async_session_factory() as db:
+            # Look up project ID by name
+            proj_result = await db.execute(
+                select(Project).where(Project.name == project_name)
             )
-            intent = {}
-            if resp.status_code == 200:
-                data = resp.json()
-                intent = data.get("output", {}) if data.get("success") else {}
+            project = proj_result.scalar_one_or_none()
+            project_id = str(project.id) if project else "0"
 
-            domain = intent.get("intent", {}).get("domain", project_name)
-
-            # Stage 2: Retrieval
-            resp2 = await client.post(
-                "http://127.0.0.1:18088/api/staged-retrieve",
-                json={
-                    "required_tools": intent.get("required_tools", ["memory-tool", "code-index"]),
-                    "search_queries": intent.get("search_queries", {}),
-                    "budget_hints": intent.get("budget_hints", {}),
-                },
-                headers={"Content-Type": "application/json"},
+            pipeline = ContextPipeline(db)
+            ctx_result = await pipeline.execute(
+                task=task,
+                project_id=project_id
             )
-            staged_results = {}
-            if resp2.status_code == 200:
-                staged_results = resp2.json()
-
-            # Stage 3: Skills
-            skills = []
-            try:
-                resp3 = await client.post(
-                    "http://127.0.0.1:8788/tool/invoke",
-                    json={
-                        "trace_id": "",
-                        "capability": "resolve_task",
-                        "context": {},
-                        "input": {"task": task, "mode": "auto", "top_k": 2, "api_key": "sk-1234567890"},
-                    },
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp3.status_code == 200:
-                    data3 = resp3.json()
-                    if data3.get("success") and data3.get("output"):
-                        out = data3["output"]
-                        if isinstance(out, dict):
-                            skills = out.get("data", {}).get("skills", [])[:2]
-            except Exception:
-                pass
-
-            # Stage 4: Generate subagent instructions
-            resp4 = await client.post(
-                "http://127.0.0.1:18088/api/assemble-subagent",
-                json={
-                    "task": task,
-                    "parent_instructions": parent_instructions,
-                    "domain": domain,
-                    "context": staged_results,
-                    "skills": skills,
+            
+            # Generate subagent-specific instructions
+            domain = ctx_result.intent.get("domains", [project_name])[0] if ctx_result.intent.get("domains") else project_name
+            
+            result["subagent_instructions"] = {
+                "agent_type": agent_type,
+                "role": f"You are a specialized subagent for {domain}. {ctx_result.instructions.get('role', '')[:200]}",
+                "task": task,
+                "specialization": domain,
+                "context": {
+                    "relevant_memories": [m.get('title') for m in ctx_result.memories[:3]],
+                    "relevant_knowledge": [k.get('title') for k in ctx_result.knowledge[:3]],
+                    "available_skills": [s.get('name') for s in ctx_result.skills[:3]],
+                    "constraints": ctx_result.instructions.get('constraints', {}),
                 },
-                headers={"Content-Type": "application/json"},
-            )
-            if resp4.status_code == 200:
-                result["subagent_instructions"] = resp4.json()
-            else:
-                result["subagent_instructions"] = {
-                    "agent_type": agent_type,
-                    "role": f"Subagent for {domain}",
-                    "task": task,
-                    "context": {"relevant_files": [], "patterns": [], "constraints": []},
-                    "allowed_tools": ["code-index", "quality-tool", "sandbox-tool"],
-                }
+                "allowed_tools": [
+                    "memory-tool",
+                    "knowledge-tool", 
+                    "asset-tool",
+                    "sandbox-tool",
+                    "quality-tool"
+                ],
+                "parent_trace_id": ctx_result.trace_id,
+            }
+            
+            result["trace_id"] = ctx_result.trace_id
 
     except Exception as e:
+        import traceback
         result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
 
     return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def promote_evolution(
+    title: str,
+    description: str = "",
+    changes: str = "{}",
+    affected_tools: str = "[]",
+    version: str = "0.1.0",
+    project_id: int = 0,
+) -> str:
+    """提出进化提案 — 将项目中的优秀模式/经验提交为进化提案。
+
+    工作完成后，如果发现值得推广的模式（如新的错误处理方式、API 设计风格、
+    模块化方案等），通过此工具提交给管理员审核。审核通过后会成为系统级最佳实践。
+
+    Args:
+        title: 提案标题，例如 "FastAPI 统一错误处理模式"
+        description: 详细描述这个模式的内容和价值
+        changes: JSON 格式的变更内容，例如 '{"added":["error_handler.py"], "description":"新增统一错误处理中间件"}'
+        affected_tools: JSON 数组，影响的工具列表，例如 '["memory","knowledge"]'
+        version: 版本号，格式 semver，例如 "0.1.0"
+        project_id: 来源项目 ID (可选)
+
+    Returns:
+        JSON 包含提案 ID 和审核状态 (pending)
+
+    使用场景:
+        - 开发完成后发现可复用的设计模式
+        - Bug 修复后总结出通用的修复方案
+        - 从项目中提取出值得跨项目共享的经验
+    """
+    from app.db.database import async_session_factory
+    from app.modules.evolution.models import EvolutionVersion
+
+    parsed_changes = {}
+    parsed_tools = []
+    try:
+        parsed_changes = json.loads(changes) if isinstance(changes, str) else changes
+    except json.JSONDecodeError:
+        pass
+    try:
+        parsed_tools = json.loads(affected_tools) if isinstance(affected_tools, str) else affected_tools
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        async with async_session_factory() as db:
+            version_obj = EvolutionVersion(
+                version=version,
+                level="project",
+                title=title,
+                description=description,
+                source_project_id=project_id,
+                changes=parsed_changes,
+                affected_tools=parsed_tools,
+                review_status="pending",
+                review_log=[],
+            )
+            db.add(version_obj)
+            await db.commit()
+            await db.refresh(version_obj)
+
+            return json.dumps({
+                "success": True,
+                "version_id": version_obj.id,
+                "title": title,
+                "status": "pending",
+                "message": f"进化提案「{title}」已提交，等待管理员审核。",
+                "hint": "管理员可通过 /admin/evolution 查看和审核提案。"
+            }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+
+
+@mcp.tool()
+async def list_evolutions(level: str = "", status: str = "") -> str:
+    """列出进化版本 — 查看所有进化提案。
+
+    Args:
+        level: 筛选级别 — "project" (项目级), "system" (系统级), "" (全部)
+        status: 筛选状态 — "pending" (待审核), "approved" (已批准), "rejected" (已拒绝), "" (全部)
+
+    Returns:
+        JSON 包含进化版本列表和统计信息
+
+    使用场景:
+        - 查看有哪些已批准的系统级最佳实践可用
+        - 检查自己提交的提案审核进度
+        - 查找可复用的通用方案
+    """
+    from app.db.database import async_session_factory
+    from app.modules.evolution.models import EvolutionVersion
+    from sqlalchemy import select, desc
+
+    try:
+        async with async_session_factory() as db:
+            q = select(EvolutionVersion)
+            if level:
+                q = q.where(EvolutionVersion.level == level)
+            if status:
+                q = q.where(EvolutionVersion.review_status == status)
+            q = q.order_by(desc(EvolutionVersion.created_at)).limit(50)
+
+            result = await db.execute(q)
+            versions = result.scalars().all()
+
+            system_versions = [
+                {"id": v.id, "version": v.version, "title": v.title,
+                 "description": v.description[:200] if v.description else "",
+                 "affected_tools": v.affected_tools,
+                 "changes": v.changes}
+                for v in versions if v.level == "system"
+            ]
+
+            return json.dumps({
+                "success": True,
+                "total": len(versions),
+                "system_versions": system_versions,
+                "all_versions": [
+                    {"id": v.id, "version": v.version, "level": v.level,
+                     "title": v.title, "review_status": v.review_status,
+                     "description": v.description[:150] if v.description else "",
+                     "created_at": v.created_at.isoformat() if v.created_at else None}
+                    for v in versions
+                ]
+            }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+
+
+@mcp.tool()
+async def analyze_and_evolve(
+    task: str,
+    result: str = "",
+    event_type: str = "success",
+    project_id: int = 0,
+) -> str:
+    """智能进化分析 — 调用 evolution-engine 的 LLM 分析工作成果，自动提取可复用模式。
+
+    每当完成一个开发任务后，调用此工具来分析本次工作的结果，
+    系统会使用 LLM 从中提取可复用的模式和经验，置信度高时自动创建进化提案。
+
+    Args:
+        task: 已完成的任务描述
+        result: 工作结果简述（做了什么、效果如何）
+        event_type: 事件类型 — "success" (成功模式), "error" (错误修复), "optimization" (优化)
+        project_id: 项目 ID (可选)
+
+    Returns:
+        JSON 包含分析结果和是否自动创建了进化提案
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "http://127.0.0.1:18089/api/events",
+                json={
+                    "type": event_type,
+                    "source": "mcp",
+                    "content": task,
+                    "result": result,
+                    "metadata": {"project_id": project_id},
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                analysis = data.get("analysis", {})
+                confidence = analysis.get("confidence", 0)
+
+                if confidence >= 0.5:
+                    return json.dumps({
+                        "success": True,
+                        "auto_proposed": True,
+                        "confidence": confidence,
+                        "analysis": {
+                            "category": analysis.get("category"),
+                            "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern"),
+                            "root_cause": analysis.get("root_cause"),
+                            "update_type": analysis.get("update_type"),
+                            "affected_tools": data.get("targets", []),
+                        },
+                        "message": f"已将模式「{analysis.get('success_pattern') or analysis.get('fix_pattern', '')}」提交为进化提案，等待管理员审核。",
+                        "hint": "管理员可通过 /admin/evolution 审核此提案。",
+                    }, ensure_ascii=False, indent=2)
+                else:
+                    return json.dumps({
+                        "success": True,
+                        "auto_proposed": False,
+                        "confidence": confidence,
+                        "analysis": analysis,
+                        "message": "分析完成但置信度不足，未自动创建提案。可手动通过 promote_evolution 提交。",
+                    }, ensure_ascii=False, indent=2)
+            else:
+                return json.dumps({
+                    "success": False,
+                    "error": f"Evolution engine returned {resp.status_code}",
+                    "hint": "确认 evolution-engine 服务已启动 (端口 18089)。"
+                }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "hint": "Evolution engine (端口 18089) 可能未启动，手动通过 promote_evolution 提交也可以。",
+        }, ensure_ascii=False, indent=2)

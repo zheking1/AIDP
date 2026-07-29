@@ -7,12 +7,15 @@ class ReviewQueue(Base):
     __tablename__ = "review_queue"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    document_id = Column(Integer, ForeignKey("documents.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    document_id = Column(Integer, nullable=True)
+    user_id = Column(Integer, nullable=True)
     action = Column(String(64), nullable=False)
     content = Column(Text)
     status = Column(String(32), default="pending")
     review_comment = Column(Text)
-    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    reviewed_by = Column(Integer, nullable=True)
     reviewed_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
+
+
+Review = ReviewQueue
