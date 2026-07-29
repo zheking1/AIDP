@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}执行详情{% endblock %}
+{% block content %}
+<div x-data="execDetail()" x-init="init()">
+    <div class="flex items-center space-x-3 mb-4">
+        <a href="/history" class="text-gray-500 hover:text-blue-600">← 返回</a>
+        <h1 class="text-xl font-bold">执行 #<span x-text="execId"></span></h1>
+        <span class="text-xs px-2 py-0.5 rounded"
+              :class="item.exitCode === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+              x-text="'exit=' + (item.exitCode || '-')"></span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h2 class="font-semibold mb-2">信息</h2>
+            <dl class="text-sm space-y-1">
+                <div class="flex"><dt class="w-20 text-gray-500">语言:</dt><dd x-text="item.language"></dd></div>
+                <div class="flex"><dt class="w-20 text-gray-500">耗时:</dt><dd x-text="(item.durationMs || 0) + 'ms'"></dd></div>
+                <div class="flex"><dt class="w-20 text-gray-500">超时:</dt><dd x-text="item.timedOut ? '是' : '否'"></dd></div>
+                <div class="flex"><dt class="w-20 text-gray-500">时间:</dt><dd x-text="new Date(item.createdAt).toLocaleString()"></dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <h2 class="font-semibold mb-2">代码</h2>
+        <pre class="bg-gray-900 text-green-400 p-4 rounded text-sm overflow-auto max-h-64" x-text="item.code"></pre>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="item.stdout || item.stderr">
+        <h2 class="font-semibold mb-2">输出</h2>
+        <div x-show="item.stdout">
+            <div class="text-xs text-gray-500 mb-1">stdout:</div>
+            <pre class="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-auto max-h-64" x-text="item.stdout"></pre>
+        </div>
+        <div x-show="item.stderr" class="mt-2">
+            <div class="text-xs text-gray-500 mb-1">stderr:</div>
+            <pre class="bg-gray-900 text-red-400 p-3 rounded text-sm overflow-auto max-h-64" x-text="item.stderr"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function execDetail() {
+    return {
+        execId: window.location.pathname.split('/').pop(),
+        item: {},
+        async init() {
+            const resp = await fetch('/api/execute/history?limit=100');
+            const items = await resp.json();
+            this.item = items.find(i => i.id == this.execId) || {};
+        }
+    };
+}
+</script>
+{% endblock %}

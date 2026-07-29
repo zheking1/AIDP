@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Rules') }}{% endblock %}
+{% block content %}
+<div x-data="ruleManager()" x-init="init()">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">{{ _('Rules') }}</h2>
+    <div class="flex gap-2">
+      <button @click="showCreateGroup = true" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm">{{ _('New Group') }}</button>
+      <button @click="openCreate()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('+ New Rule') }}</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
+    <!-- Left: Group Tree -->
+    <div class="lg:col-span-1 bg-gray-800 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-gray-700">
+        <h3 class="font-bold text-sm">{{ _('Groups') }}</h3>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2">
+        <template x-for="group in roots" :key="group.id">
+          <div>
+            <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-700" :class="{'bg-indigo-900/30': group.id === selectedGroupId}" @click="selectGroup(group.id)">
+              <button @click.stop="toggleGroup(group)" class="p-1 hover:bg-gray-700 rounded">
+                <svg class="w-4 h-4 text-gray-400" :class="{'rotate-90': group.expanded}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+              <span class="text-sm truncate flex-1" x-text="group.name"></span>
+              <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded" x-text="getRuleCount(group.id)"></span>
+              <button @click.stop="openEditGroup(group)" class="p-1 text-gray-500 hover:text-indigo-400 rounded" title="Edit">✎</button>
+              <button @click.stop="deleteGroup(group.id)" class="p-1 text-gray-500 hover:text-red-400 rounded" title="Delete">✕</button>
+            </div>
+            <div x-show="group.expanded" class="ml-6 border-l border-gray-700 pl-2">
+              <template x-for="child in group.children" :key="child.id">
+                <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-700" :class="{'bg-indigo-900/30': child.id === selectedGroupId}" @click="selectGroup(child.id)">
+                  <span class="text-sm truncate flex-1" x-text="child.name"></span>
+                  <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded" x-text="getRuleCount(child.id)"></span>
+                  <button @click.stop="openEditGroup(child)" class="p-1 text-gray-500 hover:text-indigo-400 rounded" title="Edit">✎</button>
+                  <button @click.stop="deleteGroup(child.id)" class="p-1 text-gray-500 hover:text-red-400 rounded" title="Delete">✕</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <div x-show="roots.length === 0" class="text-center text-gray-500 py-8 text-sm">
+          {{ _('No groups yet. Create one to organize rules.') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Rules List -->
+    <div class="lg:col-span-3 bg-gray-800 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-gray-700 flex justify-between items-center">
+        <h3 class="font-bold text-sm">{{ _('Rules') }} <span class="text-gray-500 text-xs" x-text="filteredRules.length"></span></h3>
+        <input type="text" x-model="searchQuery" placeholder="{{ _('Search rules...') }}" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm w-64">
+      </div>
+      <div class="flex-1 overflow-y-auto p-3">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-700 text-gray-300 sticky top-0">
+            <tr><th class="text-left px-4 py-3">{{ _('Name') }}</th><th class="text-left px-4 py-3">{{ _('Group') }}</th><th class="text-left px-4 py-3">{{ _('Tags') }}</th><th class="text-left px-4 py-3">{{ _('Priority') }}</th><th class="text-left px-4 py-3">{{ _('Actions') }}</th></tr>
+          </thead>
+          <tbody class="divide-y divide-gray-700">
+            <template x-for="r in filteredRules" :key="r.id">
+              <tr class="hover:bg-gray-750">
+                <td class="px-4 py-3"><a :href="'/rules/' + r.id" class="text-indigo-400 hover:underline" x-text="r.name"></a></td>
+                <td class="px-4 py-3">
+                  <span x-show="r.group_name" class="bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded text-xs" x-text="r.group_name"></span>
+                  <span x-show="!r.group_name" class="text-gray-500 text-xs">{{ _('Ungrouped') }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  <template x-for="t in (r.tags || [])" :key="t">
+                    <span class="bg-gray-700 text-xs px-2 py-0.5 rounded mr-1" x-text="t"></span>
+                  </template>
+                </td>
+                <td class="px-4 py-3" x-text="r.priority"></td>
+                <td class="px-4 py-3 space-x-2">
+                  <button @click="openEdit(r)" class="text-indigo-400 hover:underline text-xs">{{ _('Edit') }}</button>
+                  <button @click="moveRuleToGroup(r.id)" class="text-blue-400 hover:underline text-xs">{{ _('Move') }}</button>
+                  <form method="POST" :action="'/rules/' + r.id + '/delete'" class="inline" onsubmit="return confirm('{{ _('Delete this rule?') }}')">
+                    <button type="submit" class="text-xs text-red-400 hover:underline">{{ _('Delete') }}</button>
+                  </form>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <div x-show="filteredRules.length === 0" class="text-center text-gray-500 py-8">{{ _('No rules yet.') }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div x-show="showCreateGroup" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showCreateGroup = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4">{{ _('New Group') }}</h3>
+      <form @submit.prevent="createGroup" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Group Name') }}</label>
+          <input type="text" x-model="newGroupName" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Parent Group (optional)') }}</label>
+          <select x-model="newGroupParentId" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+            <option value="">{{ _('None (Root Level)') }}</option>
+            <template x-for="g in roots" :key="g.id">
+              <option :value="g.id" x-text="g.name"></option>
+            </template>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showCreateGroup = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Create') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Group Modal -->
+  <div x-show="showEditGroup" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showEditGroup = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4">{{ _('Edit Group') }}</h3>
+      <form @submit.prevent="updateGroup" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Group Name') }}</label>
+          <input type="text" x-model="editGroupName" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showEditGroup = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Move Rule Modal -->
+  <div x-show="showMoveModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showMoveModal = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4">{{ _('Move Rule to Group') }}</h3>
+      <div class="space-y-2">
+        <button @click="moveToGroup(null)" class="block w-full text-left px-3 py-2 rounded hover:bg-gray-700 text-sm">{{ _('Ungrouped') }}</button>
+        <template x-for="g in allGroups" :key="g.id">
+          <button @click="moveToGroup(g.id)" class="block w-full text-left px-3 py-2 rounded hover:bg-gray-700 text-sm" x-text="g.name"></button>
+        </template>
+      </div>
+      <div class="flex justify-end mt-4">
+        <button @click="showMoveModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rule Edit/Create Modal -->
+  <div x-show="showModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showModal = false" style="display:none">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto" @click.outside.stop>
+      <h3 class="text-lg font-bold mb-4" x-text="editingId ? '{{ _('Edit Rule') }}' : '{{ _('Create Rule') }}'"></h3>
+      <form :action="editingId ? '/rules/' + editingId + '/edit' : '/rules/create'" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+          <input type="text" name="name" x-model="formName" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Tags (comma separated)') }}</label>
+          <input type="text" name="tags" x-model="formTags" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="{{ _('test, api') }}">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Priority') }}</label>
+          <input type="number" name="priority" x-model="formPriority" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Content') }}</label>
+          <textarea name="content" x-model="formContent" rows="10" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function ruleManager() {
+  return {
+    rules: {{ rules | tojson }},
+    groups: {{ groups | tojson }},
+    allGroups: [],
+    roots: [],
+    selectedGroupId: null,
+    searchQuery: '',
+    showModal: false,
+    showCreateGroup: false,
+    showEditGroup: false,
+    editGroupId: null,
+    editGroupName: '',
+    showMoveModal: false,
+    movingRuleId: null,
+    editingId: null,
+    newGroupName: '',
+    newGroupParentId: '',
+    formName: '',
+    formTags: '',
+    formPriority: 0,
+    formContent: '',
+
+    init() {
+      this.allGroups = this.groups;
+      this.buildTree();
+    },
+
+    buildTree() {
+      const map = {};
+      this.groups.forEach(g => map[g.id] = { ...g, children: [], expanded: true });
+      this.groups.forEach(g => {
+        if (g.parent_id && map[g.parent_id]) {
+          map[g.parent_id].children.push(map[g.id]);
+        }
+      });
+      this.roots = this.groups.filter(g => !g.parent_id).map(g => map[g.id]);
+    },
+
+    get filteredRules() {
+      let list = this.rules;
+      if (this.selectedGroupId) {
+        list = list.filter(r => r.group_id === this.selectedGroupId);
+      }
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        list = list.filter(r => r.name.toLowerCase().includes(q) || (r.tags||[]).some(t => t.toLowerCase().includes(q)));
+      }
+      return list;
+    },
+
+    getRuleCount(gid) {
+      return this.rules.filter(r => r.group_id === gid).length;
+    },
+
+    selectGroup(id) {
+      this.selectedGroupId = id === this.selectedGroupId ? null : id;
+    },
+
+    toggleGroup(group) {
+      group.expanded = !group.expanded;
+    },
+
+    async createGroup() {
+      if (!this.newGroupName) return;
+      const r = await fetch('/api/rule-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.newGroupName, parent_id: this.newGroupParentId || null, sort_order: 0 })
+      });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        var msg = data.error || '';
+        if (msg === 'Group name already exists') msg = '{{ _("Group name already exists") }}';
+        alert(msg);
+      }
+    },
+
+    openEditGroup(g) {
+      this.editGroupId = g.id;
+      this.editGroupName = g.name;
+      this.showEditGroup = true;
+    },
+
+    async updateGroup() {
+      if (!this.editGroupName) return;
+      const r = await fetch('/api/rule-groups/' + this.editGroupId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.editGroupName })
+      });
+      const data = await r.json();
+      if (data.ok) {
+        this.showEditGroup = false;
+        window.location.reload();
+      }
+    },
+
+    async deleteGroup(gid) {
+      if (!confirm('{{ _("Delete this group? Rules will be ungrouped.") }}')) return;
+      const r = await fetch('/api/rule-groups/' + gid, { method: 'DELETE' });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert(data.error || '{{ _("Failed to delete group") }}');
+      }
+    },
+
+    moveRuleToGroup(ruleId) {
+      this.movingRuleId = ruleId;
+      this.showMoveModal = true;
+    },
+
+    async moveToGroup(groupId) {
+      await fetch('/api/rules/' + this.movingRuleId + '/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_id: groupId })
+      });
+      window.location.reload();
+    },
+
+    openCreate() {
+      this.editingId = null;
+      this.formName = '';
+      this.formTags = '';
+      this.formPriority = 0;
+      this.formContent = '';
+      this.showModal = true;
+    },
+
+    openEdit(r) {
+      this.editingId = r.id;
+      this.formName = r.name || '';
+      this.formTags = (r.tags || []).join(', ');
+      this.formPriority = r.priority || 0;
+      this.formContent = r.content || '';
+      this.showModal = true;
+    }
+  }
+}
+</script>
+{% endblock %}

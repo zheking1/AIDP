@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block title %}文档管理{% endblock %}
+{% block content %}
+<div x-data="docList()" x-init="init()">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold flex items-center gap-2">
+            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            文档管理
+        </h1>
+        <a href="/documents/new" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            上传文档
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs text-gray-500 mb-1">搜索</label>
+                <div class="relative">
+                    <input x-model="filters.search" @keydown.enter="load()" type="text" placeholder="搜索文档标题..."
+                           class="w-full border rounded-lg px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">知识库</label>
+                <select x-model="filters.kb_id" @change="load()" class="border rounded-lg px-3 py-2 text-sm min-w-[150px]">
+                    <option value="">全部知识库</option>
+                    <template x-for="kb in knowledgeBases" :key="kb.id">
+                        <option :value="kb.id" x-text="kb.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">类型</label>
+                <select x-model="filters.doc_type" @change="load()" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="">全部</option>
+                    <option value="markdown">Markdown</option>
+                    <option value="text">文本</option>
+                    <option value="pdf">PDF</option>
+                    <option value="word">Word</option>
+                    <option value="code">代码</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">状态</label>
+                <select x-model="filters.index_status" @change="load()" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="">全部</option>
+                    <option value="indexed">已索引</option>
+                    <option value="created">待索引</option>
+                    <option value="indexing">索引中</option>
+                    <option value="error">错误</option>
+                </select>
+            </div>
+            <button @click="resetFilters()" class="text-gray-500 hover:text-gray-700 px-3 py-2 text-sm">
+                重置
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-4 gap-4 mb-4">
+        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold" x-text="stats.total"></div>
+                <div class="text-xs text-gray-500">总文档</div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold" x-text="stats.indexed"></div>
+                <div class="text-xs text-gray-500">已索引</div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold" x-text="stats.pending"></div>
+                <div class="text-xs text-gray-500">待索引</div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold" x-text="stats.totalChunks.toLocaleString()"></div>
+                <div class="text-xs text-gray-500">总分块</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 font-medium">文档</th>
+                    <th class="px-4 py-3 font-medium">知识库</th>
+                    <th class="px-4 py-3 font-medium">类型</th>
+                    <th class="px-4 py-3 font-medium">状态</th>
+                    <th class="px-4 py-3 font-medium">大小</th>
+                    <th class="px-4 py-3 font-medium">更新时间</th>
+                    <th class="px-4 py-3 font-medium text-right">操作</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                <template x-for="doc in items" :key="doc.id">
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <div>
+                                    <a :href="'/documents/' + doc.id" class="text-blue-600 hover:underline font-medium" x-text="doc.title"></a>
+                                    <div x-show="doc.file_name" class="text-xs text-gray-400" x-text="doc.file_name"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span x-show="doc.knowledge_base_id" class="text-xs px-2 py-0.5 bg-gray-100 rounded" x-text="getKbName(doc.knowledge_base_id)"></span>
+                            <span x-show="!doc.knowledge_base_id" class="text-xs text-gray-400">-</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded" x-text="doc.doc_type"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 w-fit"
+                                  :class="statusClass(doc.index_status)">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="statusDotClass(doc.index_status)"></span>
+                                <span x-text="statusText(doc.index_status)"></span>
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600" x-text="formatFileSize(doc.file_size)"></td>
+                        <td class="px-4 py-3 text-gray-500 text-xs" x-text="formatDate(doc.updated_at)"></td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a :href="'/documents/' + doc.id" class="text-blue-600 hover:text-blue-800 text-xs">查看</a>
+                                <button @click="reindexDoc(doc.id)" class="text-green-600 hover:text-green-800 text-xs">索引</button>
+                                <button @click="deleteDoc(doc.id)" class="text-red-600 hover:text-red-800 text-xs">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="items.length === 0">
+                    <td colspan="7" class="px-4 py-12 text-center text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <p>暂无文档</p>
+                        <a href="/documents/new" class="text-blue-500 hover:underline text-sm mt-1 inline-block">上传第一个文档</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        <div class="px-4 py-3 border-t flex justify-between items-center text-sm">
+            <span class="text-gray-500">共 <strong x-text="total"></strong> 条</span>
+            <div class="flex items-center gap-2">
+                <button @click="page > 1 && (page--, load())" :disabled="page <= 1"
+                        class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    上一页
+                </button>
+                <span class="text-gray-600">第 <strong x-text="page"></strong> / <strong x-text="totalPages"></strong> 页</span>
+                <button @click="page < totalPages && (page++, load())" :disabled="page >= totalPages"
+                        class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
+                    下一页
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function docList() {
+    return {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        knowledgeBases: [],
+        stats: { total: 0, indexed: 0, pending: 0, totalChunks: 0 },
+        filters: { 
+            search: '',
+            kb_id: '', 
+            doc_type: '', 
+            index_status: '' 
+        },
+        
+        get totalPages() { 
+            return Math.max(1, Math.ceil(this.total / this.pageSize)); 
+        },
+        
+        async init() { 
+            await this.loadKnowledgeBases();
+            await this.load();
+            await this.loadStats();
+        },
+        
+        async loadKnowledgeBases() {
+            try {
+                const resp = await fetch('/api/knowledge-bases');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.knowledgeBases = data.data?.items || [];
+                }
+            } catch (e) {
+                console.error('Failed to load KBs:', e);
+            }
+        },
+        
+        async loadStats() {
+            // Calculate stats from current items for now
+            this.stats.total = this.total;
+            this.stats.indexed = this.items.filter(d => d.index_status === 'indexed').length;
+            this.stats.pending = this.items.filter(d => d.index_status === 'created' || d.index_status === 'indexing').length;
+            this.stats.totalChunks = this.items.reduce((sum, d) => sum + (d.chunk_count || 0), 0);
+        },
+        
+        async load() {
+            const p = new URLSearchParams({ 
+                page: this.page, 
+                page_size: this.pageSize 
+            });
+            if (this.filters.kb_id) p.set('kb_id', this.filters.kb_id);
+            if (this.filters.doc_type) p.set('doc_type', this.filters.doc_type);
+            
+            const resp = await fetch('/api/documents?' + p);
+            const data = await resp.json();
+            this.items = data.data || data.items || [];
+            this.total = data.total || 0;
+            
+            // Apply client-side filters
+            if (this.filters.index_status) {
+                this.items = this.items.filter(d => d.index_status === this.filters.index_status);
+            }
+            if (this.filters.search) {
+                const searchLower = this.filters.search.toLowerCase();
+                this.items = this.items.filter(d => 
+                    (d.title && d.title.toLowerCase().includes(searchLower)) ||
+                    (d.file_name && d.file_name.toLowerCase().includes(searchLower))
+                );
+            }
+            
+            await this.loadStats();
+        },
+        
+        resetFilters() {
+            this.filters = { search: '', kb_id: '', doc_type: '', index_status: '' };
+            this.page = 1;
+            this.load();
+        },
+        
+        getKbName(kbId) {
+            const kb = this.knowledgeBases.find(k => k.id === kbId);
+            return kb ? kb.name : kbId.substring(0, 8);
+        },
+        
+        statusClass(status) {
+            const classes = {
+                'indexed': 'bg-green-100 text-green-700',
+                'created': 'bg-yellow-100 text-yellow-700',
+                'indexing': 'bg-blue-100 text-blue-700',
+                'error': 'bg-red-100 text-red-700'
+            };
+            return classes[status] || 'bg-gray-100 text-gray-700';
+        },
+        
+        statusDotClass(status) {
+            const classes = {
+                'indexed': 'bg-green-500',
+                'created': 'bg-yellow-500',
+                'indexing': 'bg-blue-500',
+                'error': 'bg-red-500'
+            };
+            return classes[status] || 'bg-gray-500';
+        },
+        
+        statusText(status) {
+            const texts = {
+                'indexed': '已索引',
+                'created': '待索引',
+                'indexing': '索引中',
+                'error': '错误'
+            };
+            return texts[status] || status;
+        },
+        
+        formatFileSize(bytes) {
+            if (!bytes) return '-';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+        },
+        
+        formatDate(date) {
+            if (!date) return '-';
+            return new Date(date).toLocaleString('zh-CN');
+        },
+        
+        async reindexDoc(id) {
+            try {
+                const resp = await fetch(`/api/documents/${id}/index`, { method: 'POST' });
+                if (resp.ok) {
+                    alert('索引任务已提交');
+                    setTimeout(() => this.load(), 2000);
+                }
+            } catch (e) {
+                alert('索引失败: ' + e.message);
+            }
+        },
+        
+        async deleteDoc(id) {
+            if (!confirm('确认删除此文档?')) return;
+            try {
+                const resp = await fetch('/api/documents/' + id, { method: 'DELETE' });
+                if (resp.ok) {
+                    await this.load();
+                } else {
+                    const err = await resp.json();
+                    alert('删除失败: ' + (err.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

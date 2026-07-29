@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}检查历史{% endblock %}
+{% block content %}
+<div x-data="historyList()" x-init="init()">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold">检查历史</h1>
+        <a href="/" class="text-sm text-blue-600 hover:underline">← 返回检查器</a>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-400">
+        <p>历史功能暂未实现</p>
+        <p class="text-sm mt-2">API 需要添加 history 端点</p>
+    </div>
+</div>
+{% endblock %}

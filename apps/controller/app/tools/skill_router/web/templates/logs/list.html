@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Logs') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('Operation Logs') }}</h2>
+<div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-700 text-gray-300">
+      <tr><th class="text-left px-4 py-3">{{ _('Time') }}</th><th class="text-left px-4 py-3">{{ _('Type') }}</th><th class="text-left px-4 py-3">{{ _('Action') }}</th><th class="text-left px-4 py-3">{{ _('Trace ID') }}</th></tr>
+    </thead>
+    <tbody class="divide-y divide-gray-700">
+      {% for l in logs %}
+      <tr class="hover:bg-gray-750">
+        <td class="px-4 py-3 text-gray-400">{{ l.created_at[:19] if l.created_at else '' }}</td>
+        <td class="px-4 py-3">{{ l.resource_type }}</td>
+        <td class="px-4 py-3">{{ l.action }}</td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ l.trace_id[:16] if l.trace_id else '-' }}...</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center text-gray-500 py-8">{{ _('No logs yet.') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

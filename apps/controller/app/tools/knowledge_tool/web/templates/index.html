@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Tool - 仪表盘{% endblock %}
+{% block content %}
+<div x-data="dashboard()" x-init="init()">
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">文档总数</div>
+            <div class="text-2xl font-bold text-gray-800" x-text="stats.total">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">已索引</div>
+            <div class="text-2xl font-bold text-green-600" x-text="stats.indexed">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="text-sm text-gray-500">待索引</div>
+            <div class="text-2xl font-bold text-yellow-600" x-text="stats.pending">-</div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-3">快捷操作</h2>
+        <div class="flex space-x-3">
+            <a href="/documents/new" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">上传文档</a>
+            <a href="/documents" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">管理文档</a>
+            <a href="/search" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">测试搜索</a>
+        </div>
+    </div>
+
+    <!-- Recent Documents -->
+    <div class="bg-white rounded-lg shadow-sm p-4">
+        <h2 class="text-lg font-semibold mb-3">最近文档</h2>
+        <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 border-b">
+                <tr>
+                    <th class="pb-2">标题</th>
+                    <th class="pb-2">类型</th>
+                    <th class="pb-2">状态</th>
+                    <th class="pb-2">创建时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="doc in recent" :key="doc.id">
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2">
+                            <a :href="'/documents/' + doc.id" class="text-blue-600 hover:underline" x-text="doc.title"></a>
+                        </td>
+                        <td class="py-2" x-text="doc.doc_type"></td>
+                        <td class="py-2">
+                            <span class="px-2 py-0.5 rounded text-xs"
+                                  :class="doc.index_status === 'indexed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+                                  x-text="doc.index_status"></span>
+                        </td>
+                        <td class="py-2 text-gray-500" x-text="new Date(doc.created_at).toLocaleString()"></td>
+                    </tr>
+                </template>
+                <tr x-show="recent.length === 0">
+                    <td colspan="4" class="py-4 text-center text-gray-400">暂无文档</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        stats: { total: 0, indexed: 0, pending: 0 },
+        recent: [],
+        async init() {
+            try {
+                const resp = await fetch('/api/documents?page_size=5');
+                const data = await resp.json();
+                this.recent = data.items || [];
+                this.stats.total = data.total || 0;
+                this.stats.indexed = this.recent.filter(d => d.index_status === 'indexed').length;
+                this.stats.pending = this.stats.total - this.stats.indexed;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -10,3 +10,5 @@ COPY . .
 EXPOSE 8883
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8883"]
+
+# integrated-tools v1

@@ -113,6 +113,11 @@ async def app_lifespan(app: FastAPI):
     initialized_modules = init_all_modules(app)
     print(f"[AIDP] Initialized modules: {initialized_modules}")
     
+    # Initialize integrated tool databases
+    from app.tools import init_tool_databases
+    await init_tool_databases()
+    print(f"[AIDP] Tool databases initialized")
+    
     # Initialize seed data (templates)
     try:
         from app.services.seed_data import seed_templates
@@ -178,6 +183,10 @@ app.include_router(projects_new_router, prefix="/api/projects")
 app.include_router(classification_router, prefix="/api/classification")
 
 app.add_api_websocket_route("/ws/logs", ws_handler)
+
+# Register external tool routes (integrated into Controller)
+from app.tools import register_tool_routes, init_tool_databases
+register_tool_routes(app)
 
 # Mount static files
 static_dir = Path(__file__).parent / "web" / "static"

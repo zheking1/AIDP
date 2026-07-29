@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if rule %}{{ _('Edit: %(name)s') | format(name=rule.name) }}{% else %}{{ _('Create Rule') }}{% endif %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div class="flex justify-end gap-2 p-4">
+    <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+    <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+  </div>
+  <div class="p-6">
+    <a href="/rules" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+    <h2 class="text-xl font-bold mt-4 mb-4">{% if rule %}{{ _('Edit: %(name)s') | format(name=rule.name) }}{% else %}{{ _('Create Rule') }}{% endif %}</h2>
+    <form method="post" class="max-w-2xl space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+        <input type="text" name="name" value="{{ rule.name if rule else '' }}" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Tags (comma separated)') }}</label>
+        <input type="text" name="tags" value="{{ rule.tags|join(', ') if rule and rule.tags else '' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Priority') }}</label>
+        <input type="number" name="priority" value="{{ rule.priority if rule else 0 }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Content') }}</label>
+        <textarea name="content" rows="10" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">{{ rule.content if rule else '' }}</textarea>
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+    </form>
+  </div>
+</body>
+</html>

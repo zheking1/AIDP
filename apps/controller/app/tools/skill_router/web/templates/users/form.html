@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if user_data %}{{ _('Edit: %(name)s') | format(name=user_data.username) }}{% else %}{{ _('Create User') }}{% endif %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div class="flex justify-end gap-2 p-4">
+    <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+    <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+  </div>
+  <div class="p-6">
+    <a href="/users" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+    <h2 class="text-xl font-bold mt-4 mb-4">{% if user_data %}{{ _('Edit: %(name)s') | format(name=user_data.username) }}{% else %}{{ _('Create User') }}{% endif %}</h2>
+    {% if error %}
+    <div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">{{ error }}</div>
+    {% endif %}
+    <form method="post" class="max-w-lg space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Username') }}</label>
+        <input type="text" name="username" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ user_data.username if user_data else '' }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Password') }}{% if user_data %} ({{ _('leave blank to keep') }}){% endif %}</label>
+        <input type="password" name="password" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" {% if not user_data %}required{% endif %}>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Role') }}</label>
+        <select name="role" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+          <option value="readonly" {% if user_data and user_data.role == 'readonly' %}selected{% endif %}>{{ _('Readonly') }}</option>
+          <option value="user" {% if user_data and user_data.role == 'user' %}selected{% endif %}>{{ _('User') }}</option>
+          <option value="developer" {% if user_data and user_data.role == 'developer' %}selected{% endif %}>{{ _('Developer') }}</option>
+          <option value="admin" {% if user_data and user_data.role == 'admin' %}selected{% endif %}>{{ _('Admin') }}</option>
+          <option value="super_admin" {% if user_data and user_data.role == 'super_admin' %}selected{% endif %}>{{ _('Super Admin') }}</option>
+        </select>
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+    </form>
+  </div>
+</body>
+</html>

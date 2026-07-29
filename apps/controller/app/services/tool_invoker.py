@@ -1,5 +1,5 @@
 """
-Tool Invoker Service - Calls external tools via HTTP API
+Tool Invoker Service - Calls tools via local function calls (integrated) or HTTP (legacy)
 """
 
 import os
@@ -13,58 +13,153 @@ from app.db.models import ToolRegistry
 
 
 class ToolInvoker:
-    """Invokes tool capabilities via HTTP"""
-    
     def __init__(self, db: Optional[AsyncSession] = None):
         self.db = db
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = None
         self._endpoint_cache = {}
-    
-    async def invoke(self, tool_name: str, capability: str, 
+
+    async def _get_client(self):
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def invoke(self, tool_name: str, capability: str,
                     arguments: dict = None) -> dict:
-        """Invoke a tool capability"""
-        
-        # Get tool endpoint
+
+        # Try local (integrated) call first
+        result = await self._invoke_local(tool_name, capability, arguments)
+        if result is not None:
+            return result
+
+        # Fallback to HTTP for non-integrated tools
         endpoint = await self._get_tool_endpoint(tool_name)
         if not endpoint:
-            return {
-                "success": False,
-                "error": f"Tool '{tool_name}' not found or not registered"
-            }
-        
-        # Build request
+            return {"success": False, "error": f"Tool '{tool_name}' not found"}
+
         url = f"{endpoint}/tool/invoke"
         payload = {
             "capability": capability,
             "input": arguments or {},
             "trace_id": self._generate_trace_id()
         }
-        
+
         try:
-            response = await self._client.post(
-                url,
-                json=payload,
+            client = await self._get_client()
+            response = await client.post(
+                url, json=payload,
                 headers={"Content-Type": "application/json"}
             )
-            
             if response.status_code == 200:
                 return response.json()
-            else:
-                return {
-                    "success": False,
-                    "error": f"HTTP {response.status_code}: {response.text}"
-                }
-                
+            return {"success": False, "error": f"HTTP {response.status_code}"}
         except httpx.TimeoutException:
-            return {
-                "success": False,
-                "error": "Request timeout"
-            }
+            return {"success": False, "error": "Request timeout"}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
+
+    async def _invoke_local(self, tool_name: str, capability: str, arguments: dict) -> Optional[dict]:
+        """Try to invoke tool locally (integrated in Controller process)"""
+        try:
+            if tool_name == "skill-router" or tool_name == "skillrouter":
+                return await self._skill_router_invoke(capability, arguments)
+            elif tool_name == "sandbox-tool" and capability.startswith("sandbox."):
+                return await self._sandbox_execute(arguments)
+            elif tool_name == "quality-tool" and capability.startswith("quality."):
+                return await self._quality_check(arguments)
+            elif tool_name == "knowledge-tool" and capability.startswith("knowledge."):
+                return await self._knowledge_search(arguments)
+            elif tool_name == "memory-tool" and capability.startswith("memory."):
+                return await self._memory_op(capability, arguments)
+        except Exception:
+            pass
+        return None
+
+    async def _sandbox_execute(self, arguments: dict) -> dict:
+        from app.tools.sandbox_tool.services.execution_service import execute_code
+        code = arguments.get("code", "")
+        language = arguments.get("language", "python")
+        result = await execute_code(code, language)
+        return {"success": True, "output": result}
+
+    async def _quality_check(self, arguments: dict) -> dict:
+        from app.tools.quality_tool.api.check import run_quality_check
+        from app.tools.quality_tool.api.check import CheckRequest
+        from app.db.database import async_session_factory
+        async with async_session_factory() as db:
+            req = CheckRequest(
+                code=arguments.get("code", ""),
+                filename=arguments.get("filename"),
+                language=arguments.get("language"),
+            )
+            result = await run_quality_check(req, user=None, db=db)
+            return {"success": True, "output": result}
+
+    async def _knowledge_search(self, arguments: dict) -> dict:
+        from app.tools.knowledge_tool.services.search_service import search_documents
+        from app.db.database import async_session_factory
+        async with async_session_factory() as db:
+            results = await search_documents(
+                db,
+                query=arguments.get("query", ""),
+                top_k=arguments.get("top_k", 5),
+                base_id=arguments.get("base_id"),
+                project_id=arguments.get("project_id"),
+            )
+            return {"success": True, "output": {"items": results}}
+
+    async def _skill_router_invoke(self, capability: str, arguments: dict) -> dict:
+        from app.tools.skill_router.services.vector_service import analyze_intent
+        from app.tools.skill_router.services.resolve_service import resolve_task
+        from app.tools.skill_router.services.skill_service import run_skill
+
+        task = arguments.get("task", "")
+        if capability == "analyze_intent":
+            result = await analyze_intent(task, arguments.get("chat_history"))
+            return {"success": True, "data": result}
+        elif capability == "skill_run":
+            skills, rules, instructions = await run_skill(
+                task=task,
+                mode=arguments.get("mode", "auto"),
+                hint_tags=arguments.get("hint_tags", []),
+                top_k=arguments.get("top_k", 6),
+                session_id=arguments.get("session_id"),
+            )
+            return {"success": True, "data": {"skills": skills, "rules": rules, "instructions": instructions}}
+        elif capability == "resolve_task":
+            result = await resolve_task(
+                task=task,
+                mode=arguments.get("mode", "auto"),
+                top_k=arguments.get("top_k", 3),
+                api_key=arguments.get("api_key", ""),
+            )
+            return {"success": True, "data": result}
+        return {"success": False, "error": f"Unknown skill-router capability: {capability}"}
+
+    async def _memory_op(self, capability: str, arguments: dict) -> dict:
+        from app.tools.memory_tool.services.memory_service import MemoryService
+        from app.tools.memory_tool.schemas.memory import MemoryCreate as MemCreate
+        from app.db.database import async_session_factory
+
+        async with async_session_factory() as db:
+            svc = MemoryService(db)
+            if "search" in capability:
+                results = await svc.search(
+                    project=arguments.get("project", ""),
+                    query=arguments.get("query", ""),
+                    category=arguments.get("category"),
+                    limit=arguments.get("limit", 10),
+                )
+                return {"success": True, "output": {"results": results}}
+            elif "create" in capability:
+                data = MemCreate(
+                    title=arguments.get("title", ""),
+                    content=arguments.get("content", ""),
+                    category=arguments.get("category", "other"),
+                    tags=arguments.get("tags", ""),
+                )
+                entry = await svc.create(data)
+                return {"success": True, "output": entry.to_dict()}
+        return {"success": False, "error": f"Unknown memory capability: {capability}"}
     
     async def _get_tool_endpoint(self, tool_name: str) -> Optional[str]:
         """Get tool endpoint from registry or cache"""

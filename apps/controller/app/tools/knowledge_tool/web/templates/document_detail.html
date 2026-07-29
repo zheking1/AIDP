@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}文档详情{% endblock %}
+{% block content %}
+<div x-data="docDetail()" x-init="init()" class="h-[calc(100vh-120px)]">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-3">
+            <a href="/documents" class="text-gray-500 hover:text-blue-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                返回
+            </a>
+            <h1 class="text-xl font-bold" x-text="doc.title || '加载中...'"></h1>
+            <span class="px-2 py-0.5 rounded text-xs font-medium"
+                  :class="statusBadgeClass(doc.index_status)"
+                  x-text="formatStatus(doc.index_status)"></span>
+        </div>
+        <div class="space-x-2 flex items-center">
+            <button @click="showPreview = !showPreview" 
+                    class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-200 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                <span x-text="showPreview ? '隐藏预览' : '显示预览'"></span>
+            </button>
+            <button @click="showChunks = !showChunks"
+                    class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-200 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                <span x-text="showChunks ? '隐藏分块' : '显示分块'"></span>
+            </button>
+            <button @click="reindex()" 
+                    :disabled="reindexing"
+                    class="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1">
+                <svg x-show="!reindexing" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <svg x-show="reindexing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span x-text="reindexing ? '索引中...' : '重新索引'"></span>
+            </button>
+            <button @click="deleteDoc()" class="bg-red-500 text-white px-3 py-1.5 rounded text-sm hover:bg-red-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                删除
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid gap-4" :class="showPreview && showChunks ? 'grid-cols-2' : 'grid-cols-1'">
+        <!-- Left Panel: Document Info -->
+        <div class="space-y-4" :class="showChunks && !showPreview ? 'hidden' : ''">
+            <!-- Info Card -->
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h2 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    文档信息
+                </h2>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">类型:</dt><dd class="truncate" x-text="doc.doc_type"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">文件名:</dt><dd class="truncate" x-text="doc.file_name || '-'"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">MIME:</dt><dd class="truncate" x-text="doc.mime_type || '-'"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">大小:</dt><dd x-text="formatFileSize(doc.file_size)"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">可见性:</dt><dd x-text="doc.visibility"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">状态:</dt><dd x-text="doc.index_status"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">分块数:</dt><dd x-text="chunks.length || '未索引'"></dd></div>
+                    <div class="flex"><dt class="w-24 text-gray-500 flex-shrink-0">创建时间:</dt><dd x-text="formatDate(doc.created_at)"></dd></div>
+                </div>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="bg-white rounded-lg shadow-sm overflow-hidden" x-show="showPreview">
+                <div class="flex items-center justify-between p-3 border-b bg-gray-50">
+                    <h2 class="font-semibold text-gray-800">内容预览</h2>
+                    <div class="flex items-center gap-2">
+                        <select x-model="previewMode" class="text-sm border rounded px-2 py-1">
+                            <option value="rendered">渲染模式</option>
+                            <option value="raw">原始文本</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="p-4 max-h-[600px] overflow-auto">
+                    <div x-show="previewMode === 'rendered' && isMarkdown" 
+                         class="prose prose-sm max-w-none"
+                         x-html="renderedContent"></div>
+                    <pre x-show="previewMode === 'raw' || !isMarkdown" 
+                         class="text-sm text-gray-700 whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded"><code x-text="content"></code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Chunks -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden" x-show="showChunks" :class="showPreview && showChunks ? '' : 'col-span-2'">
+            <div class="flex items-center justify-between p-3 border-b bg-gray-50">
+                <h2 class="font-semibold text-gray-800">分块列表</h2>
+                <span class="text-sm text-gray-500" x-text="`(${chunks.length} 块)`"></span>
+            </div>
+            <div x-show="chunks.length === 0" class="p-8 text-center text-gray-500">
+                <p>文档尚未索引</p>
+                <button @click="reindex()" class="mt-2 text-blue-500 hover:underline">立即索引</button>
+            </div>
+            <div x-show="chunks.length > 0" class="divide-y max-h-[800px] overflow-auto">
+                <template x-for="chunk in chunks" :key="chunk.id">
+                    <div class="p-4 hover:bg-gray-50">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">#<span x-text="chunk.chunk_index"></span></span>
+                            <span class="text-xs text-gray-500" x-text="chunk.token_count + ' tokens'"></span>
+                        </div>
+                        <pre class="text-xs text-gray-600 bg-gray-50 p-2 rounded max-h-32 overflow-hidden" x-text="chunk.content.substring(0, 300) + (chunk.content.length > 300 ? '...' : '')"></pre>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function docDetail() {
+    return {
+        doc: {},
+        content: '',
+        renderedContent: '',
+        chunks: [],
+        showPreview: true,
+        showChunks: true,
+        previewMode: 'rendered',
+        reindexing: false,
+        
+        get isMarkdown() {
+            return this.doc.doc_type === 'markdown' || this.doc.mime_type === 'text/markdown' ||
+                   (this.doc.file_name && this.doc.file_name.endsWith('.md'));
+        },
+        
+        async init() {
+            const id = window.location.pathname.split('/').pop();
+            await this.loadDocument(id);
+            await this.loadChunks(id);
+        },
+        
+        async loadDocument(id) {
+            try {
+                const resp = await fetch('/api/documents/' + id);
+                const result = await resp.json();
+                this.doc = result.data || result;
+                if (this.doc.content) {
+                    this.content = this.doc.content;
+                    this.renderMarkdown();
+                }
+            } catch (e) {
+                console.error('Failed to load document:', e);
+            }
+        },
+        
+        async loadChunks(id) {
+            try {
+                const resp = await fetch('/api/documents/' + id + '/chunks');
+                if (resp.ok) {
+                    const result = await resp.json();
+                    this.chunks = result.data || result.items || [];
+                    this.chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+                }
+            } catch (e) {
+                console.error('Failed to load chunks:', e);
+            }
+        },
+        
+        renderMarkdown() {
+            if (this.isMarkdown && this.content) {
+                let html = this.content
+                    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                    .replace(/`(.*?)`/gim, '<code>$1</code>')
+                    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
+                    .replace(/\n/gim, '<br>');
+                this.renderedContent = html;
+            }
+        },
+        
+        async reindex() {
+            this.reindexing = true;
+            const id = window.location.pathname.split('/').pop();
+            try {
+                const resp = await fetch('/api/documents/' + id + '/index', { method: 'POST' });
+                if (resp.ok) {
+                    alert('索引任务已提交');
+                    setTimeout(() => this.loadChunks(id), 3000);
+                }
+            } catch (e) {
+                alert('索引失败: ' + e.message);
+            } finally {
+                this.reindexing = false;
+            }
+        },
+        
+        async deleteDoc() {
+            if (!confirm('确认删除?')) return;
+            const id = window.location.pathname.split('/').pop();
+            await fetch('/api/documents/' + id, { method: 'DELETE' });
+            window.location.href = '/documents';
+        },
+        
+        statusBadgeClass(status) {
+            return {
+                'indexed': 'bg-green-100 text-green-700',
+                'indexing': 'bg-yellow-100 text-yellow-700',
+                'error': 'bg-red-100 text-red-700'
+            }[status] || 'bg-gray-100 text-gray-700';
+        },
+        
+        formatStatus(status) {
+            return {
+                'indexed': '已索引',
+                'indexing': '索引中',
+                'created': '待索引',
+                'error': '错误'
+            }[status] || status;
+        },
+        
+        formatFileSize(bytes) {
+            if (!bytes) return '-';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+        },
+        
+        formatDate(date) {
+            if (!date) return '-';
+            return new Date(date).toLocaleString();
+        }
+    };
+}
+</script>
+{% endblock %}

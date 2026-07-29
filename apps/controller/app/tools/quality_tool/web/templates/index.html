@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}代码质量检查{% endblock %}
+{% block content %}
+<div x-data="checker()">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold">代码质量检查</h1>
+        <a href="/history" class="text-sm text-blue-600 hover:underline">查看历史 →</a>
+    </div>
+
+    <!-- Code Editor -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-4">
+                <label class="flex items-center space-x-1">
+                    <input type="checkbox" x-model="checks.lint" class="rounded">
+                    <span class="text-sm">Lint 检查</span>
+                </label>
+                <label class="flex items-center space-x-1">
+                    <input type="checkbox" x-model="checks.security" class="rounded">
+                    <span class="text-sm">安全扫描</span>
+                </label>
+            </div>
+            <button @click="runCheck()" :disabled="running"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">
+                <span x-show="!running">🔍 执行检查</span>
+                <span x-show="running">检查中...</span>
+            </button>
+        </div>
+        <textarea x-model="code" rows="15"
+                  class="w-full border rounded p-3 text-sm font-mono bg-gray-900 text-green-400 focus:outline-none"
+                  placeholder="在此粘贴代码..."></textarea>
+    </div>
+
+    <!-- Results -->
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="result">
+        <h2 class="font-semibold mb-3">检查结果</h2>
+
+        <!-- Lint Results -->
+        <div x-show="result.lint" class="mb-4">
+            <div class="flex items-center space-x-2 mb-2">
+                <span class="font-medium">Lint</span>
+                <span class="text-xs px-2 py-0.5 rounded"
+                      :class="result.lint.issues.length === 0 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+                      x-text="result.lint.issues.length === 0 ? '✅ 无问题' : result.lint.issues.length + ' 个问题'"></span>
+            </div>
+            <div x-show="result.lint.issues.length > 0" class="space-y-1">
+                <template x-for="(issue, idx) in result.lint.issues" :key="idx">
+                    <div class="text-sm bg-yellow-50 p-2 rounded border-l-2 border-yellow-400">
+                        <span class="text-yellow-700" x-text="issue"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Security Results -->
+        <div x-show="result.security">
+            <div class="flex items-center space-x-2 mb-2">
+                <span class="font-medium">Security</span>
+                <span class="text-xs px-2 py-0.5 rounded"
+                      :class="result.security.issues.length === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                      x-text="result.security.issues.length === 0 ? '✅ 安全' : result.security.issues.length + ' 个风险'"></span>
+            </div>
+            <div x-show="result.security.issues.length > 0" class="space-y-1">
+                <template x-for="(issue, idx) in result.security.issues" :key="idx">
+                    <div class="text-sm bg-red-50 p-2 rounded border-l-2 border-red-400">
+                        <span class="text-red-700" x-text="issue"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function checker() {
+    return {
+        code: '# Example Python code\ndef hello(name):\n    print(f"Hello, {name}")',
+        checks: { lint: true, security: true },
+        running: false,
+        result: null,
+        async runCheck() {
+            this.running = true;
+            this.result = null;
+            try {
+                const body = { code: this.code, checks: Object.keys(this.checks).filter(k => this.checks[k]) };
+                const resp = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                this.result = await resp.json();
+            } catch (e) {
+                this.result = { lint: { issues: [] }, security: { issues: ['Error: ' + e.message] } };
+            } finally {
+                this.running = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

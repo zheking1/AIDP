@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Stats') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('Statistics') }}</h2>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Resolve Count') }}</p>
+    <p class="text-2xl font-bold">{{ stats.resolve_count or 0 }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Cache Hit Rate') }}</p>
+    <p class="text-2xl font-bold text-green-400">{{ (stats.cache_hit_rate * 100)|round(1) if stats.cache_hit_rate else 0 }}%</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('LLM Fail Rate') }}</p>
+    <p class="text-2xl font-bold {% if stats.llm_fail_rate and stats.llm_fail_rate > 0.1 %}text-red-400{% else %}text-green-400{% endif %}">{{ (stats.llm_fail_rate * 100)|round(1) if stats.llm_fail_rate else 0 }}%</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Avg Latency') }}</p>
+    <p class="text-2xl font-bold">{{ stats.avg_latency_ms or 0 }}{{ _('ms') }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Total Skills') }}</p>
+    <p class="text-2xl font-bold text-indigo-400">{{ stats.total_skills or 0 }}</p>
+    <p class="text-xs text-gray-500">{{ _('Approved') }}: {{ stats.approved_skills or 0 }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Total Rules') }}</p>
+    <p class="text-2xl font-bold text-purple-400">{{ stats.total_rules or 0 }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Redis Memory') }}</p>
+    <p class="text-2xl font-bold text-cyan-400">{{ stats.cache_stats.used_memory if stats.cache_stats else '0' }}</p>
+    <p class="text-xs text-gray-500">{{ _('Keys') }}: {{ stats.cache_stats.total_keys if stats.cache_stats else 0 }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('System Load') }}</p>
+    <p class="text-2xl font-bold {% if stats.system_load and stats.system_load.status == 'high' %}text-red-400{% elif stats.system_load and stats.system_load.status == 'medium' %}text-yellow-400{% else %}text-green-400{% endif %}">{{ stats.system_load.load_score if stats.system_load else 0 }}</p>
+    <p class="text-xs text-gray-500">{{ stats.system_load.status if stats.system_load else 'unknown' }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('Cache Statistics') }}</h3>
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Total Requests') }}</span>
+        <span>{{ stats.cache_stats.total_requests if stats.cache_stats else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Cache Hits') }}</span>
+        <span class="text-green-400">{{ stats.cache_stats.cache_hits if stats.cache_stats else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Cache Misses') }}</span>
+        <span class="text-yellow-400">{{ stats.cache_stats.cache_misses if stats.cache_stats else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Session Hits') }}</span>
+        <span class="text-blue-400">{{ stats.cache_stats.session_hits if stats.cache_stats else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Regular Keys') }}</span>
+        <span>{{ stats.cache_stats.regular_keys if stats.cache_stats else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Session Keys') }}</span>
+        <span>{{ stats.cache_stats.session_keys if stats.cache_stats else 0 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('System Load Details') }}</h3>
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Connected Clients') }}</span>
+        <span>{{ stats.system_load.connected_clients if stats.system_load else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Used Memory') }}</span>
+        <span>{{ stats.system_load.used_memory_mb if stats.system_load else 0 }} MB</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Active Users') }}</span>
+        <span>{{ stats.system_load.active_users if stats.system_load else 0 }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-500">{{ _('Load Score') }}</span>
+        <span class="{% if stats.system_load and stats.system_load.load_score > 80 %}text-red-400{% elif stats.system_load and stats.system_load.load_score > 50 %}text-yellow-400{% else %}text-green-400{% endif %}">{{ stats.system_load.load_score if stats.system_load else 0 }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4">
+  <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('Mode Distribution') }}</h3>
+  <div class="flex gap-4">
+    <div class="bg-gray-700 rounded p-2 text-center flex-1"><p class="text-xl font-bold">{{ stats.mode_distribution.auto if stats.mode_distribution else 0 }}</p><p class="text-xs text-gray-400">{{ _('Auto') }}</p></div>
+    <div class="bg-gray-700 rounded p-2 text-center flex-1"><p class="text-xl font-bold">{{ stats.mode_distribution.embedding_only if stats.mode_distribution else 0 }}</p><p class="text-xs text-gray-400">{{ _('Embedding') }}</p></div>
+    <div class="bg-gray-700 rounded p-2 text-center flex-1"><p class="text-xl font-bold">{{ stats.mode_distribution.llm_only if stats.mode_distribution else 0 }}</p><p class="text-xs text-gray-400">{{ _('LLM Only') }}</p></div>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-4">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('Top Skills') }}</h3>
+    {% for s in stats.top_skills or [] %}
+    <div class="flex justify-between py-1 text-sm border-b border-gray-700"><span>{{ s.name }}</span><span class="text-gray-400">{{ s.hit_count }} {{ _('hits') }}</span></div>
+    {% else %}<p class="text-gray-500 text-xs">{{ _('No data yet.') }}</p>{% endfor %}
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('Top Rules') }}</h3>
+    {% for r in stats.top_rules or [] %}
+    <div class="flex justify-between py-1 text-sm border-b border-gray-700"><span>{{ r.name }}</span><span class="text-gray-400">{{ r.hit_count }} {{ _('hits') }}</span></div>
+    {% else %}<p class="text-gray-500 text-xs">{{ _('No data yet.') }}</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

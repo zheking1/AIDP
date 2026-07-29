@@ -673,58 +673,55 @@ async def analyze_and_evolve(
     Returns:
         JSON 包含分析结果和是否自动创建了进化提案
     """
-    import httpx
-
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "http://127.0.0.1:18089/api/events",
-                json={
-                    "type": event_type,
-                    "source": "mcp",
-                    "content": task,
-                    "result": result,
-                    "metadata": {"project_id": project_id},
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                analysis = data.get("analysis", {})
-                confidence = analysis.get("confidence", 0)
+        from app.tools.evolution_engine.app.db.database import async_session_factory as evo_session
+        from app.tools.evolution_engine.app.services.event_collector import EventCollector
+        from app.tools.evolution_engine.app.services.llm_pattern_analyzer import LLMPatternAnalyzer
+        from app.tools.evolution_engine.app.services.evolution_router import EvolutionRouter
+        from app.tools.evolution_engine.app.services.tool_updater import ToolUpdater
 
-                if confidence >= 0.5:
-                    return json.dumps({
-                        "success": True,
-                        "auto_proposed": True,
-                        "confidence": confidence,
-                        "analysis": {
-                            "category": analysis.get("category"),
-                            "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern"),
-                            "root_cause": analysis.get("root_cause"),
-                            "update_type": analysis.get("update_type"),
-                            "affected_tools": data.get("targets", []),
-                        },
-                        "message": f"已将模式「{analysis.get('success_pattern') or analysis.get('fix_pattern', '')}」提交为进化提案，等待管理员审核。",
-                        "hint": "管理员可通过 /admin/evolution 审核此提案。",
-                    }, ensure_ascii=False, indent=2)
-                else:
-                    return json.dumps({
-                        "success": True,
-                        "auto_proposed": False,
-                        "confidence": confidence,
-                        "analysis": analysis,
-                        "message": "分析完成但置信度不足，未自动创建提案。可手动通过 promote_evolution 提交。",
-                    }, ensure_ascii=False, indent=2)
+        async with evo_session() as evo_db:
+            collector = EventCollector(evo_db)
+            event = await collector.collect(event_type, "mcp", task, result, {"project_id": project_id})
+
+            analyzer = LLMPatternAnalyzer(evo_db)
+            analysis = await analyzer.analyze(event_type, task, result, {"project_id": project_id})
+            await analyzer.save_analysis(event.id, analysis)
+
+            router_inst = EvolutionRouter()
+            targets = router_inst.route(analysis)
+
+            updater = ToolUpdater(evo_db)
+            await updater.apply_evolution(event.id, targets, analysis.get("update_type", "经验"))
+            await collector.mark_processed(event.id)
+
+            confidence = analysis.get("confidence", 0)
+            if confidence >= 0.5:
+                return json.dumps({
+                    "success": True,
+                    "auto_proposed": True,
+                    "confidence": confidence,
+                    "analysis": {
+                        "category": analysis.get("category"),
+                        "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern"),
+                        "root_cause": analysis.get("root_cause"),
+                        "update_type": analysis.get("update_type"),
+                        "affected_tools": targets,
+                    },
+                    "message": f"已将模式「{analysis.get('success_pattern') or analysis.get('fix_pattern', '')}」提交为进化提案，等待管理员审核。",
+                    "hint": "管理员可通过 /admin/evolution 审核此提案。",
+                }, ensure_ascii=False, indent=2)
             else:
                 return json.dumps({
-                    "success": False,
-                    "error": f"Evolution engine returned {resp.status_code}",
-                    "hint": "确认 evolution-engine 服务已启动 (端口 18089)。"
+                    "success": True,
+                    "auto_proposed": False,
+                    "confidence": confidence,
+                    "analysis": analysis,
+                    "message": "分析完成但置信度不足，未自动创建提案。可手动通过 promote_evolution 提交。",
                 }, ensure_ascii=False, indent=2)
     except Exception as e:
         return json.dumps({
             "success": False,
             "error": str(e),
-            "hint": "Evolution engine (端口 18089) 可能未启动，手动通过 promote_evolution 提交也可以。",
+            "hint": "Evolution engine 分析失败，手动通过 promote_evolution 提交也可以。",
         }, ensure_ascii=False, indent=2)

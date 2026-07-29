@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}记忆详情 - Memory Tool{% endblock %}
+
+{% block content %}
+<div x-data="memoryDetail()" x-init="init({{ memory_id }})" class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="/memories" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-2xl font-bold text-gray-800">记忆详情</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <a :href="`/memories/${memory?.id}/edit`" 
+               class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                <span>✏️</span>
+                <span>编辑</span>
+            </a>
+            <button @click="deleteMemory()" 
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2">
+                <span>🗑️</span>
+                <span>删除</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+        <p class="mt-4 text-gray-500">加载中...</p>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="error" class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <div class="text-4xl mb-2">⚠️</div>
+        <p class="text-red-700" x-text="error"></p>
+        <a href="/memories" class="mt-4 inline-block text-blue-600 hover:underline">返回列表</a>
+    </div>
+
+    <!-- Content -->
+    <div x-show="memory && !loading && !error" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Memory Card -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-gray-900" x-text="memory?.title"></h2>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 text-xs rounded-full"
+                                  :class="getCategoryClass(memory?.category)"
+                                  x-text="getCategoryText(memory?.category)">
+                            </span>
+                            <span x-show="memory?.ai_suggested" 
+                                  class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
+                                AI生成
+                            </span>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none">
+                        <p class="text-gray-700 whitespace-pre-wrap leading-relaxed" x-text="memory?.content"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tags -->
+            <div x-show="memory?.tags?.length" class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">标签</h3>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="tag in memory?.tags || []" :key="tag">
+                        <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm" x-text="tag"></span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Related Memories -->
+            <div x-show="relatedMemories.length > 0" class="bg-white rounded-lg shadow">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold text-gray-800">相关记忆</h3>
+                </div>
+                <div class="divide-y">
+                    <template x-for="related in relatedMemories" :key="related.id">
+                        <a :href="`/memories/${related.id}`" class="block p-4 hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium text-gray-900" x-text="related.title"></h4>
+                                    <p class="text-sm text-gray-500 mt-1 line-clamp-1" x-text="related.content_preview || related.content"></p>
+                                </div>
+                                <span class="px-2 py-1 text-xs rounded-full"
+                                      :class="getCategoryClass(related.category)"
+                                      x-text="getCategoryText(related.category)">
+                                </span>
+                            </div>
+                        </a>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Metadata -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-medium text-gray-800 mb-4">元数据</h3>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">ID</span>
+                        <span class="text-gray-700 font-mono text-xs" x-text="memory?.id"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">分类</span>
+                        <span class="text-gray-700" x-text="getCategoryText(memory?.category)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">层级</span>
+                        <span class="text-gray-700 capitalize" x-text="memory?.memory_tier"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">置信度</span>
+                        <span class="text-gray-700" x-text="(memory?.confidence_score * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">来源</span>
+                        <span class="text-gray-700 capitalize" x-text="memory?.source_type"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">访问次数</span>
+                        <span class="text-gray-700" x-text="memory?.access_count || 0"></span>
+                    </div>
+                    <div x-show="memory?.has_embedding" class="flex justify-between">
+                        <span class="text-gray-500">向量</span>
+                        <span class="text-green-600">✓ 已嵌入</span>
+                    </div>
+                    <hr class="border-gray-200">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">创建时间</span>
+                        <span class="text-gray-700" x-text="formatDate(memory?.created_at)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">更新时间</span>
+                        <span class="text-gray-700" x-text="formatDate(memory?.updated_at)"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relations Stats -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-medium text-gray-800 mb-4">关系</h3>
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <div class="text-2xl font-bold text-blue-600" x-text="relationsStats.outgoing || 0"></div>
+                        <div class="text-xs text-gray-500"> outgoing</div>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-3">
+                        <div class="text-2xl font-bold text-green-600" x-text="relationsStats.incoming || 0"></div>
+                        <div class="text-xs text-gray-500">incoming</div>
+                    </div>
+                </div>
+                <a :href="`/memories/graph?focus=${memory?.id}`" 
+                   class="mt-4 block text-center text-blue-600 hover:text-blue-800 text-sm">
+                   在图谱中查看 →
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function memoryDetail() {
+    return {
+        memory: null,
+        relatedMemories: [],
+        relationsStats: { outgoing: 0, incoming: 0 },
+        loading: true,
+        error: null,
+
+        async init(memoryId) {
+            await this.loadMemory(memoryId);
+        },
+
+        async loadMemory(id) {
+            this.loading = true;
+            this.error = null;
+            
+            try {
+                const response = await fetch(`/api/memories/${id}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    this.memory = result.data;
+                    await this.loadRelatedMemories(id);
+                    await this.loadRelationsStats(id);
+                } else {
+                    this.error = '记忆不存在或已被删除';
+                }
+            } catch (error) {
+                console.error('Failed to load memory:', error);
+                this.error = '加载失败，请稍后重试';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async loadRelatedMemories(id) {
+            try {
+                const response = await fetch(`/api/memories/graph/neighbors/${id}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.relatedMemories = result.data.related_memories || [];
+                }
+            } catch (error) {
+                console.error('Failed to load related memories:', error);
+            }
+        },
+
+        async loadRelationsStats(id) {
+            try {
+                // Count relations - this is simplified, ideally we'd have a dedicated endpoint
+                this.relationsStats = { outgoing: 0, incoming: 0 };
+            } catch (error) {
+                console.error('Failed to load relations stats:', error);
+            }
+        },
+
+        async deleteMemory() {
+            if (!confirm('确定要删除这条记忆吗？此操作不可恢复。')) return;
+            
+            try {
+                const response = await fetch(`/api/memories/${this.memory.id}`, {
+                    method: 'DELETE',
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/memories';
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                console.error('Failed to delete:', error);
+                alert('删除失败');
+            }
+        },
+
+        getCategoryClass(category) {
+            const map = {
+                'architecture': 'bg-blue-100 text-blue-800',
+                'decision': 'bg-purple-100 text-purple-800',
+                'pattern': 'bg-green-100 text-green-800',
+                'issue': 'bg-orange-100 text-orange-800',
+                'bug': 'bg-red-100 text-red-800',
+                'other': 'bg-gray-100 text-gray-800',
+            };
+            return map[category] || 'bg-gray-100 text-gray-800';
+        },
+
+        getCategoryText(category) {
+            const map = {
+                'architecture': '架构',
+                'decision': '决策',
+                'pattern': '模式',
+                'issue': '问题',
+                'bug': '缺陷',
+                'other': '其他',
+            };
+            return map[category] || category;
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        },
+    }
+}
+</script>
+{% endblock %}

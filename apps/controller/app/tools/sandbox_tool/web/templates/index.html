@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}代码执行器{% endblock %}
+{% block content %}
+<div x-data="executor()">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold">代码执行器</h1>
+        <a href="/history" class="text-sm text-blue-600 hover:underline">查看历史 →</a>
+    </div>
+
+    <!-- Code Editor -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-3">
+                <label class="text-sm font-medium text-gray-700">语言:</label>
+                <select x-model="language" class="border rounded px-2 py-1 text-sm">
+                    <option value="python">Python</option>
+                    <option value="bash">Bash</option>
+                </select>
+            </div>
+            <button @click="execute()" :disabled="running"
+                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">
+                <span x-show="!running">▶ 执行</span>
+                <span x-show="running">执行中...</span>
+            </button>
+        </div>
+        <textarea x-model="code" rows="15"
+                  class="w-full border rounded p-3 text-sm font-mono bg-gray-900 text-green-400 focus:outline-none"
+                  placeholder="在此输入代码..."></textarea>
+    </div>
+
+    <!-- Stdin -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <button @click="showStdin = !showStdin" class="text-sm text-gray-500 hover:text-gray-700">
+            <span x-text="showStdin ? '▼' : '▶'"></span> 标准输入 (stdin)
+        </button>
+        <div x-show="showStdin" x-cloak>
+            <textarea x-model="stdin" rows="3"
+                      class="w-full border rounded p-2 text-sm font-mono mt-2"
+                      placeholder="可选: 输入传递给程序的标准输入"></textarea>
+        </div>
+    </div>
+
+    <!-- Output -->
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="result">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">输出</h2>
+            <span class="text-xs px-2 py-0.5 rounded"
+                  :class="result.exitCode === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                  x-text="'exit=' + result.exitCode + ' | ' + result.durationMs + 'ms'"></span>
+        </div>
+        <div x-show="result.stdout">
+            <div class="text-xs text-gray-500 mb-1">stdout:</div>
+            <pre class="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-auto max-h-64" x-text="result.stdout"></pre>
+        </div>
+        <div x-show="result.stderr" class="mt-2">
+            <div class="text-xs text-gray-500 mb-1">stderr:</div>
+            <pre class="bg-gray-900 text-red-400 p-3 rounded text-sm overflow-auto max-h-64" x-text="result.stderr"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function executor() {
+    return {
+        code: 'print("Hello, World!")',
+        language: 'python',
+        stdin: '',
+        running: false,
+        showStdin: false,
+        result: null,
+        async execute() {
+            this.running = true;
+            this.result = null;
+            try {
+                const body = { code: this.code, language: this.language };
+                if (this.stdin) body.stdin = this.stdin;
+                const resp = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                this.result = await resp.json();
+            } catch (e) {
+                this.result = { stdout: '', stderr: 'Error: ' + e.message, exitCode: -1, durationMs: 0 };
+            } finally {
+                this.running = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

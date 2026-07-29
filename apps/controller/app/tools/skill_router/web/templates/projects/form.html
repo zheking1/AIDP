@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if project %}{{ project.name }}{% else %}{{ _('Create Project') }}{% endif %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div class="flex justify-end gap-2 p-4">
+    <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+    <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+  </div>
+  <div class="p-6">
+    <a href="/projects" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+    <h2 class="text-xl font-bold mt-4 mb-4">{% if project %}{{ _('Edit Project') }}{% else %}{{ _('Create Project') }}{% endif %}</h2>
+    {% if error %}
+    <div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">{{ error }}</div>
+    {% endif %}
+    <form method="post" class="max-w-lg space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+        <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ project.name if project else '' }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Description') }}</label>
+        <textarea name="description" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">{{ project.description if project else '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Instruction') }}</label>
+        <textarea name="instruction" rows="4" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm">{{ project.instruction if project else '' }}</textarea>
+        <p class="text-xs text-gray-500 mt-1">{{ _('Injected into system prompt when project skills are matched') }}</p>
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+    </form>
+  </div>
+</body>
+</html>

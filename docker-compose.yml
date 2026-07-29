@@ -33,22 +33,6 @@ services:
       CONTROLLER_SESSION_KEY: ${CONTROLLER_SESSION_KEY:-change-me-in-production}
     restart: unless-stopped
 
-  sandbox-tool:
-    image: aidp/sandbox-tool:0.1.0
-    container_name: aidp-sandbox
-    network_mode: host
-    environment:
-      DATABASE_URL: ${SANDBOX_DB_URL:-postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/aidp}
-    restart: unless-stopped
-
-  quality-tool:
-    image: aidp/quality-tool:0.1.0
-    container_name: aidp-quality
-    network_mode: host
-    environment:
-      DATABASE_URL: ${QUALITY_DB_URL:-postgresql+asyncpg://novel_os:jygame_postgres_01@127.0.0.1:5432/aidp}
-    restart: unless-stopped
-
 # volumes:
 #   aidp_pgdata:
 #   aidp_redisdata:

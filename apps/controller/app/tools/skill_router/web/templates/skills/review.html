@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Review: %(name)s') | format(name=skill.name) }}{% endblock %}
+{% block content %}
+<div class="mb-4 flex items-center gap-4">
+  <a href="/skills/{{ skill.id }}" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+  <h2 class="text-xl font-bold">{{ _('Review: %(name)s') | format(name=skill.name) }}</h2>
+</div>
+
+<div class="grid grid-cols-3 gap-4 mb-4">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Version') }}</p>
+    <p class="text-lg font-bold">v{{ skill.version }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-xs text-gray-500">{{ _('Status') }}</p>
+    <p class="text-lg font-bold">{{ skill.review_status }}</p>
+  </div>
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 self-center">
+    <span class="text-xs text-gray-400">{{ _('Tags') }}:</span>
+    {% for t in skill.tags or [] %}<span class="bg-gray-700 text-xs px-2 py-0.5 rounded mr-1">{{ t }}</span>{% endfor %}
+  </div>
+</div>
+
+{% if error %}
+<div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">{{ error }}</div>
+{% endif %}
+
+{% if review %}
+<div class="bg-green-900/50 border border-green-700 text-green-300 px-4 py-3 rounded mb-4">{{ _('Review completed') }}</div>
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4">
+  <h3 class="text-sm font-bold text-gray-400 mb-2">{{ _('Review Result') }}</h3>
+  <div class="space-y-2 text-sm">
+    <div><span class="text-gray-500">{{ _('Status') }}:</span>
+      <span class="text-xs px-2 py-0.5 rounded {% if review.review_status == 'approved' %}bg-green-900 text-green-300{% elif review.review_status == 'rejected' %}bg-red-900 text-red-300{% else %}bg-yellow-900 text-yellow-300{% endif %}">
+        {{ review.review_status }}
+      </span>
+    </div>
+    {% if review.hits %}
+    <div>
+      <span class="text-gray-500">{{ _('Issues found:') }} {{ review.hits|length }}</span>
+      <ul class="list-disc list-inside mt-1 space-y-1">
+        {% for h in review.hits %}
+        <li class="text-xs text-red-400">{{ h.rule or h.pattern }} <span class="text-gray-500">({{ h.risk_level }})</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<form method="post" action="/skills/{{ skill.id }}/review" class="mt-4">
+  <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('Re-run Review') }}</button>
+</form>
+{% else %}
+<form method="post" action="/skills/{{ skill.id }}/review">
+  <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Run Review') }}</button>
+</form>
+{% endif %}
+{% endblock %}

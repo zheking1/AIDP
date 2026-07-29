@@ -317,26 +317,41 @@ class SmartProposeRequest(BaseModel):
 async def analyze_and_propose(req: SmartProposeRequest, db: AsyncSession = Depends(get_db)):
     """智能分析 → 调用 evolution-engine LLM 分析 → 自动生成进化提案"""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "http://127.0.0.1:18089/api/events",
-                json={
-                    "type": req.event_type,
-                    "source": req.source,
-                    "content": req.task,
-                    "result": req.result,
-                    "metadata": {"project_id": req.project_id},
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                analysis = data.get("analysis", {})
-                targets = data.get("targets", [])
+        from app.tools.evolution_engine.api.events import collect_event
+        from app.tools.evolution_engine.app.db.database import async_session_factory as evo_session
+        import asyncio as _asyncio
 
-                confidence = analysis.get("confidence", 0)
-                if confidence >= 0.5:
-                    version = EvolutionVersion(
+        # Call evolution-engine internally
+        async with evo_session() as evo_db:
+            from app.tools.evolution_engine.app.services.event_collector import EventCollector
+            from app.tools.evolution_engine.app.services.llm_pattern_analyzer import LLMPatternAnalyzer
+            from app.tools.evolution_engine.app.services.evolution_router import EvolutionRouter
+            from app.tools.evolution_engine.app.services.tool_updater import ToolUpdater
+
+            collector = EventCollector(evo_db)
+            event = await collector.collect(
+                event_type=req.event_type,
+                source=req.source,
+                content=req.task,
+                result=req.result,
+                metadata={"project_id": req.project_id},
+            )
+
+            analyzer = LLMPatternAnalyzer(evo_db)
+            analysis = await analyzer.analyze(req.event_type, req.task, req.result, {"project_id": req.project_id})
+            saved = await analyzer.save_analysis(event.id, analysis)
+
+            router_inst = EvolutionRouter()
+            targets = router_inst.route(analysis)
+
+            updater = ToolUpdater(evo_db)
+            await updater.apply_evolution(saved.id, targets, analysis.get("update_type", "经验"))
+
+            await collector.mark_processed(event.id)
+
+            confidence = analysis.get("confidence", 0)
+            if confidence >= 0.5:
+                version = EvolutionVersion(
                         version="0.1.0",
                         level="project",
                         title=analysis.get("success_pattern") or analysis.get("fix_pattern") or req.task[:100],
@@ -367,14 +382,12 @@ async def analyze_and_propose(req: SmartProposeRequest, db: AsyncSession = Depen
                         "auto_proposed": True,
                     }
                 else:
-                    return {
-                        "success": True,
-                        "auto_proposed": False,
-                        "confidence": confidence,
-                        "message": "置信度不足，跳过自动提案",
-                        "analysis": analysis,
-                    }
-            else:
-                return {"success": False, "error": f"Evolution engine returned {resp.status_code}"}
+return {
+                    "success": True,
+                    "auto_proposed": False,
+                    "confidence": confidence,
+                    "message": "置信度不足，跳过自动提案",
+                    "analysis": analysis,
+                }
     except Exception as e:
-        return {"success": False, "error": str(e), "message": "Evolution engine 不可用，请确认服务是否启动 (端口 18089)"}
+        return {"success": False, "error": str(e), "message": "Evolution engine 分析失败"}

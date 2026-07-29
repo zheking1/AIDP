@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<div x-data="{showSkillModal: false, showRuleModal: false, skillSearch: '', ruleSearch: ''}">
+<div class="flex justify-between items-center mb-4">
+  <h2 class="text-xl font-bold">{{ project.name }}</h2>
+  <div class="space-x-2">
+    <a href="/projects/{{ project.id }}/edit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm">{{ _('Edit') }}</a>
+    {% if not project.config or not project.config.get('is_default') %}
+    <form method="POST" action="/projects/{{ project.id }}/delete" class="inline" onsubmit="return confirm('{{ _('Delete this project? Skills and rules will be unlinked.') }}')">
+      <button type="submit" class="bg-red-700 hover:bg-red-800 px-4 py-2 rounded text-sm">{{ _('Delete') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4">
+  <p class="text-sm text-gray-400">{{ project.description or _('No description') }}</p>
+</div>
+
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <!-- Skills -->
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="text-sm font-bold text-gray-400">{{ _('Skills') }} ({{ skills|length }})</h3>
+      <button @click="showSkillModal = true" class="text-xs bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded">{{ _('Add Skill') }}</button>
+    </div>
+    <ul class="space-y-1 text-sm max-h-64 overflow-y-auto">
+      {% for s in skills %}
+      <li class="flex justify-between items-center bg-gray-700 rounded px-2 py-1">
+        <a href="/skills/{{ s.id }}" class="text-indigo-400 hover:underline flex-1">{{ s.name }}</a>
+        <form method="POST" action="/projects/{{ project.id }}/skills/{{ s.id }}/unlink" class="inline" onsubmit="return confirm('{{ _('Unlink this skill from project?') }}')">
+          <button type="submit" class="text-xs text-red-400 hover:text-red-300">{{ _('Unlink') }}</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="text-gray-500">{{ _('No skills') }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Rules -->
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="text-sm font-bold text-gray-400">{{ _('Rules') }} ({{ rules|length }})</h3>
+      <button @click="showRuleModal = true" class="text-xs bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded">{{ _('Add Rule') }}</button>
+    </div>
+    <ul class="space-y-1 text-sm max-h-64 overflow-y-auto">
+      {% for r in rules %}
+      <li class="flex justify-between items-center bg-gray-700 rounded px-2 py-1">
+        <a href="/rules/{{ r.id }}" class="text-indigo-400 hover:underline flex-1">{{ r.name }}</a>
+        <form method="POST" action="/projects/{{ project.id }}/rules/{{ r.id }}/unlink" class="inline" onsubmit="return confirm('{{ _('Unlink this rule from project?') }}')">
+          <button type="submit" class="text-xs text-red-400 hover:text-red-300">{{ _('Unlink') }}</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="text-gray-500">{{ _('No rules') }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<!-- Skill Link Modal -->
+<div x-show="showSkillModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showSkillModal = false" style="display:none">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+    <h3 class="text-lg font-bold mb-4">{{ _('Link Skill to Project') }}</h3>
+    <form method="POST" action="/projects/{{ project.id }}/skills/link" class="space-y-3">
+      <div x-data="{q: ''}">
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Select Skill') }}</label>
+        <input type="text" x-model="q" placeholder="{{ _('Search skills...') }}" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 mb-1 text-sm">
+        <select name="skill_id" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" required size="6">
+          <option value="">{{ _('Select a skill') }}</option>
+          {% for s in available_skills %}
+          <option value="{{ s.id }}" x-show="!q || '{{ s.name }}'.toLowerCase().includes(q.toLowerCase()) || '{{ s.tags|join(", ") }}'.toLowerCase().includes(q.toLowerCase())">{{ s.name }} ({{ s.tags|join(', ') }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="showSkillModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Link') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rule Link Modal -->
+<div x-show="showRuleModal" x-transition class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.outside="showRuleModal = false" style="display:none">
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md mx-4" @click.outside.stop>
+    <h3 class="text-lg font-bold mb-4">{{ _('Link Rule to Project') }}</h3>
+    <form method="POST" action="/projects/{{ project.id }}/rules/link" class="space-y-3">
+      <div x-data="{q: ''}">
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Select Rule') }}</label>
+        <input type="text" x-model="q" placeholder="{{ _('Search rules...') }}" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 mb-1 text-sm">
+        <select name="rule_id" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" required size="6">
+          <option value="">{{ _('Select a rule') }}</option>
+          {% for r in available_rules %}
+          <option value="{{ r.id }}" x-show="!q || '{{ r.name }}'.toLowerCase().includes(q.toLowerCase())">{{ r.name }} ({{ _('priority') }}: {{ r.priority }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="showRuleModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">{{ _('Cancel') }}</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded">{{ _('Link') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="text-xs text-gray-500">{{ _('Created') }}: {{ project.created_at[:16] if project.created_at else '' }}</div>
+</div>
+{% endblock %}

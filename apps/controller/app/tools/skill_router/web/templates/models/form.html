@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'zh' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if model %}{{ _('Edit: %(name)s') | format(name=model.name) }}{% else %}{{ _('Add Model') }}{% endif %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div class="flex justify-end gap-2 p-4">
+    <a href="/lang/en" class="text-xs px-2 py-1 rounded {% if lang == 'en' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">EN</a>
+    <a href="/lang/zh" class="text-xs px-2 py-1 rounded {% if lang == 'zh' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white{% endif %}">中</a>
+  </div>
+  <div class="p-6">
+    <a href="/models" class="text-indigo-400 hover:underline text-sm">← {{ _('Back') }}</a>
+    <h2 class="text-xl font-bold mt-4 mb-4">{% if model %}{{ _('Edit: %(name)s') | format(name=model.name) }}{% else %}{{ _('Add LLM Model') }}{% endif %}</h2>
+    <form method="post" class="max-w-2xl space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Name') }}</label>
+        <input type="text" name="name" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ model.name if model else '' }}" placeholder="{{ _('My LLM') }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Endpoint') }}</label>
+        <input type="text" name="endpoint" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ model.endpoint if model else '' }}" placeholder="{{ _('http://localhost:8000/v1') }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('API Key') }}</label>
+        <input type="password" name="api_key" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ model.api_key if model else '' }}" placeholder="{{ _('sk-xxx') }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Model Name') }}</label>
+        <input type="text" name="model_name" required class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2" value="{{ model.model_name if model else '' }}" placeholder="{{ _('deepseek-v4-flash-free') }}">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ _('Role') }}</label>
+        <select name="role" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+          <option value="Intent Analyzer" {% if model and model.role == 'Intent Analyzer' %}selected{% endif %}>{{ _('Intent Analyzer') }}</option>
+          <option value="Embedding" {% if model and model.role == 'Embedding' %}selected{% endif %}>{{ _('Embedding') }}</option>
+          <option value="Review" {% if model and model.role == 'Review' %}selected{% endif %}>{{ _('Review') }}</option>
+          <option value="Ranker" {% if model and model.role == 'Ranker' %}selected{% endif %}>{{ _('Ranker') }}</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" name="is_default" value="true" id="is_default" {% if model and model.is_default %}checked{% endif %}>
+        <label for="is_default" class="text-sm">{{ _('Set as default for this role') }}</label>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Temperature') }}</label>
+          <input type="number" name="temperature" step="0.1" value="{{ model.temperature if model else '0.7' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Max Tokens') }}</label>
+          <input type="number" name="max_tokens" value="{{ model.max_tokens if model else '2048' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _('Timeout (s)') }}</label>
+          <input type="number" name="timeout_secs" value="{{ model.timeout_secs if model else '30' }}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+        </div>
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded">{{ _('Save') }}</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Evolutions') }}{% endblock %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">{{ _('Evolutions') }}</h2>
+<div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-700 text-gray-300">
+      <tr><th class="text-left px-4 py-3">{{ _('Target') }}</th><th class="text-left px-4 py-3">{{ _('Type') }}</th><th class="text-left px-4 py-3">{{ _('Summary') }}</th><th class="text-left px-4 py-3">{{ _('Status') }}</th><th class="text-left px-4 py-3">{{ _('Date') }}</th></tr>
+    </thead>
+    <tbody class="divide-y divide-gray-700">
+      {% for e in evolutions %}
+      <tr class="hover:bg-gray-750">
+        <td class="px-4 py-3">{{ e.target_name }}</td>
+        <td class="px-4 py-3">{{ e.target_type }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ e.diff_summary or '-' }}</td>
+        <td class="px-4 py-3">{{ e.status }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ e.created_at[:10] if e.created_at else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not evolutions %}<div class="text-center text-gray-500 py-8">{{ _('No evolutions yet.') }}</div>{% endif %}
+</div>
+{% endblock %}

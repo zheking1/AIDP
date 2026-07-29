@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}搜索资产{% endblock %}
+{% block content %}
+<div x-data="searchTest()">
+    <h1 class="text-xl font-bold mb-4">搜索资产</h1>
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <form @submit.prevent="search()">
+            <div class="flex gap-3 items-end">
+                <div class="flex-1">
+                    <input x-model="query" type="text" required class="w-full border rounded px-3 py-2 text-sm" placeholder="输入搜索关键词...">
+                </div>
+                <div>
+                    <select x-model="asset_type" class="border rounded px-2 py-2 text-sm">
+                        <option value="">全部类型</option>
+                        <option value="snippet">代码片段</option>
+                        <option value="config">配置</option>
+                        <option value="pattern">模式</option>
+                    </select>
+                </div>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded text-sm">搜索</button>
+            </div>
+        </form>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4" x-show="results.length > 0">
+        <h2 class="font-semibold mb-2">结果 (<span x-text="results.length"></span>)</h2>
+        <div class="space-y-3">
+            <template x-for="(item, idx) in results" :key="idx">
+                <div class="border rounded p-3">
+                    <div class="flex justify-between mb-2">
+                        <a :href="'/assets/' + item.id" class="font-medium text-blue-600 hover:underline" x-text="item.title"></a>
+                        <span class="text-xs text-gray-500" x-text="'Score: ' + item.score.toFixed(3)"></span>
+                    </div>
+                    <pre class="text-xs bg-gray-50 p-2 rounded max-h-32 overflow-auto" x-text="item.content.substring(0, 300)"></pre>
+                    <div class="mt-2 text-xs text-gray-500" x-text="item.asset_type + (item.language ? ' · ' + item.language : '')"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+    <div x-show="searched && results.length === 0" class="text-center text-gray-400 py-8">未找到匹配结果</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function searchTest() {
+    return {
+        query: '', asset_type: '', results: [], searched: false,
+        async search() {
+            this.searched = true;
+            const body = { query: this.query, top_k: 10 };
+            if (this.asset_type) body.asset_type = this.asset_type;
+            const resp = await fetch('/api/assets/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await resp.json();
+            this.results = data.items || [];
+        }
+    };
+}
+</script>
+{% endblock %}

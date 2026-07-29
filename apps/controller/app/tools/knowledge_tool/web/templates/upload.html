@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}上传文档{% endblock %}
+{% block content %}
+<div x-data="uploadForm()" x-init="init()">
+    <div class="flex items-center space-x-3 mb-4">
+        <a href="/documents" class="text-gray-500 hover:text-blue-600">← 返回</a>
+        <h1 class="text-xl font-bold">上传文档</h1>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
+        <form @submit.prevent="submit()">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Workspace ID <span class="text-red-500">*</span></label>
+                    <input x-model="form.workspace_id" type="text" required
+                           class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="e.g. my-project">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Project ID</label>
+                    <input x-model="form.project_id" type="text"
+                           class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">标题 <span class="text-red-500">*</span></label>
+                    <input x-model="form.title" type="text" required
+                           class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">类型</label>
+                    <select x-model="form.doc_type" class="w-full border rounded px-3 py-2 text-sm">
+                        <option value="markdown">Markdown</option>
+                        <option value="plain">Plain Text</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">内容 <span class="text-red-500">*</span></label>
+                    <textarea x-model="form.content" required rows="15"
+                              class="w-full border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="粘贴文档内容..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tags (逗号分隔)</label>
+                    <input x-model="form.tags" type="text"
+                           class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="e.g. api,guide,v1">
+                </div>
+                <div class="flex space-x-3">
+                    <button type="submit" :disabled="loading"
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">
+                        <span x-show="!loading">创建并索引</span>
+                        <span x-show="loading">处理中...</span>
+                    </button>
+                    <a href="/documents" class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded text-sm">取消</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function uploadForm() {
+    return {
+        loading: false,
+        form: {
+            workspace_id: '', project_id: '', title: '',
+            doc_type: 'markdown', content: '', tags: ''
+        },
+        init() {},
+        async submit() {
+            this.loading = true;
+            try {
+                const body = {
+                    workspace_id: this.form.workspace_id,
+                    project_id: this.form.project_id || undefined,
+                    title: this.form.title,
+                    doc_type: this.form.doc_type,
+                    content: this.form.content,
+                    tags: this.form.tags ? this.form.tags.split(',').map(t => t.trim()) : []
+                };
+                const resp = await fetch('/api/documents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (resp.ok) {
+                    const doc = await resp.json();
+                    // Auto index
+                    await fetch('/api/documents/' + doc.id + '/index', { method: 'POST' });
+                    window.location.href = '/documents/' + doc.id;
+                } else {
+                    const err = await resp.json();
+                    alert('创建失败: ' + (err.detail || '未知错误'));
+                }
+            } catch (e) {
+                alert('错误: ' + e.message);
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

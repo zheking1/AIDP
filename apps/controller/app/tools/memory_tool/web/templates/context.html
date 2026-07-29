@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% block title %}上下文包 - Memory Tool{% endblock %}
+
+{% block content %}
+<div x-data="contextBuilder()" x-init="init()" class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-800">📦 上下文包</h1>
+        <button @click="showBuilder = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <span>+</span>
+            <span>新建包</span>
+        </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-blue-600" x-text="stats.total || 0"></div>
+            <div class="text-sm text-gray-500">总包数</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-green-600" x-text="stats.templates || 0"></div>
+            <div class="text-sm text-gray-500">模板</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-2xl font-bold text-purple-600" x-text="stats.total_usage || 0"></div>
+            <div class="text-sm text-gray-500">使用次数</div>
+        </div>
+    </div>
+
+    <!-- Package List -->
+    <div class="bg-white rounded-lg shadow">
+        <div x-show="loading" class="p-8 text-center text-gray-500">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            加载中...
+        </div>
+
+        <div x-show="!loading && packages.length === 0" class="p-8 text-center text-gray-500">
+            <div class="text-4xl mb-2">📦</div>
+            <p>暂无上下文包，点击"新建包"创建</p>
+        </div>
+
+        <div x-show="!loading && packages.length > 0" class="divide-y">
+            <template x-for="pkg in packages" :key="pkg.id">
+                <div class="p-4 hover:bg-gray-50 transition-colors cursor-pointer" @click="viewPackage(pkg)">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="font-semibold text-gray-800" x-text="pkg.name"></h3>
+                                <span x-show="pkg.is_template" class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">模板</span>
+                            </div>
+                            <p class="text-sm text-gray-500 line-clamp-1" x-text="pkg.description || '无描述'"></p>
+                            <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                <span x-show="pkg.project" x-text="'项目: ' + pkg.project"></span>
+                                <span x-text="'记忆: ' + pkg.memory_count"></span>
+                                <span x-text="'Token: ' + pkg.total_tokens"></span>
+                                <span x-text="'使用: ' + pkg.usage_count + '次'"></span>
+                                <span x-text="formatDate(pkg.created_at)"></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 ml-4">
+                            <button @click.stop="copyContext(pkg.id)" class="p-2 text-blue-600 hover:bg-blue-50 rounded" title="复制上下文">
+                                📋
+                            </button>
+                            <button @click.stop="deletePackage(pkg.id)" class="p-2 text-red-600 hover:bg-red-50 rounded">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Builder Modal -->
+    <div x-show="showBuilder" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b flex items-center justify-between sticky top-0 bg-white">
+                <h2 class="text-xl font-bold">构建上下文包</h2>
+                <button @click="showBuilder = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Step 1: Basic Info -->
+                <div>
+                    <h3 class="font-medium text-gray-700 mb-3">1. 基本信息</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">名称 *</label>
+                            <input x-model="newPackage.name" type="text" 
+                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                   placeholder="例如：API设计上下文">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                            <textarea x-model="newPackage.description" rows="2" 
+                                      class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                      placeholder="描述这个上下文包的用途..."></textarea>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">项目</label>
+                                <input x-model="newPackage.project" type="text" 
+                                       class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex items-center mt-6">
+                                <input x-model="newPackage.is_template" type="checkbox" id="is_template" class="mr-2">
+                                <label for="is_template" class="text-sm text-gray-700">保存为模板</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Select Memories -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-medium text-gray-700">2. 选择记忆</h3>
+                        <span class="text-sm text-gray-500">
+                            已选择 <span x-text="selectedMemories.length" class="font-semibold text-blue-600"></span> 个
+                        </span>
+                    </div>
+                    
+                    <!-- Search -->
+                    <div class="flex gap-2 mb-3">
+                        <input x-model="memorySearch" @keyup.enter="searchMemories()" 
+                               type="text" placeholder="搜索记忆..." 
+                               class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <button @click="searchMemories()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                            搜索
+                        </button>
+                    </div>
+                    
+                    <!-- Memory List -->
+                    <div class="border rounded-lg max-h-64 overflow-y-auto">
+                        <div x-show="searchResults.length === 0" class="p-4 text-center text-gray-500 text-sm">
+                            搜索记忆并选择
+                        </div>
+                        <template x-for="memory in searchResults" :key="memory.id">
+                            <div class="p-3 border-b last:border-b-0 hover:bg-gray-50 flex items-center gap-3">
+                                <input type="checkbox" 
+                                       :value="memory.id" 
+                                       x-model="selectedMemories"
+                                       class="rounded">
+                                <div class="flex-1">
+                                    <div class="font-medium text-sm" x-text="memory.title"></div>
+                                    <div class="text-xs text-gray-500" x-text="memory.content_preview?.substring(0, 80) + '...'"></div>
+                                </div>
+                                <span class="px-2 py-0.5 rounded text-xs" 
+                                      :class="getCategoryClass(memory.category)"
+                                      x-text="getCategoryLabel(memory.category)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Step 3: Configuration -->
+                <div>
+                    <h3 class="font-medium text-gray-700 mb-3">3. 配置</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">最大 Token</label>
+                            <select x-model="config.max_tokens" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="1000">1000</option>
+                                <option value="2000">2000</option>
+                                <option value="4000">4000</option>
+                                <option value="8000">8000</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">格式</label>
+                            <select x-model="config.format" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="markdown">Markdown</option>
+                                <option value="json">JSON</option>
+                                <option value="xml">XML</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <input x-model="config.include_summaries" type="checkbox" id="include_summaries" class="mr-2">
+                        <label for="include_summaries" class="text-sm text-gray-700">包含完整内容摘要</label>
+                    </div>
+                </div>
+
+                <!-- Preview -->
+                <div x-show="preview">
+                    <h3 class="font-medium text-gray-700 mb-3">预览</h3>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-500 mb-2">
+                            Token 估算: <span x-text="preview?.total_tokens || 0"></span>
+                        </div>
+                        <pre class="text-xs bg-gray-800 text-gray-100 p-3 rounded overflow-x-auto max-h-48 overflow-y-auto" x-text="preview?.context?.substring(0, 500) + '...'"></pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
+                <button @click="showBuilder = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                    取消
+                </button>
+                <button @click="generatePreview()" 
+                        :disabled="selectedMemories.length === 0"
+                        :class="selectedMemories.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                    预览
+                </button>
+                <button @click="createPackage()" 
+                        :disabled="!canCreate"
+                        :class="!canCreate ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    创建
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div x-show="viewingPackage" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b flex items-center justify-between sticky top-0 bg-white">
+                <div>
+                    <h2 class="text-xl font-bold" x-text="viewingPackage?.name"></h2>
+                    <p class="text-sm text-gray-500" x-text="viewingPackage?.description"></p>
+                </div>
+                <button @click="viewingPackage = null" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center gap-4 mb-4 text-sm text-gray-500">
+                    <span x-show="viewingPackage?.project" x-text="'项目: ' + viewingPackage?.project"></span>
+                    <span x-text="'Token: ' + (viewingPackage?.total_tokens || 0)"></span>
+                    <span x-text="'使用: ' + (viewingPackage?.usage_count || 0) + '次'"></span>
+                </div>
+                <textarea x-show="viewingPackage?.generated_context" 
+                          x-text="viewingPackage?.generated_context" 
+                          readonly
+                          class="w-full h-96 p-4 bg-gray-50 rounded-lg text-sm font-mono resize-none"></textarea>
+                <div x-show="!viewingPackage?.generated_context" class="p-8 text-center text-gray-500">
+                    无生成的上下文
+                </div>
+            </div>
+            <div class="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
+                <button @click="copyToClipboard(viewingPackage?.generated_context)" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    复制到剪贴板
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function contextBuilder() {
+    return {
+        packages: [],
+        loading: true,
+        stats: {},
+        showBuilder: false,
+        viewingPackage: null,
+        
+        // New package form
+        newPackage: {
+            name: '',
+            description: '',
+            project: '',
+            is_template: false,
+        },
+        
+        // Memory selection
+        memorySearch: '',
+        searchResults: [],
+        selectedMemories: [],
+        
+        // Config
+        config: {
+            max_tokens: 2000,
+            format: 'markdown',
+            include_summaries: true,
+        },
+        
+        // Preview
+        preview: null,
+        
+        get canCreate() {
+            return this.newPackage.name && this.selectedMemories.length > 0;
+        },
+
+        async init() {
+            await this.loadPackages();
+            await this.loadStats();
+        },
+
+        async loadPackages() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/api/context-packages');
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.packages = data.data?.items || [];
+                }
+            } catch (e) {
+                console.error('Failed to load packages:', e);
+            }
+            this.loading = false;
+        },
+
+        async loadStats() {
+            // Calculate stats from packages
+            const total = this.packages.length;
+            const templates = this.packages.filter(p => p.is_template).length;
+            const totalUsage = this.packages.reduce((sum, p) => sum + (p.usage_count || 0), 0);
+            
+            this.stats = { total, templates, total_usage: totalUsage };
+        },
+
+        async searchMemories() {
+            if (!this.memorySearch) return;
+            
+            try {
+                const params = new URLSearchParams();
+                params.append('search', this.memorySearch);
+                params.append('page_size', '20');
+                
+                const resp = await fetch(`/api/memories?${params}`);
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.searchResults = data.data?.items || [];
+                }
+            } catch (e) {
+                console.error('Failed to search memories:', e);
+            }
+        },
+
+        async generatePreview() {
+            try {
+                const resp = await fetch('/api/context-packages/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        memory_ids: this.selectedMemories,
+                        max_tokens: parseInt(this.config.max_tokens),
+                        include_summaries: this.config.include_summaries,
+                        format: this.config.format,
+                    }),
+                });
+                
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.preview = data.data;
+                }
+            } catch (e) {
+                alert('预览生成失败: ' + e.message);
+            }
+        },
+
+        async createPackage() {
+            try {
+                const resp = await fetch('/api/context-packages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...this.newPackage,
+                        memory_ids: this.selectedMemories,
+                    }),
+                });
+                
+                const data = await resp.json();
+                if (data.success !== false) {
+                    this.showBuilder = false;
+                    this.resetBuilder();
+                    await this.loadPackages();
+                    await this.loadStats();
+                } else {
+                    alert('创建失败: ' + (data.message || '未知错误'));
+                }
+            } catch (e) {
+                alert('创建出错: ' + e.message);
+            }
+        },
+
+        resetBuilder() {
+            this.newPackage = { name: '', description: '', project: '', is_template: false };
+            this.selectedMemories = [];
+            this.searchResults = [];
+            this.memorySearch = '';
+            this.preview = null;
+        },
+
+        viewPackage(pkg) {
+            this.viewingPackage = pkg;
+        },
+
+        async copyContext(packageId) {
+            try {
+                const resp = await fetch(`/api/context-packages/${packageId}`);
+                const data = await resp.json();
+                if (data.success !== false && data.data?.generated_context) {
+                    await this.copyToClipboard(data.data.generated_context);
+                    alert('已复制到剪贴板');
+                }
+            } catch (e) {
+                alert('复制失败: ' + e.message);
+            }
+        },
+
+        async copyToClipboard(text) {
+            if (!text) return;
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (e) {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+        },
+
+        async deletePackage(id) {
+            if (!confirm('确定要删除这个上下文包吗？')) return;
+            
+            try {
+                const resp = await fetch(`/api/context-packages/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success !== false) {
+                    await this.loadPackages();
+                    await this.loadStats();
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
+        },
+
+        getCategoryClass(category) {
+            const map = {
+                'architecture': 'bg-blue-100 text-blue-700',
+                'decision': 'bg-green-100 text-green-700',
+                'pattern': 'bg-amber-100 text-amber-700',
+                'issue': 'bg-red-100 text-red-700',
+                'bug': 'bg-red-100 text-red-800',
+            };
+            return map[category] || 'bg-gray-100 text-gray-700';
+        },
+
+        getCategoryLabel(category) {
+            const map = {
+                'architecture': '架构',
+                'decision': '决策',
+                'pattern': '模式',
+                'issue': '问题',
+                'bug': 'Bug',
+            };
+            return map[category] || category;
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('zh-CN');
+        },
+    };
+}
+</script>
+{% endblock %}
