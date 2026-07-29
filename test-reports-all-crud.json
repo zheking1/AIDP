@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-29T16:28:57.723Z",
+  "timestamp": "2026-07-29T16:57:01.583Z",
   "testSuite": "全量CRUD测试",
   "summary": {
     "total": 64,
@@ -17,7 +17,7 @@
       "page": "技能",
       "name": "读取API",
       "passed": true,
-      "detail": "name=技能测试-1785342535985"
+      "detail": "name=技能测试-1785344219910"
     },
     {
       "page": "技能",
@@ -29,7 +29,7 @@
       "page": "技能",
       "name": "列表API",
       "passed": true,
-      "detail": "items=2"
+      "detail": "items=1"
     },
     {
       "page": "技能",
@@ -47,7 +47,7 @@
       "page": "知识库",
       "name": "列表API",
       "passed": true,
-      "detail": "items=25"
+      "detail": "items=1"
     },
     {
       "page": "知识库",
@@ -89,7 +89,7 @@
       "page": "记忆",
       "name": "列表API",
       "passed": true,
-      "detail": "items=3"
+      "detail": "items=1"
     },
     {
       "page": "记忆",
@@ -131,7 +131,7 @@
       "page": "项目",
       "name": "读取API",
       "passed": true,
-      "detail": "name=项目测试-1785342536571"
+      "detail": "name=项目测试-1785344220480"
     },
     {
       "page": "项目",
@@ -143,7 +143,7 @@
       "page": "项目",
       "name": "列表API",
       "passed": true,
-      "detail": "items=5"
+      "detail": "items=1"
     },
     {
       "page": "项目",
@@ -167,7 +167,7 @@
       "page": "个人规则",
       "name": "列表API",
       "passed": true,
-      "detail": "items=2"
+      "detail": "items=1"
     },
     {
       "page": "个人规则",
@@ -191,7 +191,7 @@
       "page": "个人技能",
       "name": "列表API",
       "passed": true,
-      "detail": "items=2"
+      "detail": "items=1"
     },
     {
       "page": "个人技能",
@@ -215,7 +215,7 @@
       "page": "全局规则",
       "name": "列表API",
       "passed": true,
-      "detail": "items=24"
+      "detail": "items=1"
     },
     {
       "page": "全局规则",
@@ -239,7 +239,7 @@
       "page": "流程",
       "name": "列表API",
       "passed": true,
-      "detail": "items=2"
+      "detail": "items=1"
     },
     {
       "page": "流程",
@@ -257,19 +257,19 @@
       "page": "资产",
       "name": "读取API",
       "passed": true,
-      "detail": "title=资产测试-1785342537186"
+      "detail": "title=资产测试-1785344221015"
     },
     {
       "page": "资产",
       "name": "列表API",
       "passed": true,
-      "detail": "items=3"
+      "detail": "items=1"
     },
     {
       "page": "资产",
       "name": "统计API",
       "passed": true,
-      "detail": "total=3"
+      "detail": "total=1"
     },
     {
       "page": "资产",
@@ -335,13 +335,13 @@
       "page": "进化",
       "name": "列表API",
       "passed": true,
-      "detail": "items=12"
+      "detail": "items=2"
     },
     {
       "page": "进化",
       "name": "统计API",
       "passed": true,
-      "detail": "total=18"
+      "detail": "total=2"
     },
     {
       "page": "进化",
@@ -365,7 +365,7 @@
       "page": "指令",
       "name": "列表API",
       "passed": true,
-      "detail": "items=4"
+      "detail": "items=1"
     },
     {
       "page": "指令",
@@ -389,7 +389,7 @@
       "page": "质量检查",
       "name": "历史API",
       "passed": true,
-      "detail": "items=10"
+      "detail": "items=2"
     }
   ]
 }
