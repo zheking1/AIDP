@@ -2,147 +2,162 @@
 
 ## 什么是 AIDP
 
-AIDP (AI DevOps Platform) 是一个私有化 AI 编程基础设施平台。它为开发者和 AI Agent 提供统一的项目管理、知识检索、代码执行、质量检查等能力，通过标准化 MCP (Model Context Protocol) 协议对外暴露服务。
+AIDP (AI DevOps Platform) 是一个私有化 AI 编程基础设施平台。它通过标准 MCP 协议为 AI Agent 提供项目上下文、知识检索、代码索引、质量检查等能力，由一个统一的 Controller 服务承载所有功能。
 
-仓库地址: `https://github.com/zheking1/AIDP`
+## 设计理念
 
-## 解决什么问题
+```
+单一入口，全部能力
 
-传统开发流程中，AI Agent 和开发者面临以下痛点:
+  AI Agent → MCP → Controller (:8883)
+                         │
+                         ├─ 5 阶段上下文管线 (aidp_context)
+                         ├─ 15 个模块 (知识/记忆/技能/规则/Agent/流程...)
+                         ├─ 13 个 MCP 工具
+                         ├─ 统一模型管理 (8 个 LLM)
+                         ├─ 用户/项目绑定 + 会话认证
+                         ├─ Evolution 两级进化系统
+                         └─ 三层文件索引系统
+                         
+  外部独立工具 (剩余 1 个):
+    └─ file-watcher (:18091) — 本地文件监控守护进程
+```
 
-| 痛点 | AIDP 的解决方案 |
-|------|---------------|
-| **知识碎片化** - 项目文档、代码结构、历史经验散落在不同系统 | **统一知识管理** - 知识库、记忆库、代码索引一体化检索 |
-| **工具孤岛** - 代码执行、质量检查、技能路由各自独立 | **多工具架构** - 通过 Controller 统一编排 12+ 个专业工具 |
-| **上下文不足** - AI Agent 缺乏项目背景和约束信息 | **5 阶段上下文管线** - 自动分析意图、检索知识、匹配技能 |
-| **重复劳动** - 每次开发都要重新加载项目信息 | **项目初始化** - 一键扫描技术栈、导入文档、建立索引 |
-| **缺乏标准化** - 不同 AI 工具使用不同接口 | **MCP 协议** - 基于 FastMCP 的标准化工具调用接口 |
+## 核心架构
 
-## 谁在使用
-
-- **AI Agent / AI 编程助手**: 通过 MCP 协议调用 AIDP 的工具能力，获取项目上下文、执行代码、检索知识
-- **开发团队**: 通过 Web UI 管理项目、知识库、记忆、技能、规则等
-- **平台管理员**: 管理用户、权限、工具注册、模型配置、审计日志
-
-## 核心功能
-
-### 1. 多工具架构
-
-AIDP 采用 Controller + N 个可选工具的松耦合架构。Controller 负责统一的工具注册、健康检查、调用编排，各工具独立部署和扩展。
-
-| 工具 | 端口 | 职责 |
+| 层级 | 组件 | 说明 |
 |------|------|------|
-| **controller** | `8883` | 主控服务 - 工具注册/编排、MCP 暴露、权限审计、Web UI |
-| **skill-router** | `8788` | 技能路由引擎 - 意图分析、技能匹配、语义搜索 |
-| **knowledge-tool** | `18081` | 文档知识库 - 文档导入、分块、向量检索 |
-| **asset-tool** | `18082` | 代码资产管理 - 代码片段、模板存储和检索 |
-| **sandbox-tool** | `18083` | 代码沙箱 - 安全的代码执行环境 |
-| **quality-tool** | `18084` | 质量检查 - 代码规范、安全检查 |
-| **memory-tool** | `18085` | 项目记忆 - 开发经验、bug 修复记录、架构决策 |
-| **code-index** | `18086` | 代码索引 - AST 解析、符号搜索、调用链追踪 |
-| **doc-index** | `18087` | 文档索引 - 文档结构化解析和索引 |
-| **context-optimizer** | `18088` | 上下文优化 - 多工具结果去重、排序、Token 预算管理 |
-| **evolution-engine** | `18089` | 自演进引擎 - 分析工具调用结果、自动化技能和规则更新 |
-| **project-importer** | `18090` | 项目导入器 - 一键导入项目(扫描、索引、创建记忆) |
-| **file-watcher** | `18091` | 文件监听 - 监控项目文件变更，自动触发重新索引 |
+| **入口层** | MCP Server + Web UI | AI Agent 通过 MCP 协议调用，开发者通过浏览器管理 |
+| **管线层** | 5 阶段上下文管线 | 指令加载 → 意图分析 → 知识检索 → 技能匹配 → 上下文组装 |
+| **模块层** | 15 个功能模块 | 知识库、记忆、技能、规则、Agent、流程、沙箱、质量、资产、进化等 |
+| **数据层** | PostgreSQL | 所有模块共享同一数据库，统一事务和查询 |
 
-### 2. MCP 协议
+## 功能模块
 
-AIDP Controller 通过 FastMCP 对外暴露标准化的 MCP Server (`apps/controller/app/mcp/server.py`)，AI Agent 通过 MCP Client 连接即可调用所有工具能力。
+### 知识管理 (4 个模块)
 
-核心 MCP 工具:
-- `aidp_context` - 5 阶段上下文管线(必须先调用)
-- `invoke_tool_mcp` - 通用工具调用器
-- `list_registered_tools` - 查看可用工具
-- `check_tool_health` - 健康检查
-- `aidp_init` - 项目初始化
-- `aidp_instructions` - 生成 Subagent 指令
-- `manage_models` - 模型管理
+| 模块 | 说明 | 数据隔离 |
+|------|------|:---:|
+| **knowledge** | 知识库、文档管理、分块索引、搜索 | 用户/项目/可见性三级 |
+| **memory** | 项目记忆、经验沉淀、图谱可视化 | 项目级 |
+| **skills** | 技能库、意图匹配、语义搜索 | global/personal/project |
+| **rules** | 编码规范、安全规则、审查流程 | global/personal/project |
 
-### 3. 5 阶段上下文管线
+### 开发工具 (3 个模块)
 
-`aidp_context` 在每次开发任务前自动执行 (`apps/controller/app/services/context_pipeline.py:62`):
+| 模块 | 说明 |
+|------|------|
+| **sandbox** | 代码沙箱 — 安全的 Python/Bash 执行环境 |
+| **quality** | 质量检查 — 代码规范、安全漏洞、硬编码密钥检测 |
+| **assets** | 代码资产 — 代码片段、模板存储和检索 |
+
+### 编排管理 (4 个模块)
+
+| 模块 | 说明 |
+|------|------|
+| **agents** | Agent 管理 — 组合 Instructions/Skills/Rules/Knowledge |
+| **workflows** | 流程管理 — 多步骤多 Agent 协作流程 |
+| **evolution** | 进化系统 — 项目级经验 → 审核 → 系统级最佳实践 |
+| **instructions** | 指令模板 — 每个项目的 Agent 角色和约束 |
+
+### 文件索引 (3 层防御)
+
+| 层级 | 触发方式 | 可靠性 |
+|:---:|------|:---:|
+| Layer 1 | git post-commit hook | 最可靠 |
+| Layer 2 | Agent MCP `index_changes` | 最智能 |
+| Layer 3 | file_watcher.py (watchdog) | 最实时 |
+
+## 5 阶段上下文管线
+
+每次 `aidp_context()` 调用自动执行：
 
 ```
-Stage 0: 从数据库加载 Agent Instructions(角色定义、约束规则)
-Stage 1: 通过 skill-router 分析用户意图(识别所需工具、查询词)
-Stage 2: 从 memory/knowledge/asset 并行检索知识
-Stage 3: 技能匹配(自动选择最佳 skill)
-Stage 4: 上下文组装(输出精炼后的上下文)
+Stage 0: 加载项目 Agent Instructions (角色、约束、规则)
+Stage 1: 意图分析 (识别领域、复杂度、需要的工具)
+Stage 2: 并行检索 (Memory → Knowledge → Asset)
+Stage 3: 技能匹配 (从 SkillRouter 获取最佳技能)
+Stage 4: 上下文组装 (Token 预算管理, 优先排序)
 ```
 
-### 4. 统一知识管理
+## MCP 工具 (13 个)
 
-- **knowledge-tool**: 支持 Markdown/代码文件导入，自动分块(`chunk_size=800, overlap=120`)，向量检索(`hybrid` 模式)
-- **memory-tool**: 项目级别的记忆存储，支持语义搜索和图谱关系
-- **code-index**: AST 级别的代码符号索引，支持符号搜索、调用链、影响分析
-- **doc-index**: 文档结构化索引(Markdown/HTML 解析)
-- **context-optimizer**: 多工具检索结果融合，Token 预算管理(`default_budget=8000`)
+### 核心工作流
 
-### 5. 项目初始化
+| 工具 | 作用 | 认证 |
+|------|------|:---:|
+| `aidp_context` | 加载项目上下文（必须先调用）| api_key |
+| `invoke_tool_mcp` | 调用任意已注册工具 | 需 context |
+| `index_changes` | 增量索引代码变更 + 模式分析 | session 绑定 |
 
-`project-importer` 提供一键导入功能:
-1. 扫描项目目录，识别语言(`Python/Java/TypeScript/Go/Rust`)
-2. 识别框架(`FastAPI/Spring Boot/React/Vue/Django/Flask`)
-3. 分析技术栈，自动获取官方文档
-4. 索引代码到 code-index
-5. 导入文档到 knowledge-tool
-6. 导入配置文件到 Controller
-7. 创建项目记忆
+### 项目初始化
 
-## 快速开始
+| 工具 | 作用 |
+|------|------|
+| `aidp_init` | 一键初始化项目（代码索引、文档导入、记忆创建）|
+| `install_local_scripts` | 生成本地 git hook + file_watcher 配置 |
+| `aidp_instructions` | 生成 Subagent 专用指令 |
 
-### 前置条件
+### 进化与知识沉淀
 
-- Python 3.13+
-- PostgreSQL 16+ (含 pgvector 扩展)
-- Redis 7+
-- Docker & Docker Compose
+| 工具 | 作用 |
+|------|------|
+| `promote_evolution` | 提交项目经验为系统级进化提案 |
+| `list_evolutions` | 查看系统级最佳实践 |
+| `analyze_and_evolve` | LLM 自动分析代码变更、提取模式 |
 
-### 部署步骤
+### 管理与监控
+
+| 工具 | 作用 |
+|------|------|
+| `list_registered_tools` | 查看所有可用工具 |
+| `check_tool_health` | 检查工具健康状态 |
+| `manage_models` | 统一管理 LLM 模型配置 |
+| `sync_tool_capabilities` | 同步工具能力定义 |
+
+## 统一模型管理
+
+所有 LLM 调用统一由 Controller 的模型管理页面配置：
+
+| 模型 | 用途 |
+|------|------|
+| GLM-5 / GLM-5.1 | 通用聊天 |
+| ERNIE 4.5 Turbo | 代码分析 |
+| DeepSeek V4 Flash / Pro / V3.2 | 多场景 |
+| BGE-M3 | 向量嵌入 |
+| BGE-Reranker V2-M3 | 检索重排 |
+
+## 部署
+
+### 当前部署（单容器）
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/zheking1/AIDP.git
-cd openCode
+# 唯一容器
+docker compose up -d controller
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件，设置数据库密码、LLM API Key 等
-
-# 3. 全量部署到 NAS
-powershell deploy/deploy-nas.ps1
-
-# 4. 验证服务
-curl http://localhost:8883/health
-```
-
-### 独立启动某一工具
-
-```bash
-# SkillRouter 独立启动
-cd tools/skill-router
-cp .env.example .env
-docker compose up -d
-
-# Code Index 独立启动
-cd tools/code-index
-docker compose up -d
+# 验证
+curl http://192.168.0.100:8883/health
 ```
 
 ### 接入 AI Agent
-
-在 AI Agent 的 MCP 配置中添加:
 
 ```json
 {
   "mcpServers": {
     "aidp": {
-      "url": "http://your-server:8883/mcp",
-      "transport": "streamable-http"
+      "url": "http://192.168.0.100:8883/mcp",
+      "transport": "streamable-http",
+      "headers": { "x-api-key": "your-api-key" }
     }
   }
 }
 ```
 
-Agent 连接后，首先调用 `aidp_context` 加载项目上下文，然后通过 `invoke_tool_mcp` 调用具体工具。
+## 文档导航
+
+| 目录 | 内容 |
+|------|------|
+| `01-platform/` | 平台架构、部署、认证、模型管理 |
+| `02-controller/` | Controller API、上下文管线、MCP 服务 |
+| `09-file-indexing/` | 三层文件索引系统 |
+| `plans/` | 开发计划文档 |
