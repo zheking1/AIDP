@@ -1,323 +1,319 @@
-# Agent 模块重构方案
+# Agent 模块重构方案 v2 — LLM 智能自动创建
 
-> **版本**: v1.0  
+> **版本**: v2.0  
 > **日期**: 2026-07-29  
 > **状态**: 规划中
 
 ---
 
-## 1. 现状分析
+## 1. 设计理念
 
-### 1.1 当前 Agent 模型
-
-```python
-class Agent(Base):
-    id, name, role, instructions
-    scope: global/personal/project
-    parent_agent_id, is_template
-    config, extra_data
-
-    # 多对多关联（冗余——管线自己会匹配）
-    skills           # ← Stage 3 SkillRouter 实时匹配, 不需要预先绑定
-    rules            # ← Stage 0 instructions 已包含, 不需要单独关联
-    knowledge_bases  # ← Stage 2 意图检索, 不需要预先绑定
-```
-
-### 1.2 问题
-
-| 问题 | 说明 |
-|------|------|
-| **三张关联表冗余** | skills/rules/knowledge 的绑定管线自己会动态检索, 静态绑定反而局限 |
-| **未被管线使用** | Agent 模块只在 `seed_data.py` 创建默认数据, 不被任何执行流程引用 |
-| **scope 默认 personal** | "后端开发助手"应该对所有项目可用, 不限于个人 |
-| **与 `agent_instructions` 表功能重叠** | 两张表都在存 role+instructions, 但只有 instructions 表被管线加载 |
-
-### 1.3 对比 `agent_instructions` 表
-
-| 字段 | Agent | agent_instructions | 谁被管线用 |
-|------|:---:|:---:|:---:|
-| role | ✅ | ✅ | agent_instructions |
-| instructions/constraints | ✅ | ✅ | agent_instructions |
-| 规则列表 | ❌ (关联表) | ✅ (JSON字段) | agent_instructions |
-| 作用域 | global/personal/project | project_id + agent_type | agent_instructions |
-
-`agent_instructions` 是 Stage 0 真正加载的表。Agent 可以做 UI 配置界面，但应该最终写入 `agent_instructions`。
-
----
-
-## 2. 重构目标
-
-### 2.1 Agent 的新角色
-
-Agent = 一个**领域专家身份模板**，用来告诉管线"这次任务是什么类型的"
+**不预置模板，不手动创建。** 项目初始化时，系统自动分析技术栈，用 LLM 生成专属 Agent。
 
 ```
-Agent "backend-dev":
+aidp_init(project_name, tech_stack, description)
   │
-  ├─ role: "你是一个FastAPI后端开发专家"
-  ├─ instructions: "遵循RESTful规范, 使用Pydantic验证, 
-  │                 错误统一处理, 数据库操作用SQLAlchemy async"
-  ├─ domain_tags: ["backend", "api", "database"]
-  └─ scope: global  (全平台可用)
-
-管线使用方式:
-  aidp_context(task="修复登录bug")
-  → Stage 1: intent.domains = ["auth", "backend"]
-  → Stage 0: 匹配 domain_tags → 选中 "backend-dev"
-  → 加载该 Agent 的 role + instructions
-  → 管线用"后端专家身份"运行
+  ├─ 全量索引 (现有)
+  │
+  ├─ 技术栈分析 (现有: tech_scan.py)
+  │
+  ├─ Step N: 智能 Agent 生成 ──────────────────────┐
+  │    │                                          │
+  │    └─→ LLM: "根据 FastAPI+PostgreSQL+React     │
+  │             生成 2-3 个领域专属 Agent"         │
+  │                                               │
+  │    ←─ LLM Response:                           │
+  │        [                                      │
+  │          {                                    │
+  │            "agent_key": "fastapi-backend",     │
+  │            "name": "FastAPI 后端专家",          │
+  │            "role": "...",                      │
+  │            "instructions": "1. 使用 async/await│
+  │              模式处理所有数据库操作...",         │
+  │            "domain_tags": ["backend","api",    │
+  │              "database"]                       │
+  │          },                                    │
+  │          {                                    │
+  │            "agent_key": "react-frontend",      │
+  │            "name": "React 18 前端专家",         │
+  │            ...                                 │
+  │          }                                     │
+  │        ]                                       │
+  │                                               │
+  └─ Step N+1: 保存到 aidp_agents 表 + sync       │
+               到 agent_instructions 表            │
+────────────────────────────────────────────────────
 ```
 
-### 2.2 不做什么
-
-- ❌ 不绑定 skills（管线动态匹配）
-- ❌ 不绑定 rules（instructions 里已经有规则）
-- ❌ 不绑定 knowledge_bases（管线按意图检索）
-- ❌ 不和现有 `agent_instructions` 表冲突（Agent 新增/编辑后写入该表）
-
----
-
-## 3. 详细设计
-
-### 3.1 数据模型（精简后）
+## 2. 数据模型（精简后）
 
 ```python
 class Agent(Base):
     __tablename__ = "aidp_agents"
 
-    id          = Column(String(36), primary_key=True)
-    name        = Column(String(200), nullable=False)     # "后端开发专家"
-    agent_key   = Column(String(100), unique=True)         # "backend-dev" (程序标识)
-    role        = Column(Text)                            # "你是一个FastAPI后端开发专家"
-    instructions = Column(Text)                           # 专用指令
-    domain_tags = Column(Text, default="[]")               # '["backend","api","database"]'
-    scope       = Column(String(20), default="global")     # global / personal / project
-    project_id  = Column(Integer, nullable=True)           # project scope 时使用
-    user_id     = Column(String(100), nullable=True)       # personal scope 时使用
-    is_active   = Column(Boolean, default=True)
-    is_template = Column(Boolean, default=False)           # 是否作为模板
-    sort_order  = Column(Integer, default=0)
-    config      = Column(Text, default="{}")              # 保留, 扩展用
+    id            = primary_key
+    name          = Column(String(200))          # "FastAPI 后端开发专家"
+    agent_key     = Column(String(100), unique)   # "fastapi-backend"
+    role          = Column(Text)                  # 一句话角色
+    instructions  = Column(Text)                  # 详细指令 (5-10条)
+    domain_tags   = Column(Text, default="[]")    # ["backend","api","database"]
+    
+    scope         = Column(String(20), default="project")  # project(自动创建)
+    project_id    = Column(Integer)               # 所属项目
+    user_id       = Column(String(100))           # 个人时使用
+    
+    source        = Column(String(20), default="auto")  # auto/manual
+    source_version = Column(String(20))            # 生成时记录技术栈摘要
+    
+    is_active     = Column(Boolean, default=True)
+    created_at, updated_at
 ```
-
-**删除**：
-- ❌ `parent_agent_id` — 模板体系不需要继承链
-- ❌ `extra_data` — 未使用的字段
-- ❌ `skills` 关联表 `aidp_agent_skills`
-- ❌ `rules` 关联表 `aidp_agent_rules`
-- ❌ `knowledge_bases` 关联表 `aidp_agent_knowledge`
 
 **删除的表**：
-- `aidp_agent_skills`
-- `aidp_agent_rules`
-- `aidp_agent_knowledge`
+- `aidp_agent_skills` ❌
+- `aidp_agent_rules` ❌  
+- `aidp_agent_knowledge` ❌
 
-### 3.2 domain_tags 设计
+**新增字段**：
+- `agent_key` — 程序标识, 如 "fastapi-backend"
+- `domain_tags` — 匹配 Stage 1 intent.domains
+- `source` — "auto"(LLM生成) / "manual"(手动创建)
+- `source_version` — 记录生成时的技术栈, 方便后续更新
+
+## 3. LLM Prompt 设计（核心）
 
 ```python
-# 支持的领域标签
-DOMAIN_TAGS = {
-    "backend":   "后端开发 (API, 数据库, 服务端逻辑)",
-    "frontend":  "前端开发 (UI, 组件, 交互)",
-    "fullstack": "全栈开发",
-    "testing":   "测试和调试",
-    "devops":    "部署和运维 (Docker, CI/CD)",
-    "database":  "数据库 (SQL, ORM, 迁移)",
-    "security":  "安全 (认证, 授权, 加密)",
-    "ai_ml":     "AI/ML (模型训练, 推理, 嵌入)",
-    "code_indexing":  "代码索引和搜索",
-    "documentation":   "文档编写和管理",
-    "general":   "通用开发助手"       # 默认值
-}
+AGENT_GENERATION_PROMPT = """你是一个开发配置专家。根据以下项目信息, 生成 2-3 个领域专属 Agent 配置。
+
+项目信息:
+  - 技术栈: {tech_stack}
+  - 描述: {description}  
+  - 架构概述: {architecture_summary}
+
+要求:
+1. 根据实际技术栈生成 Agent，不要生成项目不涉及的技术领域
+2. 每个 Agent 的 instructions 必须包含该技术栈版本相关的具体最佳实践
+3. 输出纯 JSON, 不要额外解释
+
+JSON 格式:
+[{{
+    "agent_key": "英文标识 (如 fastapi-backend)",
+    "name": "中文名称 (如 'FastAPI 后端开发专家')",
+    "role": "一句话角色定义",
+    "instructions": "5-10条最佳实践, 用\\n分隔, 要具体到技术栈版本",
+    "domain_tags": ["从 backend/frontend/fullstack/testing/devops/
+                      database/security/ai_ml/docs/code_indexing 中选择1-3个"]
+}}]
+
+示例 (输入: Python 3.13+FastAPI+PostgreSQL):
+[{{
+    "agent_key": "fastapi-backend",
+    "name": "FastAPI 后端开发专家",
+    "role": "精通 Python 3.13 + FastAPI + PostgreSQL 后端开发",
+    "instructions": "1. 所有数据库操作用 SQLAlchemy 2.0 async 模式\\n"
+                   "2. 路由用 FastAPI 装饰器, 参数用 Pydantic v2 验证\\n"
+                   "3. 错误处理统一用 HTTPException + 自定义 exception handler\\n"
+                   "4. 数据库迁移用 Alembic, 不要手动改表结构\\n"
+                   "5. 异步操作用 async/await, 不要用同步阻塞函数\\n"
+                   "6. API 响应用 Pydantic response_model 做类型安全\\n"
+                   "7. 依赖注入用 Depends(), 避免全局状态",
+    "domain_tags": ["backend", "api", "database"]
+}}]"""
 ```
 
-### 3.3 预置 Agent 模板
+### 技术栈 → Agent 类型推导（规则层）
 
-```python
-DEFAULT_AGENTS = [
-    {
-        "name": "通用开发助手",
-        "agent_key": "main",
-        "role": "你是一个全栈开发助手，精通多种编程语言和框架。",
-        "instructions": "提供清晰的代码示例，解释设计决策，遵循项目已有的编码风格。",
-        "domain_tags": ["general"],
-        "scope": "global",
-        "is_template": True,
-    },
-    {
-        "name": "后端开发专家",
-        "agent_key": "backend-dev",
-        "role": "你是一个FastAPI/Python后端开发专家，精通RESTful API设计和数据库优化。",
-        "instructions": 
-            "1. API设计遵循RESTful规范, 使用Pydantic模型验证\n"
-            "2. 数据库操作用SQLAlchemy async, 避免N+1查询\n"
-            "3. 错误统一用异常处理, 返回结构化响应\n"
-            "4. 敏感数据不暴露在URL或日志中\n"
-            "5. 所有异步操作设置超时和重试",
-        "domain_tags": ["backend", "api", "database"],
-        "scope": "global",
-        "is_template": True,
-    },
-    {
-        "name": "前端开发专家",
-        "agent_key": "frontend-dev",
-        "role": "你是一个前端开发专家，精通React/Vue和现代CSS。",
-        "instructions": 
-            "1. 组件设计遵循单一职责原则\n"
-            "2. 状态管理清晰, 避免prop-drilling\n"
-            "3. 使用TypeScript类型定义\n"
-            "4. 关注性能和可访问性",
-        "domain_tags": ["frontend"],
-        "scope": "global",
-        "is_template": True,
-    },
-    {
-        "name": "测试专家",
-        "agent_key": "testing-dev",
-        "role": "你是一个软件测试专家，精通单元测试、集成测试和E2E测试。",
-        "instructions": 
-            "1. 测试覆盖率优先核心逻辑\n"
-            "2. 使用pytest/playwright等工具\n"
-            "3. 测试边界条件和错误路径\n"
-            "4. mock外部依赖",
-        "domain_tags": ["testing"],
-        "scope": "global",
-        "is_template": True,
-    },
-]
+```
+技术栈项 → 推导 → Agent 类型
+
+Python/FastAPI/Django/Flask/SpringBoot → {backend agent}
+React/Vue/Angular/Next.js/Nuxt         → {frontend agent}
+PostgreSQL/MySQL/MongoDB/Redis         → 合并到 backend agent
+Docker/K8s/Nginx/GitHub Actions        → {devops agent}
+pytest/jest/playwright/cypress         → {testing agent}
+PyTorch/TensorFlow/scikit-learn       → {ai_ml agent}
+TypeScript/Babel/Webpack              → 合并到 frontend agent
 ```
 
-### 3.4 管线集成（Stage 0 改造）
+### Agent 生成数量逻辑
 
 ```python
-# context_pipeline.py _stage_0_load_instructions 改造
-
-async def _stage_0_load_instructions(self, ctx: PipelineContext):
-    """Stage 0: 根据意图领域匹配 Agent, 加载对应指令"""
+def decide_agent_count(tech_stack: list) -> int:
+    """根据技术栈决定生成几个 Agent"""
+    has_backend = any(t in tech_lower for t in BACKEND_TECH)
+    has_frontend = any(t in tech_lower for t in FRONTEND_TECH)
+    has_testing = any(t in tech_lower for t in TESTING_TECH)
+    has_devops = any(t in tech_lower for t in DEVOPS_TECH)
+    has_ai = any(t in tech_lower for t in AI_TECH)
     
-    # 1. 先尝试用 intent 的 domains 匹配 Agent
-    agent = await self._match_agent_by_domain(
-        project_id=int(ctx.project_id),
-        domains=ctx.intent.get("domains", [])
+    count = 0
+    if has_backend: count += 1
+    if has_frontend: count += 1
+    if has_testing: count += 1
+    if has_devops: count += 1
+    if has_ai: count += 1
+    
+    # 最少 1 个, 最多 3 个
+    return max(1, min(3, count))
+```
+
+## 4. 集成到 aidp_init 流程
+
+```python
+# project_init_service.py 新增步骤
+
+# Step 9: 智能生成 Agent
+async def _generate_agents(project_id: int, tech_stack: str, description: str, 
+                           architecture_summary: str):
+    """用 LLM 分析技术栈, 自动生成 2-3 个领域 Agent"""
+    
+    # 1. 调用 LLM
+    llm = LLMClient()
+    await llm._ensure_config()
+    prompt = AGENT_GENERATION_PROMPT.format(
+        tech_stack=tech_stack,
+        description=description,
+        architecture_summary=architecture_summary
     )
+    response = await llm.call(prompt, max_tokens=2000)
     
-    # 2. 如果没有匹配, fallback 到 agent_type="main"
-    if not agent:
-        agent = await self._load_agent_by_key("main")
+    # 2. 解析 JSON
+    agents = json.loads(response)
     
-    # 3. 加载 Agent 的 instructions
-    if agent:
-        ctx.instructions = {
-            "role": agent.role,
-            "constraints": ...,
-            "rules": ...,
-            "agent_name": agent.name,
-            "agent_key": agent.agent_key,
-        }
+    # 3. 保存
+    for agent in agents:
+        # 去重检查
+        existing = await db.execute(
+            select(Agent).where(
+                Agent.project_id == project_id,
+                Agent.agent_key == agent["agent_key"]
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+        
+        # 创建 Agent
+        new_agent = Agent(
+            name=agent["name"],
+            agent_key=agent["agent_key"],
+            role=agent["role"],
+            instructions=agent["instructions"],
+            domain_tags=json.dumps(agent["domain_tags"]),
+            scope="project",
+            project_id=project_id,
+            source="auto",
+            source_version=tech_stack,
+        )
+        db.add(new_agent)
+        
+        # 同步到 agent_instructions 表
+        await _sync_to_instructions(new_agent)
+    
+    await db.commit()
+    return {"agents_created": len(agents)}
+```
+
+## 5. 管线集成（Agent 匹配引擎）
+
+```python
+# context_pipeline.py Stage 0 改造
 
 async def _match_agent_by_domain(self, project_id: int, domains: list) -> Optional[Agent]:
-    """根据意图领域匹配最合适的 Agent"""
-    # 1. 先查项目特有的 Agent
-    agents = await query_project_agents(project_id)
+    """根据意图领域自动匹配最合适的 Agent"""
     
-    # 2. 对每个 Agent 的 domain_tags 与 intent domains 做交集
-    best_agent = None
-    best_score = 0
+    # 1. 查询项目所有 Agent
+    agents = await self.db.execute(
+        select(Agent).where(
+            Agent.project_id == project_id,
+            Agent.is_active == True
+        )
+    )
+    agents = agents.scalars().all()
+    
+    # 2. 如果项目没有 Agent, fallback 到全局 Agent
+    if not agents:
+        return None
+    
+    # 3. 按 domain 匹配度排序
+    scored = []
     for agent in agents:
         agent_domains = json.loads(agent.domain_tags)
         score = len(set(agent_domains) & set(domains))
-        if score > best_score:
-            best_score = score
-            best_agent = agent
+        if score > 0:
+            scored.append((score, agent))
     
-    # 3. 有匹配 → 返回; 无匹配 → None (管线 fallback 到 "main")
-    return best_agent if best_score > 0 else None
+    if not scored:
+        return None  # 没有匹配, 管线用默认
+    
+    # 4. 返回最高分
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[0][1]
 ```
 
-### 3.5 domain → agent 匹配规则
+## 6. 开发计划
 
-```
-intent.domains                    匹配 Agent          匹配得分
-────────────────────────────────────────────────────────────
-["backend", "api"]               backend-dev         2
-["backend", "database"]          backend-dev         2
-["frontend", "ui"]               frontend-dev        2
-["testing"]                      testing-dev         1
-["backend", "security"]          backend-dev (1)     (无security agent)
-["unknown"]                      → fallback main
-[]                               → fallback main
-```
+### Phase 1: 模型改造 (0.5h)
 
-### 3.6 API 端点（简化后）
+- [ ] 修改 Agent 模型: 删除关联表, 增加 agent_key/domain_tags/source/source_version
+- [ ] 删除三张关联表
+- [ ] `seed_data.py`: 移除旧 Agent 模板
 
-```
-GET    /api/agents/list          列出 Agent (按scope筛选)
-POST   /api/agents/create        创建 Agent
-GET    /api/agents/{id}          详情
-PUT    /api/agents/{id}          更新
-DELETE /api/agents/{id}          删除
+### Phase 2: LLM 生成逻辑 (1h)
 
-GET    /api/agents/templates     列出模板 (is_template=True)
-POST   /api/agents/from-template/{id}  从模板创建
-
-POST   /api/agents/{id}/sync-to-instructions  同步到 agent_instructions 表
-```
-
-### 3.7 Agent 与 `agent_instructions` 的双向同步
-
-```
-Agent UI 创建/编辑 → 保存到 aidp_agents 表
-                         │
-                         └─ 同时写入 agent_instructions 表
-                            (project_id, agent_type=agent_key, role, constraints, rules)
-
-管线加载:
-  Stage 0 → 先查 aidp_agents 做 domain 匹配
-          → 再读 agent_instructions 加载内容
-```
-
----
-
-## 4. 开发计划
-
-### Phase 1: 模型精简 (1h)
-
-- [ ] 修改 `Agent` 模型：删除关联表字段, 增加 `agent_key`, `domain_tags`
-- [ ] 删除三张关联表: `aidp_agent_skills`, `aidp_agent_rules`, `aidp_agent_knowledge`
-- [ ] 更新 `seed_data.py`: 用新的 4 个预置 Agent 模板替换
-- [ ] 数据库迁移: 创建新字段, 删除旧表
-
-### Phase 2: UI 简化 (1h)
-
-- [ ] 重写 `agents/list.html`: 移除 skills/rules/knowledge 标签页
-- [ ] 简化创建/编辑表单: 只保留 name, agent_key, role, instructions, domain_tags, scope
-- [ ] 添加 domain_tags 多选组件
-- [ ] 简化详情弹窗: 只显示基本信息, 移除关联管理
+- [ ] 在 `project_init_service.py` 新增 `_generate_agents()` 步骤
+- [ ] 技术栈 → Agent 类型推导规则
+- [ ] Agent 数量决策逻辑 (最少1, 最多3)
+- [ ] 去重检查 (按 agent_key)
+- [ ] 同步到 agent_instructions 表
 
 ### Phase 3: 管线集成 (0.5h)
 
-- [ ] `context_pipeline.py` Stage 0: 增加 `_match_agent_by_domain()`
-- [ ] `context_pipeline.py` Stage 0: 用 domain 匹配替换固定 `agent_type="main"`
-- [ ] Agent 更新时自动同步到 `agent_instructions` 表
+- [ ] `context_pipeline.py` Stage 0: `_match_agent_by_domain()`
+- [ ] domain 匹配 + 评分
 
-### Phase 4: 测试部署 (0.5h)
+### Phase 4: UI 简化 (0.5h)
 
-- [ ] 单元测试: Agent CRUD, domain 匹配逻辑
-- [ ] 集成测试: `aidp_context` 验证不同 task 匹配不同 Agent
-- [ ] 全量 CRUD 测试验证不报错
+- [ ] 简化 Agent 管理页面
+- [ ] 显示 source=`auto`/`manual` 标识
+- [ ] 一键"重新生成 Agent"按钮
+
+### Phase 5: 测试部署 (0.5h)
+
+- [ ] 全量 CRUD 测试
+- [ ] `aidp_init` 测试: 验证 Agent 自动创建
+- [ ] `aidp_context` 测试: 验证 domain 匹配
+
+**总计**: 约 3 小时, 5 个文件
 
 ---
 
-## 5. 改动清单
+## 7. Evolution 系统是否应进化 Agent
 
-| 文件 | 操作 | 工作量 |
-|------|:---:|:---:|
-| `modules/agents/models.py` | 重写 | 30行 → 50行 |
-| `modules/agents/routes.py` | 简化 + 加 domain 匹配 | 删 30行 |
-| `modules/agents/__init__.py` | 更新描述 | 1行 |
-| `web/templates/modules/agents/list.html` | 重写 UI | 200行 |
-| `services/context_pipeline.py` | 加 `_match_agent_by_domain` | 20行 |
-| `services/seed_data.py` | 更新预置数据 | 10行 |
-| `db/init_db.py` | 删除三张关联表 | 删 10行 |
+### 分析
 
-**总计**: 约 3 小时, 7 个文件, 净增约 50 行代码
+| 维度 | 当前进化系统 | 是否应扩展到 Agent |
+|------|------------|:---:|
+| 进化对象 | 代码模式、bug修复方案、架构决策 | Agent 的 instructions |
+| 触发器 | `analyze_and_evolve` / `index_changes` | Agent 使用反馈 |
+| 范围 | 项目级 → 审核 → 系统级 | 项目级 → 审核 → 系统级 |
+| 具体效果 | 系统级最佳实践 | 系统级 Agent 指令优化 |
+
+### 必要性分析
+
+**不需要进化 Agent 的理由**：
+1. Agent 的 instructions 由 LLM 在初始化时生成，已经充分考虑了技术栈
+2. Agent 只是一个过路角色——管线使用的 instructions 来自 `agent_instructions` 表
+3. 技术栈变了 → 再跑一次 `aidp_init` → LLM 重新生成 Agent → 比"进化"更准确
+4. 当前进化系统跟踪的是代码模式，跟踪 Agent 使用效果需要完全不同的度量体系
+
+**需要进化 Agent 的理由**：
+1. 跨项目学习——"A 项目的 FastAPI Agent 用得很成功，promote 到系统级给 B 项目用"
+2. 当技术栈相似的项目多了，可以提炼出通用最佳实践
+
+### 结论：不需要，也不需要刻意排除
+
+**当前不接入**：Agent 的 instructions 质量由 LLM 保证，进化系统处理的是代码模式积累，这两个是**不同层面的问题**。
+
+**预留接口**：Agent 模型保留 `source` 字段（auto/manual），如果将来出现（例如 Agent 使用反馈数据），通过 promote 按钮手动提交 Agent 配置到系统级即可——和现在的 promote_evolution 一脉相承。
+
+最简单的方式：Agent 通过现有进化系统的 `promote_evolution` 提交。用户觉得某个 Agent 的 instructions 特别好 → 自然语言提交提案 → 管理员审核 → 系统级 Agent 模板。
