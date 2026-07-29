@@ -10,12 +10,12 @@ mcp = FastMCP(
     instructions="""AIDP (AI DevOps Platform) 工作流指引:
 
 【必须第一步调用】aidp_context — 在开始任何开发任务前，先调用此工具加载项目上下文。
-它会触发 5 阶段 Pipeline: 加载 Instructions → 意图分析 → 知识检索 → 技能匹配 → 上下文组装。
 
 工具调用顺序:
 1. aidp_context(project_name, task) → 获取上下文
 2. invoke_tool_mcp(tool_name, capability, arguments) → 执行具体操作
-3. 工作完成后可选: invoke_tool_mcp("memory-tool", "memory.create", {...}) → 归档经验
+3. 工作完成后: index_changes(task, changed_files, summary) → 更新索引 + 模式分析
+4. 可选: promote_evolution(title, description) → 提交优秀模式为系统级实践
 
 复杂任务拆分时:
 - aidp_instructions(project_name, task) → 生成 subagent 专用指令
@@ -755,3 +755,152 @@ async def analyze_and_evolve(
             "error": str(e),
             "hint": "Evolution engine 分析失败，手动通过 promote_evolution 提交也可以。",
         }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def index_changes(
+    ctx: Context,
+    task: str = "",
+    changed_files: str = "[]",
+    summary: str = "",
+    project_id: str = "",
+) -> str:
+    """索引代码变更 — 完成开发任务后调用，增量更新索引并分析模式。
+
+    将本次任务中修改的文件提交到 code-index 进行增量索引，
+    同时分析变更内容，发现可复用模式后自动创建进化提案。
+
+    Args:
+        task: 本次完成的任务描述，例如 "修复了登录页面的 cookie 失效"
+        changed_files: JSON 数组，修改的文件列表
+                       格式: '[{"path":"src/auth.py","content":"...","language":"python"}]'
+                       为空时尝试从 session 中获取项目信息
+        summary: 变更总结（做了什么、为什么），用于模式分析
+        project_id: 项目 ID，为空时从 session 自动获取
+
+    Returns:
+        JSON 包含索引结果和模式分析
+
+    使用场景:
+        - 完成一个功能开发后立即调用，保持索引最新
+        - 修复 Bug 后调用，让 AIDP 学到修复模式
+        - 重构后调用，更新代码结构信息
+    """
+    result = {
+        "success": True,
+        "indexed_code_files": 0,
+        "indexed_doc_files": 0,
+        "patterns_found": [],
+        "evolution_proposed": False,
+        "project_id": project_id,
+    }
+
+    # 1. Resolve project_id from session
+    session_id = ctx.session_id or "default"
+    session = session_manager.sessions.get(session_id)
+    pid = project_id or (session.project_id if session else "")
+
+    if not pid:
+        return json.dumps({
+            "success": False,
+            "error": "No project_id. Call aidp_context first, provide project_id, or ensure .opencode/watcher.json exists.",
+        }, ensure_ascii=False, indent=2)
+
+    result["project_id"] = pid
+
+    # 2. Parse changed_files
+    files = []
+    try:
+        files = json.loads(changed_files) if isinstance(changed_files, str) else changed_files
+    except json.JSONDecodeError:
+        files = []
+
+    if not files:
+        result["message"] = "No changed files provided. Skipping indexing."
+        if summary:
+            result["message"] += " Summary recorded for analysis."
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    # 3. Index code files
+    code_files = [f for f in files if not f.get("path", "").endswith((".md",".txt",".rst",".adoc"))]
+    if code_files:
+        try:
+            idx_result = await invoke_tool(
+                "code-index", "code.index_files",
+                {"project_id": int(pid), "files": code_files}
+            )
+            if idx_result.get("success"):
+                result["indexed_code_files"] = len(code_files)
+        except Exception as e:
+            result["indexed_code_files"] = 0
+
+    # 4. Index doc files
+    doc_files = [f for f in files if f.get("path", "").endswith((".md",".txt",".rst",".adoc"))]
+    if doc_files:
+        try:
+            docs = [{"title": f.get("path", "").rsplit("/",1)[-1].rsplit(".",1)[0],
+                     "content": f.get("content", ""),
+                     "filename": f.get("path", ""),
+                     "source_uri": f.get("path", "")} for f in doc_files]
+            import httpx
+            async with httpx.AsyncClient(timeout=30) as client:
+                await client.post(
+                    "http://127.0.0.1:8883/api/classification/import",
+                    json={"auto_classify": True, "auto_create_kb": True, "documents": docs},
+                )
+            result["indexed_doc_files"] = len(doc_files)
+        except Exception:
+            pass
+
+    # 5. Pattern analysis via evolution-engine (if task + summary provided)
+    if task and summary and code_files:
+        try:
+            from app.tools.evolution_engine.db.database import async_session_factory as evo_session
+            from app.tools.evolution_engine.services.event_collector import EventCollector
+            from app.tools.evolution_engine.services.llm_pattern_analyzer import LLMPatternAnalyzer
+
+            async with evo_session() as evo_db:
+                collector = EventCollector(evo_db)
+                event = await collector.collect(
+                    "success", "mcp_index_changes", task, summary,
+                    {"project_id": pid, "files_count": len(code_files)}
+                )
+
+                analyzer = LLMPatternAnalyzer(evo_db)
+                analysis = await analyzer.analyze("success", task, summary,
+                    {"project_id": pid, "files_count": len(code_files)})
+                await analyzer.save_analysis(event.id, analysis)
+                await collector.mark_processed(event.id)
+
+                confidence = analysis.get("confidence", 0)
+                result["patterns_found"] = [{
+                    "category": analysis.get("category", ""),
+                    "pattern": analysis.get("success_pattern") or analysis.get("fix_pattern", ""),
+                    "confidence": confidence,
+                }]
+
+                if confidence >= 0.5:
+                    # Auto-propose evolution
+                    from app.db.database import async_session_factory
+                    from app.modules.evolution.models import EvolutionVersion
+
+                    async with async_session_factory() as db:
+                        version = EvolutionVersion(
+                            version="0.1.0",
+                            level="project",
+                            title=analysis.get("success_pattern") or analysis.get("fix_pattern") or task[:100],
+                            description=f"任务: {task}\n总结: {summary}\n模式: {analysis.get('success_pattern') or analysis.get('fix_pattern', '')}",
+                            source_project_id=int(pid) if pid.isdigit() else 0,
+                            changes={"pattern": analysis.get("success_pattern") or analysis.get("fix_pattern")},
+                            affected_tools=["code-index"],
+                            review_status="pending",
+                            review_log=[],
+                        )
+                        db.add(version)
+                        await db.commit()
+                        result["evolution_proposed"] = True
+        except Exception as e:
+            result["patterns_error"] = str(e)[:100]
+
+    session_manager.record_tool_call(session_id, "index_changes")
+    return json.dumps(result, ensure_ascii=False, indent=2)

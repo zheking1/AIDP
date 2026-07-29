@@ -92,6 +92,7 @@ class MCPSessionManager:
             "sync_tool_capabilities",
             "aidp_instructions",
             "list_evolutions",
+            "index_changes",
         }
 
         if tool_name in ALLOWED_WITHOUT_CONTEXT:
