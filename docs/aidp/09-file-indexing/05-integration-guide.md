@@ -7,7 +7,18 @@
 
 ## 1. 快速开始
 
-### 1.1 安装三层索引（项目初始化时自动完成）
+### 1.1 自动安装（推荐——零手动）
+
+Agent 全程自动化完成初始化，详见 [06-auto-install.md](06-auto-install.md)。
+
+```python
+# Agent 执行
+1. aidp_init(project_name, key_files, docs)     → project_id
+2. install_local_scripts(project_dir, project_id) → 本地脚本+配置
+3. index_changes(task, changed_files, summary)    → 增量索引
+```
+
+### 1.2 手动安装（备用）
 
 ```bash
 # 在项目目录执行

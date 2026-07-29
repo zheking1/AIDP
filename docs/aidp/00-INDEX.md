@@ -88,7 +88,8 @@ AIDP 是一个 AI DevOps Platform，提供 AI 辅助的代码开发、知识管�
 | [02-layer1-git-hook.md](09-file-indexing/02-layer1-git-hook.md) | Layer 1 — Git Post-Commit Hook |
 | [03-layer2-agent.md](09-file-indexing/03-layer2-agent.md) | Layer 2 — Agent MCP index_changes |
 | [04-layer3-file-watcher.md](09-file-indexing/04-layer3-file-watcher.md) | Layer 3 — file_watcher 实时监控 |
-| [05-integration-guide.md](09-file-indexing/05-integration-guide.md) | 集成开发指南 |
+| [05-integration-guide.md](09-file-indexing/05-integration-guide.md) | Agent/开发者集成指南 |
+| [06-auto-install.md](09-file-indexing/06-auto-install.md) | 本地脚本自动安装（零手动） |
 
 ### 前端
 | 文档 | 说明 |
