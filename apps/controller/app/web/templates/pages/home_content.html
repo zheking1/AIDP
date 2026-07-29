@@ -73,35 +73,66 @@
     </div>
 
     <!-- 使用指南内容 -->
-    <div x-show="activeTab==='guide'" class="mt-6 grid grid-cols-2 gap-4">
+    <div x-show="activeTab==='guide'" class="mt-6 space-y-6">
+        <!-- 系统简介 -->
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-plug mr-2 text-green-400"></i>接入 AI Agent</h3>
-            <p class="text-sm text-gray-400 mb-3">在你的 MCP 配置中添加 AIDP Controller 地址，AI Agent 即可调用所有平台能力。需在模型管理页面配置 API Key。</p>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-green-400 overflow-x-auto">{"mcpServers":{"aidp":{"url":"http://192.168.0.100:8883/mcp","headers":{"x-api-key":"your-key"}}}}</pre>
+            <h3 class="font-medium text-white mb-2"><i class="fas fa-info-circle mr-2 text-indigo-400"></i>系统简介</h3>
+            <p class="text-sm text-gray-300">AIDP 是一个私有化 AI DevOps 平台，通过统一 MCP 协议为 AI Agent 提供项目上下文、代码索引、知识检索、沙箱执行等能力。一个 Controller 承载全部功能。</p>
+            <div class="mt-2 flex gap-3 text-xs text-gray-500">
+                <span>15 个功能模块</span><span class="text-gray-600">|</span><span>13 个 MCP 工具</span><span class="text-gray-600">|</span><span>5 阶段管线</span><span class="text-gray-600">|</span><span>3 层文件索引</span>
+            </div>
         </div>
+
+        <!-- Step 1: 配置模型 -->
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-rocket mr-2 text-blue-400"></i>初始化项目</h3>
-            <p class="text-sm text-gray-400 mb-3">Agent 调用 aidp_init 一键导入：扫描代码 → 索引 → 创建记忆 → 自动生成领域 Agent。</p>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-blue-400">aidp_init(project_name="my-app", tech_stack="Python 3.13+FastAPI", key_files=[{path:"main.py",content:"...",type:"python"}])</pre>
+            <h3 class="font-medium text-white mb-2"><span class="w-6 h-6 inline-flex items-center justify-center rounded bg-indigo-500/20 text-xs text-indigo-400 mr-2">1</span>配置 AI 模型</h3>
+            <p class="text-sm text-gray-400 mb-3">进入 <b>系统管理 → 模型管理</b>，添加你需要的大模型。每个模型需填写名称、API端点、API Key。</p>
+            <div class="text-xs text-gray-500 space-y-1">
+                <div>• 聊天模型: 填入 OpenAI 兼容的 API 地址和 Key，task_types 选 "chat"</div>
+                <div>• 嵌入模型: task_types 选 "embedding"</div>
+                <div>• 重排模型: task_types 选 "rerank"（端点要填 /v1，不含 /rerank）</div>
+            </div>
         </div>
+
+        <!-- Step 2: 配置 MCP -->
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-search mr-2 text-yellow-400"></i>开发工作流</h3>
-            <p class="text-sm text-gray-400 mb-3">每次开发任务必调 aidp_context 加载上下文，系统自动匹配领域 Agent、检索知识和技能。</p>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-yellow-400">aidp_context(project_name="aidp", task="修复登录cookie过期", api_key="...")</pre>
+            <h3 class="font-medium text-white mb-2"><span class="w-6 h-6 inline-flex items-center justify-center rounded bg-green-500/20 text-xs text-green-400 mr-2">2</span>配置 MCP 连接</h3>
+            <p class="text-sm text-gray-400 mb-3">在你的 AI 编程助手的 MCP 配置中添加：</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-green-400 overflow-x-auto">{"mcpServers": {
+  "aidp": {
+    "url": "http://192.168.0.100:8883/mcp",
+    "transport": "streamable-http",
+    "headers": {"x-api-key": "你的API Key"}
+  }
+}}</pre>
+            <p class="text-xs text-gray-500 mt-2">API Key 在 <b>系统管理 → API 密钥</b> 中创建，配置到 MCP 的 headers 里。</p>
         </div>
+
+        <!-- Step 3: 初始化项目 -->
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-code-branch mr-2 text-purple-400"></i>知识沉淀</h3>
-            <p class="text-sm text-gray-400 mb-3">完成开发后调 index_changes 索引变更 + 分析模式，优秀经验 promote 为系统级最佳实践。</p>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-purple-400">index_changes(task="修复cookie", changed_files=[{path:"auth.py",content:"...",language:"python"}])</pre>
+            <h3 class="font-medium text-white mb-2"><span class="w-6 h-6 inline-flex items-center justify-center rounded bg-blue-500/20 text-xs text-blue-400 mr-2">3</span>初始化项目</h3>
+            <p class="text-sm text-gray-400 mb-3">Agent 调用 aidp_init 一键导入项目。扫描技术栈、索引代码、创建记忆，并自动生成领域 Agent。</p>
+            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-blue-400">aidp_init(
+  project_name="my-project",
+  tech_stack="Python 3.13 + FastAPI + PostgreSQL",
+  key_files=[{path:"main.py", content:"...", type:"python"}, ...],
+  docs=[{title:"README", content:"..."}, ...]
+)</pre>
         </div>
+
+        <!-- Step 4: 开始开发 -->
         <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-shield-alt mr-2 text-red-400"></i>多用户隔离</h3>
-            <p class="text-sm text-gray-400 mb-3">MCP 认证后每个 session 自动绑定用户和项目，后续调用只返回该用户/项目的数据。</p>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-red-400">x-api-key: sk-your-api-key</pre>
+            <h3 class="font-medium text-white mb-2"><span class="w-6 h-6 inline-flex items-center justify-center rounded bg-yellow-500/20 text-xs text-yellow-400 mr-2">4</span>开始开发</h3>
+            <div class="space-y-2 text-sm text-gray-300">
+                <div><b>每次任务开始前：</b></div>
+                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-yellow-400">aidp_context(project_name="my-project", task="修复登录cookie过期")</pre>
+                <div class="text-xs text-gray-500">系统自动加载项目上下文、匹配 Agent、检索知识和技能。</div>
+                <div class="mt-2"><b>任务完成后：</b></div>
+                <pre class="bg-gray-900 rounded-lg p-3 text-xs text-purple-400">index_changes(task="修复cookie", changed_files=[{path:"auth.py",content:"...",language:"python"}], summary="设置httpOnly和secure属性")</pre>
+                <div class="text-xs text-gray-500">索引代码变更 + 分析可复用模式，自动创建进化提案。</div>
+            </div>
         </div>
-        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h3 class="font-medium text-white mb-2"><i class="fas fa-robot mr-2 text-teal-400"></i>领域 Agent</h3>
-            <p class="text-sm text-gray-400 mb-3">项目初始化时自动根据技术栈生成专属 Agent，aidp_context 根据任务意图自动匹配。</p>
+    </div>
             <pre class="bg-gray-900 rounded-lg p-3 text-xs text-teal-400">a后端项目自动创建: fastapi-backend / python-security
 前端项目: react-frontend / vue3-frontend</pre>
         </div>

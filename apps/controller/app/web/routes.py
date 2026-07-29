@@ -110,8 +110,8 @@ async def home_page(request: Request):
         return RedirectResponse(url="/login", status_code=302)
     # Partial mode: render dashboard content fragment directly
     if request.query_params.get("partial"):
-        return render_template(request, "pages/dashboard_content.html", {
-            "current_user": user.to_dict(), "active_page": "home", "title": "仪表盘"
+        return render_template(request, "pages/home_content.html", {
+            "current_user": user.to_dict(), "active_page": "home", "title": "首页"
         })
     return RedirectResponse(url="/?tab=home", status_code=302)
 
