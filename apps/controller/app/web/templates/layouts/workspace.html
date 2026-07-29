@@ -371,16 +371,17 @@
     <!-- Main Content Area -->
     <main class="flex-1 flex flex-col min-w-0 relative z-0">
         <!-- Tab Bar -->
-        <div class="h-10 bg-gray-800 border-b border-gray-700 flex items-center overflow-x-auto">
+        <div class="h-10 bg-gray-800 border-b border-gray-700 flex items-center overflow-x-auto scrollbar-thin">
             <template x-for="tab in tabs" :key="tab.id">
                 <div @click="switchTab(tab.id)"
                      :class="activeTab === tab.id ? 'tab-active bg-gray-700' : 'tab-inactive hover:bg-gray-700/50'"
-                     class="flex items-center gap-2 px-4 py-2 cursor-pointer text-sm border-r border-gray-700 min-w-fit">
-                    <i :class="tab.icon" class="text-xs"></i>
-                    <span x-text="tab.name"></span>
+                     class="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-r border-gray-700 min-w-fit max-w-[180px] whitespace-nowrap flex-shrink-0"
+                     :title="tab.name">
+                    <i :class="tab.icon" class="text-xs flex-shrink-0"></i>
+                    <span class="truncate" x-text="tab.name"></span>
                     <button @click.stop="closeTab(tab.id)" 
                             x-show="tabs.length > 1"
-                            class="ml-1 text-gray-500 hover:text-red-400">
+                            class="ml-1 text-gray-500 hover:text-red-400 flex-shrink-0">
                         <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>
