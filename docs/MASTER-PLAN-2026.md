@@ -300,8 +300,11 @@ Evolution v1.2.3
 ### 8.2 中优先级 (P1)
 
 - [ ] **Evolution Engine 重构** - 两级进化系统（目前仅骨架）
+- [ ] **三层文件索引 Layer 2** - Agent MCP index_changes 工具（Layer 1/3 已修复）
 - [ ] Knowledge Tool 分块可视化
-- [ ] Memory Tool 时间轴/上下文包生成器
+- [x] Memory Tool 时间轴/上下文包生成器 ✅
+- [x] 模型配置统一管理 ✅
+- [x] MCP 用户/项目绑定 + 强制认证 ✅
 - [ ] **Asset Tool Web UI 完善** - 详情弹窗、模板预览
 - [ ] **Quality Tool Web UI 完善** - 趋势图表、报告页面
 

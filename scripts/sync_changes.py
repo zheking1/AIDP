@@ -1,11 +1,16 @@
 """
 Git post-commit hook helper: 自动同步本地变更到系统索引
-每次 git commit 后调用，只同步变动的文件
+每次 git commit 后调用，只同步变动的文件（差量更新）
+
+安装: aidp_init.py 自动写入 .git/hooks/post-commit
+手动: python scripts/sync_changes.py --project-id 42
 """
 
 import os
+import re
 import sys
 import json
+import argparse
 import subprocess
 import urllib.request
 
@@ -18,6 +23,19 @@ DOC_EXTENSIONS = {".md", ".txt", ".rst", ".adoc"}
 SKIP_DIRS = {"node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "build", ".idea"}
 
 
+def load_project_id():
+    """从 .opencode/watcher.json 读取项目配置"""
+    config_path = os.path.join(PROJECT_ROOT, ".opencode", "watcher.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+                return config.get("project_id", 0)
+        except Exception:
+            pass
+    return 0
+
+
 def get_changed_files():
     """Get files changed in the last commit"""
     try:
@@ -26,7 +44,6 @@ def get_changed_files():
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )
         if result.returncode != 0:
-            # First commit - no parent
             return []
         return [f for f in result.stdout.strip().split("\n") if f]
     except Exception:
@@ -38,8 +55,7 @@ def should_skip(path):
     return any(p in SKIP_DIRS or p.startswith(".") for p in parts)
 
 
-def sync_code_files(file_paths):
-    """Sync code files to code-index"""
+def sync_code_files(file_paths, project_id):
     batch = []
     for fp in file_paths:
         abs_path = os.path.join(PROJECT_ROOT, fp)
@@ -62,27 +78,24 @@ def sync_code_files(file_paths):
                 batch.append({"path": fp.replace("\\", "/"), "content": content, "language": lang})
         except Exception:
             pass
-
     if not batch:
         return
 
     for i in range(0, len(batch), 10):
         chunk = batch[i:i+10]
-        payload = json.dumps({"capability": "code.index_files", "arguments": {"project_id": 3, "files": chunk}})
+        payload = json.dumps({"capability": "code.index_files", "arguments": {"project_id": project_id, "files": chunk}})
         req = urllib.request.Request(
             f"{CONTROLLER_URL}/api/tools/code-index/invoke",
             data=payload.encode(), headers={"Content-Type": "application/json"}, method="POST"
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
-                r = json.loads(resp.read().decode())
-                print(f"  [code] synced {len(chunk)} files")
+                print(f"  [code] synced {len(chunk)} files -> project {project_id}")
         except Exception as e:
             print(f"  [code] sync error: {e}")
 
 
 def sync_doc_files(file_paths):
-    """Sync doc files to knowledge base"""
     docs = []
     for fp in file_paths:
         abs_path = os.path.join(PROJECT_ROOT, fp)
@@ -100,7 +113,6 @@ def sync_doc_files(file_paths):
                 })
         except Exception:
             pass
-
     if not docs:
         return
 
@@ -111,21 +123,27 @@ def sync_doc_files(file_paths):
     )
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
-            r = json.loads(resp.read().decode())
-            s = r.get("stored", {})
-            print(f"  [doc] synced {len(docs)} files: +{s.get('knowledge',0)}kb +{s.get('rule',0)}rule")
+            print(f"  [doc] synced {len(docs)} files")
     except Exception as e:
         print(f"  [doc] sync error: {e}")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Sync changed files from git commit to AIDP index")
+    parser.add_argument("--project-id", "-p", type=int, default=0, help="AIDP project ID")
+    args = parser.parse_args()
+
+    project_id = args.project_id or load_project_id()
+    if not project_id:
+        print("[sync] ERROR: No project_id. Provide --project-id or ensure .opencode/watcher.json exists")
+        sys.exit(1)
+
     files = get_changed_files()
     if not files:
         print("[sync] No changed files detected or first commit")
         return
 
-    code_files = []
-    doc_files = []
+    code_files, doc_files = [], []
     for fp in files:
         if should_skip(fp):
             continue
@@ -137,12 +155,10 @@ def main():
 
     if code_files:
         print(f"[sync] Syncing {len(code_files)} changed code files...")
-        sync_code_files(code_files)
-
+        sync_code_files(code_files, project_id)
     if doc_files:
         print(f"[sync] Syncing {len(doc_files)} changed doc files...")
         sync_doc_files(doc_files)
-
     if not code_files and not doc_files:
         print("[sync] No code/doc files changed")
 
