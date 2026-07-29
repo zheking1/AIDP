@@ -89,6 +89,16 @@ async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, argumen
     except json.JSONDecodeError:
         args = {}
 
+    # Auto-inject project_id and user_id from session
+    session = session_manager.sessions.get(session_id)
+    if session:
+        if session.user_id and user_id == 0:
+            user_id = int(session.user_id) if session.user_id.isdigit() else 0
+        if session.project_id and "project_id" not in args:
+            args["project_id"] = session.project_id
+        if session.project_name and "project" not in args:
+            args["project"] = session.project_name
+
     session_manager.record_tool_call(session_id, f"{tool_name}:{capability}")
     result = await invoke_tool(tool_name, capability, args, user_id=user_id)
     return json.dumps(result, indent=2)
@@ -359,9 +369,28 @@ async def aidp_context(
     from app.services.context_pipeline import ContextPipeline
     from app.db.database import async_session_factory
     from app.models.project_new import Project as AidpProject
+    from app.services.auth_service import AuthService
     from sqlalchemy import select
 
     result = {"project_name": project_name, "task": task, "agent_type": agent_type, "stages": {}}
+    user_id = ""
+    user_name = ""
+
+    # Resolve user from api_key header
+    try:
+        request = ctx.request
+        if hasattr(request, 'headers'):
+            api_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
+            if api_key:
+                user = await AuthService.validate_api_key(api_key)
+                if user:
+                    user_id = str(user.id)
+                    user_name = user.username or ""
+    except Exception:
+        pass
+
+    # Authenticate to session
+    session_id = ctx.session_id or "default"
 
     try:
         # Execute 5-Stage Pipeline using local implementation
@@ -423,8 +452,9 @@ async def aidp_context(
         result["error"] = str(e)
         result["traceback"] = traceback.format_exc()
 
-    # 标记该会话已加载上下文
+    # 标记该会话已认证并加载上下文
     session_id = ctx.session_id or "default"
+    session_manager.mark_authenticated(session_id, user_id, user_name, project_id, project_name)
     session_manager.mark_context_loaded(session_id, result)
     session_manager.record_tool_call(session_id, "aidp_context")
 

@@ -246,13 +246,15 @@ class ContextPipeline:
         
         async def _retrieve_knowledge():
             r = await self.tool_invoker.invoke("knowledge-tool", "knowledge.search", {
-                "query": ctx.task, "top_k": 5, "task_domains": domains
+                "query": ctx.task, "top_k": 5, "task_domains": domains,
+                "project_id": ctx.project_id,
             })
             return r.get("data", {}).get("items", []) if r and r.get("success") else []
         
         async def _retrieve_asset():
             r = await self.tool_invoker.invoke("asset-tool", "search", {
-                "query": ctx.task, "tags": tags, "top_k": 3
+                "query": ctx.task, "tags": tags, "top_k": 3,
+                "project_id": ctx.project_id,
             })
             return r.get("data", {}).get("items", []) if r and r.get("success") else []
         

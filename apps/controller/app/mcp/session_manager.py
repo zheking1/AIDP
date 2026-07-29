@@ -14,6 +14,10 @@ from dataclasses import dataclass, field
 @dataclass
 class MCPSession:
     session_id: str
+    user_id: str = ""
+    user_name: str = ""
+    project_id: str = ""
+    project_name: str = ""
     context_loaded: bool = False
     created_at: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
@@ -52,6 +56,18 @@ class MCPSessionManager:
         session.context_loaded = True
         session.context_result = context_result
 
+    def mark_authenticated(self, session_id: str, user_id: str, user_name: str = "",
+                           project_id: str = "", project_name: str = ""):
+        session = self.get_or_create_session(session_id)
+        session.user_id = user_id
+        session.user_name = user_name
+        session.project_id = project_id
+        session.project_name = project_name
+
+    def is_authenticated(self, session_id: str) -> bool:
+        session = self.sessions.get(session_id)
+        return bool(session and session.user_id)
+
     def is_context_loaded(self, session_id: str) -> bool:
         session = self.sessions.get(session_id)
         if not session:
@@ -75,6 +91,7 @@ class MCPSessionManager:
             "check_tool_health",
             "sync_tool_capabilities",
             "aidp_instructions",
+            "list_evolutions",
         }
 
         if tool_name in ALLOWED_WITHOUT_CONTEXT:
@@ -84,8 +101,11 @@ class MCPSessionManager:
         if not session:
             return False, "会话不存在，必须先调用 aidp_context"
 
+        if not session.user_id:
+            return False, "未认证，aidp_context 需要提供有效的 api_key"
+
         if not session.context_loaded:
-            return False, "必须先调用 aidp_context 加载上下文，然后才能调用其他工具"
+            return False, "必须先调用 aidp_context 加载上下文"
 
         return True, "允许调用"
 
