@@ -7,6 +7,32 @@ from app._config import settings
 logger = logging.getLogger(__name__)
 
 
+AGENT_GEN_PROMPT = """根据以下项目信息, 生成 2-3 个领域专属 Agent 配置。
+
+项目: {name}, 技术栈: {tech_stack}, 描述: {description}, 架构: {architecture}
+
+每个 Agent 必须包含:
+  agent_key: 英文标识
+  name: 中文名称
+  role: 一句话角色定义
+  instructions: 5-10条该技术栈版本相关的具体最佳实践, 用\\n分隔
+  domain_tags:  从 [backend,frontend,testing,devops,database,security,ai_ml,docs,code_indexing] 选1-3个
+
+严格规则:
+  - 只生成项目技术栈涉及的领域 Agent
+  - 纯后端项目不要生成前端Agent, 纯前端不要后端Agent
+  - 每个Agent的instructions要有该技术栈版本相关的具体建议
+  - 输出纯JSON数组, 不要额外解释
+
+示例(输入: Python 3.13+FastAPI+PostgreSQL):
+[{{
+  "agent_key":"fastapi-backend","name":"FastAPI 后端专家",
+  "role":"精通 Python 3.13 + FastAPI + PostgreSQL 后端开发",
+  "instructions":"1. 数据库操作用 SQLAlchemy 2.0 async\\n2. 路由用 FastAPI 装饰器, Pydantic v2 验证\\n3. 统一用 HTTPException 处理错误\\n4. 数据库迁移用 Alembic",
+  "domain_tags":["backend","api","database"]
+}}]"""
+
+
 async def load_agent_instructions(project_name: str = "", agent_type: str = "main") -> dict:
     """Stage 0: Load Agent Instructions from database."""
     from app.models.instructions import AgentInstruction
@@ -268,6 +294,70 @@ async def init_project(
     except Exception as e:
         step("sync_capabilities", err=e)
 
+    # Step 9: 智能生成 Agent (LLM 分析技术栈)
+    agents_created = 0
+    if tech_stack and project_id:
+        try:
+            from app.modules.agents.models import Agent
+            import json as _json
+            from app.services.context_optimizer.services.llm_client import LLMClient
+            import httpx
+
+            llm = LLMClient()
+            await llm._ensure_config()
+            prompt = AGENT_GEN_PROMPT.format(
+                name=project_name,
+                tech_stack=tech_stack,
+                description=description or "",
+                architecture=architecture_summary or "",
+            )
+            response = await llm.call(prompt, max_tokens=2000)
+            if response:
+                response = response.strip()
+                if response.startswith("```"):
+                    response = response.split("\n", 1)[-1].rsplit("```", 1)[0]
+                agents_data = _json.loads(response)
+
+                if not isinstance(agents_data, list):
+                    agents_data = agents_data.get("agents", [])
+
+                for ad in agents_data:
+                    if not isinstance(ad, dict):
+                        continue
+                    ak = ad.get("agent_key", "")
+                    if not ak:
+                        continue
+                    # 去重
+                    existing = await (await async_session_factory()).execute(
+                        select(Agent).where(
+                            Agent.agent_key == ak,
+                            Agent.project_id == project_id,
+                            Agent.deleted_at.is_(None),
+                        )
+                    )
+                    if existing.scalar_one_or_none():
+                        continue
+
+                    async with async_session_factory() as s:
+                        agent = Agent(
+                            name=ad.get("name", ak),
+                            agent_key=ak,
+                            role=ad.get("role", ""),
+                            instructions=ad.get("instructions", ""),
+                            domain_tags=_json.dumps(ad.get("domain_tags", [])),
+                            scope="project",
+                            project_id=project_id,
+                            source="auto",
+                            source_version=tech_stack,
+                        )
+                        s.add(agent)
+                        await s.commit()
+                        agents_created += 1
+
+            step("generate_agents", {"agents_created": agents_created})
+        except Exception as e:
+            step("generate_agents", err=e)
+
     return {
         "project_id": project_id,
         "project_name": project_name,
@@ -277,6 +367,7 @@ async def init_project(
             "docs_imported": docs_imported,
             "memories_created": memories_created,
             "assets_registered": assets_registered,
+            "agents_created": agents_created,
             "total_steps": len(steps),
             "total_errors": len(errors),
         },

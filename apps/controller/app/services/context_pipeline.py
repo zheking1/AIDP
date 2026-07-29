@@ -114,9 +114,49 @@ class ContextPipeline:
             raise
     
     async def _stage_0_load_instructions(self, ctx: PipelineContext):
-        """Stage 0: Load Agent Instructions from database"""
+        """Stage 0: 根据意图领域匹配 Agent, 加载对应指令"""
         start = time.time()
-        
+
+        # 尝试按 domain 匹配项目 Agent
+        domains = ctx.intent.get("domains", []) if ctx.intent else []
+        try:
+            from app.modules.agents.models import Agent as AgentModel
+            import json as _json
+
+            agent_result = await self.db.execute(
+                select(AgentModel).where(
+                    and_(
+                        AgentModel.project_id == int(ctx.project_id),
+                        AgentModel.is_active == True,
+                        AgentModel.deleted_at.is_(None),
+                    )
+                )
+            )
+            agents = agent_result.scalars().all()
+
+            best, best_score = None, 0
+            for a in agents:
+                agent_domains = _json.loads(a.domain_tags) if a.domain_tags else []
+                score = len(set(agent_domains) & set(domains))
+                if score > best_score:
+                    best_score, best = score, a
+
+            if best:
+                ctx.instructions = {
+                    "role": best.role or "You are a helpful AI assistant.",
+                    "constraints": {},
+                    "rules": [r.strip() for r in (best.instructions or "").split("\n") if r.strip()],
+                    "loaded_from_db": True,
+                    "agent_name": best.name,
+                    "agent_key": best.agent_key,
+                }
+                ctx.stage_timings["stage_0"] = (time.time() - start) * 1000
+                print(f"[{ctx.trace_id}] Stage 0: matched agent '{best.agent_key}' (score={best_score}) ({ctx.stage_timings['stage_0']:.0f}ms)")
+                return
+        except Exception:
+            pass
+
+        # Fallback: 加载 project 的通用 instructions 或全局默认
         result = await self.db.execute(
             select(AgentInstruction).where(
                 AgentInstruction.project_id == int(ctx.project_id),

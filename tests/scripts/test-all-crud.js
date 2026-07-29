@@ -123,8 +123,9 @@ async function testAgentCRUD(page) {
 
   // Create
   const create = await apiCall(page, 'POST', `${BASE_URL}/api/agents/create`, {
-    name: uniqueName, description: '自动化测试Agent', model: 'gpt-4',
-    system_prompt: '你是一个测试Agent'
+    name: uniqueName, agent_key: uniqueName.toLowerCase().replace(/[^a-z0-9]/g,'-'),
+    role: '测试Agent角色', instructions: '1. 测试规则一\n2. 测试规则二',
+    domain_tags: ['backend', 'api'], scope: 'project'
   });
   record('Agent', '创建API', create.status === 200 || create.status === 201, `status=${create.status}`);
   const agentId = create.data?.id;

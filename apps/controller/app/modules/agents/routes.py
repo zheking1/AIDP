@@ -1,10 +1,9 @@
 """
 Agents Module Routes
-Agent API 路由
+Agent CRUD + domain-based matching
 """
 
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, and_, or_, desc, func
@@ -12,11 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
 from app.db.database import async_session_factory
-from app.modules.agents.models import Agent, agent_skills, agent_rules, agent_knowledge
-from app.modules.skills.models import Skill
-from app.modules.rules.models import Rule
-from app.modules.knowledge.models import KnowledgeBase
-from app.core.permissions import require_permissions
+from app.modules.agents.models import Agent
 from app.core.utils import get_current_user_id
 from app.api.auth import get_current_user
 
@@ -25,35 +20,31 @@ router = APIRouter()
 
 class AgentCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    agent_key: Optional[str] = None
     role: Optional[str] = None
     instructions: Optional[str] = None
-    scope: str = Field("personal")
-    parent_agent_id: Optional[str] = None
-    config: Optional[dict] = Field(default_factory=dict)
-    is_template: bool = False
-    skill_ids: List[str] = Field(default_factory=list)
-    rule_ids: List[str] = Field(default_factory=list)
-    knowledge_base_ids: List[str] = Field(default_factory=list)
+    domain_tags: List[str] = Field(default_factory=list)
+    scope: str = Field("project")
+    project_id: Optional[int] = None
 
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    name: Optional[str] = None
+    agent_key: Optional[str] = None
     role: Optional[str] = None
     instructions: Optional[str] = None
-    config: Optional[dict] = None
+    domain_tags: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    is_template: Optional[bool] = None
-    parent_agent_id: Optional[str] = None
 
 
-async def get_db() -> AsyncSession:
+async def get_db():
     async with async_session_factory() as session:
         yield session
 
 
 def _scope_filter(model, scope: str, user_id: str = None, project_id: int = None):
     if not scope:
-        return True  # Show all scopes
+        return True
     if scope == "global":
         return model.scope == "global"
     elif scope == "personal":
@@ -63,263 +54,208 @@ def _scope_filter(model, scope: str, user_id: str = None, project_id: int = None
     return model.scope == scope
 
 
-# ==================== Static Routes FIRST ====================
-
 @router.get("/list")
 async def list_agents(
-    scope: str = Query("personal"),
+    scope: str = Query("project"),
     project_id: Optional[int] = Query(None),
-    is_template: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
     user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     user_id = get_current_user_id(user)
-    query = select(Agent).where(and_(Agent.deleted_at.is_(None), Agent.is_active == True))
-    query = query.where(_scope_filter(Agent, scope, user_id, project_id))
-    if is_template is not None:
-        query = query.where(Agent.is_template == is_template)
+    query = select(Agent).where(and_(Agent.deleted_at.is_(None)))
+    if scope:
+        query = query.where(_scope_filter(Agent, scope, user_id, project_id))
     if search:
         p = f"%{search}%"
-        query = query.where(or_(Agent.name.ilike(p), Agent.role.ilike(p)))
-    total_q = select(func.count()).select_from(query.subquery())
-    total_r = await db.execute(total_q)
-    total = total_r.scalar() or 0
-    query = query.order_by(Agent.sort_order, desc(Agent.updated_at)).offset(skip).limit(limit)
+        query = query.where(or_(Agent.name.ilike(p), Agent.agent_key.ilike(p)))
+    query = query.order_by(desc(Agent.created_at)).limit(100)
     result = await db.execute(query)
-    agents = result.scalars().all()
-    return {"items": [a.to_dict() for a in agents], "total": total}
+    return {"items": [a.to_dict() for a in result.scalars().all()]}
 
 
 @router.post("/create")
 async def create_agent(
     data: AgentCreate,
     project_id: Optional[int] = Query(None),
-    user=require_permissions("skills:write:personal"),
-    db: AsyncSession = Depends(get_db)
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     user_id = get_current_user_id(user)
-    if data.scope == "project" and not project_id:
-        raise HTTPException(status_code=400, detail="Project agent requires project_id")
     agent = Agent(
-        name=data.name, role=data.role, instructions=data.instructions,
-        scope=data.scope, parent_agent_id=data.parent_agent_id,
-        config=json.dumps(data.config), is_template=data.is_template,
-        user_id=user_id if data.scope != "global" else None,
-        project_id=project_id if data.scope == "project" else None
+        name=data.name,
+        agent_key=data.agent_key or data.name.lower().replace(" ", "-"),
+        role=data.role,
+        instructions=data.instructions,
+        domain_tags=json.dumps(data.domain_tags),
+        scope=data.scope,
+        project_id=project_id or data.project_id,
+        user_id=user_id if data.scope == "personal" else None,
+        source="manual",
     )
     db.add(agent)
-    await db.flush()
-    for sid in data.skill_ids:
-        await db.execute(agent_skills.insert().values(agent_id=agent.id, skill_id=sid))
-    for rid in data.rule_ids:
-        await db.execute(agent_rules.insert().values(agent_id=agent.id, rule_id=rid))
-    for kid in data.knowledge_base_ids:
-        await db.execute(agent_knowledge.insert().values(agent_id=agent.id, knowledge_base_id=kid))
     await db.commit()
-    await db.refresh(agent, ['skills', 'rules', 'knowledge_bases', 'children'])
-    return agent.to_dict(include_relations=True)
+    await db.refresh(agent)
+    return agent.to_dict()
 
 
 @router.get("/templates/list")
 async def list_templates(
     user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Agent).where(and_(Agent.deleted_at.is_(None), Agent.is_template == True, Agent.scope == "global"))
-        .order_by(Agent.sort_order)
+        select(Agent).where(
+            and_(Agent.deleted_at.is_(None), Agent.is_template == True)
+        )
+    )
+    return {"items": [a.to_dict() for a in result.scalars().all()]}
+
+
+@router.get("/match")
+async def match_agent(
+    domains: str = Query(""),
+    project_id: int = Query(0),
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """根据意图领域匹配最合适的 Agent"""
+    domain_list = [d.strip() for d in domains.split(",") if d.strip()]
+    if not domain_list or not project_id:
+        return {"matched": None, "fallback": True}
+
+    result = await db.execute(
+        select(Agent).where(
+            and_(Agent.deleted_at.is_(None), Agent.is_active == True,
+                 and_(Agent.scope == "project", Agent.project_id == project_id))
+        )
     )
     agents = result.scalars().all()
-    return {"items": [a.to_dict() for a in agents]}
 
+    best, best_score = None, 0
+    for a in agents:
+        agent_domains = json.loads(a.domain_tags) if a.domain_tags else []
+        score = len(set(agent_domains) & set(domain_list))
+        if score > best_score:
+            best_score, best = score, a
 
-@router.post("/from-template/{template_id}")
-async def create_from_template(
-    template_id: str,
-    name: Optional[str] = Query(None),
-    project_id: Optional[int] = Query(None),
-    user=require_permissions("skills:write:personal"),
-    db: AsyncSession = Depends(get_db)
-):
-    user_id = get_current_user_id(user)
-    result = await db.execute(
-        select(Agent).where(and_(Agent.id == template_id, Agent.deleted_at.is_(None), Agent.is_template == True))
-    )
-    template = result.scalar_one_or_none()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    await db.refresh(template, ['skills', 'rules', 'knowledge_bases'])
-    agent = Agent(
-        name=name or template.name, role=template.role, instructions=template.instructions,
-        scope="personal" if not project_id else "project",
-        config=template.config, user_id=user_id, project_id=project_id
-    )
-    db.add(agent)
-    await db.flush()
-    for s in template.skills:
-        await db.execute(agent_skills.insert().values(agent_id=agent.id, skill_id=s.id))
-    for r in template.rules:
-        await db.execute(agent_rules.insert().values(agent_id=agent.id, rule_id=r.id))
-    for k in template.knowledge_bases:
-        await db.execute(agent_knowledge.insert().values(agent_id=agent.id, knowledge_base_id=k.id))
-    await db.commit()
-    await db.refresh(agent)
-    return agent.to_dict(include_relations=True)
+    return {
+        "matched": best.to_dict() if best else None,
+        "score": best_score,
+        "fallback": best is None,
+    }
 
-
-@router.get("/stats")
-async def get_agent_stats(
-    project_id: Optional[int] = Query(None),
-    user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    user_id = get_current_user_id(user)
-    scope_c = or_(
-        Agent.scope == "global",
-        and_(Agent.scope == "personal", Agent.user_id == user_id),
-        and_(Agent.scope == "project", Agent.project_id == project_id) if project_id else False
-    )
-    total = await db.execute(select(func.count(Agent.id)).where(and_(Agent.deleted_at.is_(None), scope_c)))
-    by_scope = await db.execute(select(Agent.scope, func.count(Agent.id)).where(Agent.deleted_at.is_(None)).group_by(Agent.scope))
-    return {"total": total.scalar() or 0, "by_scope": {r[0]: r[1] for r in by_scope.all()}}
-
-
-# ==================== Parameterized Routes AFTER ====================
 
 @router.get("/{agent_id}")
 async def get_agent(
     agent_id: str,
     user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Agent).where(and_(Agent.id == agent_id, Agent.deleted_at.is_(None)))
     )
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agent.to_dict(include_relations=True)
+        raise HTTPException(404, "Agent not found")
+    return agent.to_dict()
 
 
 @router.put("/{agent_id}")
 async def update_agent(
     agent_id: str,
     data: AgentUpdate,
-    user=require_permissions("skills:write:personal"),
-    db: AsyncSession = Depends(get_db)
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Agent).where(and_(Agent.id == agent_id, Agent.deleted_at.is_(None)))
     )
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    for f in ['name', 'role', 'instructions', 'is_active', 'is_template', 'parent_agent_id']:
+        raise HTTPException(404, "Agent not found")
+
+    for f in ["name", "agent_key", "role", "instructions", "is_active"]:
         v = getattr(data, f)
         if v is not None:
             setattr(agent, f, v)
-    if data.config is not None:
-        agent.config = json.dumps(data.config)
+    if data.domain_tags is not None:
+        agent.domain_tags = json.dumps(data.domain_tags)
+
+    # Sync to agent_instructions
+    await _sync_to_instructions(db, agent)
+
     await db.commit()
     await db.refresh(agent)
-    return agent.to_dict(include_relations=True)
+    return agent.to_dict()
 
 
 @router.delete("/{agent_id}")
 async def delete_agent(
     agent_id: str,
-    user=require_permissions("skills:write:personal"),
-    db: AsyncSession = Depends(get_db)
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Agent).where(and_(Agent.id == agent_id, Agent.deleted_at.is_(None)))
     )
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(404, "Agent not found")
+    from datetime import datetime, timezone
     agent.deleted_at = datetime.now(timezone.utc)
     await db.commit()
     return {"success": True}
 
 
-@router.get("/{agent_id}/context")
-async def get_agent_context(
-    agent_id: str,
+@router.get("/stats")
+async def get_stats(
     project_id: Optional[int] = Query(None),
     user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Agent).where(and_(Agent.id == agent_id, Agent.deleted_at.is_(None)))
+    base = select(func.count(Agent.id)).where(Agent.deleted_at.is_(None))
+    if project_id:
+        base = base.where(Agent.project_id == project_id)
+
+    total = await db.execute(base)
+    by_scope = await db.execute(
+        select(Agent.scope, func.count(Agent.id)).where(Agent.deleted_at.is_(None)).group_by(Agent.scope)
     )
-    agent = result.scalar_one_or_none()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    context = {"instructions": agent.instructions or "", "role": agent.role or "", "skills": [], "rules": [], "knowledge": []}
-    await db.refresh(agent, ['skills', 'rules', 'knowledge_bases'])
-    for s in agent.skills:
-        context["skills"].append({"id": s.id, "name": s.name, "instruction": s.instruction})
-    for r in agent.rules:
-        context["rules"].append({"id": r.id, "name": r.name, "content": r.content, "severity": r.severity})
-    for k in agent.knowledge_bases:
-        context["knowledge"].append({"id": k.id, "name": k.name, "description": k.description})
-    parent = agent
-    visited = {agent_id}
-    while parent.parent_agent_id and parent.parent_agent_id not in visited:
-        visited.add(parent.parent_agent_id)
-        result = await db.execute(select(Agent).where(and_(Agent.id == parent.parent_agent_id, Agent.deleted_at.is_(None))))
-        parent = result.scalar_one_or_none()
-        if not parent:
-            break
-        await db.refresh(parent, ['rules'])
-        for r in parent.rules:
-            if not any(x['id'] == r.id for x in context["rules"]):
-                context["rules"].append({"id": r.id, "name": r.name, "content": r.content, "severity": r.severity})
-        if parent.instructions:
-            context["instructions"] = f"[Parent: {parent.name}]\n{parent.instructions}\n\n[Current: {agent.name}]\n{context['instructions']}"
-    return context
+    by_source = await db.execute(
+        select(Agent.source, func.count(Agent.id)).where(Agent.deleted_at.is_(None)).group_by(Agent.source)
+    )
+    return {
+        "total": total.scalar() or 0,
+        "by_scope": {r[0]: r[1] for r in by_scope.all()},
+        "by_source": {r[0]: r[1] for r in by_source.all()},
+    }
 
 
-@router.post("/{agent_id}/link-skill")
-async def link_skill(agent_id: str, skill_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_skills.insert().values(agent_id=agent_id, skill_id=skill_id))
-    await db.commit()
-    return {"success": True}
-
-
-@router.post("/{agent_id}/unlink-skill")
-async def unlink_skill(agent_id: str, skill_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_skills.delete().where(and_(agent_skills.c.agent_id == agent_id, agent_skills.c.skill_id == skill_id)))
-    await db.commit()
-    return {"success": True}
-
-
-@router.post("/{agent_id}/link-rule")
-async def link_rule(agent_id: str, rule_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_rules.insert().values(agent_id=agent_id, rule_id=rule_id))
-    await db.commit()
-    return {"success": True}
-
-
-@router.post("/{agent_id}/unlink-rule")
-async def unlink_rule(agent_id: str, rule_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_rules.delete().where(and_(agent_rules.c.agent_id == agent_id, agent_rules.c.rule_id == rule_id)))
-    await db.commit()
-    return {"success": True}
-
-
-@router.post("/{agent_id}/link-knowledge")
-async def link_knowledge(agent_id: str, knowledge_base_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_knowledge.insert().values(agent_id=agent_id, knowledge_base_id=knowledge_base_id))
-    await db.commit()
-    return {"success": True}
-
-
-@router.post("/{agent_id}/unlink-knowledge")
-async def unlink_knowledge(agent_id: str, knowledge_base_id: str = Query(...), user=require_permissions("skills:write:personal"), db: AsyncSession = Depends(get_db)):
-    await db.execute(agent_knowledge.delete().where(and_(agent_knowledge.c.agent_id == agent_id, agent_knowledge.c.knowledge_base_id == knowledge_base_id)))
-    await db.commit()
-    return {"success": True}
+async def _sync_to_instructions(db: AsyncSession, agent: Agent):
+    """同步 Agent 配置到 agent_instructions 表"""
+    try:
+        from app.models.instructions import AgentInstruction
+        result = await db.execute(
+            select(AgentInstruction).where(
+                AgentInstruction.project_id == (agent.project_id or 0),
+                AgentInstruction.agent_type == agent.agent_key,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.role = agent.role
+            existing.constraints = {}
+            existing.rules = [r.strip() for r in (agent.instructions or "").split("\n") if r.strip()]
+        else:
+            inst = AgentInstruction(
+                project_id=agent.project_id or 0,
+                agent_type=agent.agent_key,
+                role=agent.role or "",
+                constraints={},
+                rules=[r.strip() for r in (agent.instructions or "").split("\n") if r.strip()],
+            )
+            db.add(inst)
+        await db.flush()
+    except Exception:
+        pass

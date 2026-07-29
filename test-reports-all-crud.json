@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-29T15:44:34.693Z",
+  "timestamp": "2026-07-29T16:28:57.723Z",
   "testSuite": "全量CRUD测试",
   "summary": {
     "total": 64,
@@ -17,7 +17,7 @@
       "page": "技能",
       "name": "读取API",
       "passed": true,
-      "detail": "name=技能测试-1785339871749"
+      "detail": "name=技能测试-1785342535985"
     },
     {
       "page": "技能",
@@ -113,7 +113,7 @@
       "page": "Agent",
       "name": "列表API",
       "passed": true,
-      "detail": "items=2"
+      "detail": "items=1"
     },
     {
       "page": "Agent",
@@ -131,7 +131,7 @@
       "page": "项目",
       "name": "读取API",
       "passed": true,
-      "detail": "name=项目测试-1785339872936"
+      "detail": "name=项目测试-1785342536571"
     },
     {
       "page": "项目",
@@ -257,7 +257,7 @@
       "page": "资产",
       "name": "读取API",
       "passed": true,
-      "detail": "title=资产测试-1785339873946"
+      "detail": "title=资产测试-1785342537186"
     },
     {
       "page": "资产",
@@ -335,13 +335,13 @@
       "page": "进化",
       "name": "列表API",
       "passed": true,
-      "detail": "items=8"
+      "detail": "items=12"
     },
     {
       "page": "进化",
       "name": "统计API",
       "passed": true,
-      "detail": "total=14"
+      "detail": "total=18"
     },
     {
       "page": "进化",
