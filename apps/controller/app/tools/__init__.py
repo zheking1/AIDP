@@ -27,6 +27,7 @@ async def init_tool_databases():
 
 
 def register_tool_routes(app: FastAPI):
+    print("[TOOLS] register_tool_routes START")
     tools = [
         ("skill_router", "/tool/skill-router", [
             "api.routes", "api.tool", "web.routes", "web.auth"
@@ -53,9 +54,9 @@ def register_tool_routes(app: FastAPI):
             for route in routes:
                 module = importlib.import_module(f"{pkg}.{route}")
                 app.include_router(module.router, prefix=prefix)
-            logger.info(f"Integrated tool: {tool_name} ({len(routes)} routes)")
+            logger.warning(f"[TOOLS] Integrated: {tool_name} ({len(routes)} routes)")
         except Exception as e:
-            logger.warning(f"Tool {tool_name} unavailable: {e}")
+            logger.warning(f"[TOOLS] {tool_name} failed: {e}")
 
     # Mount project_importer (full FastAPI app, not just router)
     try:

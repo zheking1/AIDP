@@ -186,6 +186,7 @@ app.add_api_websocket_route("/ws/logs", ws_handler)
 
 # Register external tool routes (integrated into Controller)
 from app.tools import register_tool_routes, init_tool_databases
+print("[MAIN] Registering external tool routes...")
 register_tool_routes(app)
 
 # Mount static files
