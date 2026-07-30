@@ -277,17 +277,15 @@ async def aidp_init(
         project_name: 项目唯一名称，例如 "my-web-app"
         description: 项目描述 (可选)
         tech_stack: 技术栈描述，例如 "Python 3.13 + FastAPI + PostgreSQL"
-        nas_path: 项目在 NAS 上的路径 (可选)，例如 "/home/docker/projects/my-app"
-        docs: JSON 数组格式的文档列表，例如 '[{"title": "README", "content": "..."}]'
-        key_files: JSON 数组格式的关键文件列表，例如 '[{"path": "main.py", "content": "...", "type": "python"}]'
+        nas_path: 项目在 NAS 上的路径 (可选)
+        docs: 文档列表。可以是 JSON 字符串或直接传数组
+              例如: [{"title": "README", "content": "项目说明..."}]
+        key_files: 关键文件列表。可以是 JSON 字符串或直接传数组
+              例如: [{"path": "main.py", "content": "...", "type": "python"}]
         architecture_summary: 架构概述 (可选)
 
     Returns:
         JSON 格式的初始化结果，包含 project_id 和索引状态。
-
-    使用场景:
-        - 新项目首次接入 AIDP
-        - 项目有重大架构变更时重新初始化
     """
     parsed_docs = []
     parsed_files = []
