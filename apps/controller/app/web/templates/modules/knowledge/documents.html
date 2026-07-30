@@ -28,52 +28,46 @@
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="pt-5 py-4">
-        <div class="flex gap-4">
+    <!-- Filters + Search -->
+    <div class="pt-5 pb-2">
+        <div class="flex gap-2">
             <div class="flex-1 relative">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                <input x-model="searchQuery" 
-                       @input.debounce.300ms="loadDocuments()"
-                       type="text" 
-                       placeholder="搜索文档..." 
+                <input x-model="searchQuery" @input.debounce.300ms="loadDocuments()" type="text" placeholder="搜索文档..." 
                        class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none">
             </div>
-            <select x-model="statusFilter" 
-                    @change="loadDocuments()"
-                    class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
-                <option value="">全部状态</option>
-                <option value="pending">待处理</option>
-                <option value="processing">处理中</option>
-                <option value="indexed">已索引</option>
-                <option value="error">错误</option>
+            <select x-model="statusFilter" @change="loadDocuments()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                <option value="">全部状态</option><option value="pending">待处理</option><option value="processing">处理中</option><option value="indexed">已索引</option><option value="error">错误</option>
             </select>
-            <select x-model="typeFilter" 
-                    @change="loadDocuments()"
-                    class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
-                <option value="">全部类型</option>
-                <option value="markdown">Markdown</option>
-                <option value="txt">文本</option>
-                <option value="code">代码</option>
+            <select x-model="typeFilter" @change="loadDocuments()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                <option value="">全部类型</option><option value="markdown">MD</option><option value="txt">文本</option><option value="code">代码</option>
             </select>
-            <div class="relative">
-                <input x-model="categoryFilter" 
-                       @input.debounce.300ms="loadDocuments()"
-                       type="text" 
-                       placeholder="分类筛选..." 
-                       class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none w-40">
-                <div x-show="categorySuggestions.length > 0 && categoryFilter.length > 0"
-                     class="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10 max-h-40 overflow-y-auto">
-                    <template x-for="cat in categorySuggestions" :key="cat">
-                        <button @click="categoryFilter = cat; loadDocuments(); categorySuggestions=[]"
-                                class="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"
-                                x-text="cat">
+        </div>
+    </div>
+
+    <!-- Category Sidebar + Table -->
+    <div class="flex gap-4">
+        <!-- Left: Category Sidebar -->
+        <div class="w-40 flex-shrink-0">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                <div class="px-3 py-2 border-b border-gray-700 text-xs font-medium text-gray-400 uppercase">分类</div>
+                <div class="p-1.5 space-y-0.5">
+                    <button @click="selectCategory('')" :class="categoryFilter===''?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span>全部</span><span class="text-xs text-gray-500" x-text="catCounts.all||0"></span>
+                    </button>
+                    <template x-for="c in categories" :key="c.key">
+                        <button @click="selectCategory(c.key)" :class="categoryFilter===c.key?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                                class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                            <span class="truncate" x-text="c.label"></span><span class="text-xs text-gray-500" x-text="c.count||0"></span>
                         </button>
                     </template>
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- Right: Table -->
+        <div class="flex-1 min-w-0">
 
     <!-- Documents Table -->
     <div class="pb-8">
@@ -486,6 +480,7 @@
   return {
     documents:[], loading:false, total:0, skip:0, limit:20,
     searchQuery:'', statusFilter:'', typeFilter:'', categoryFilter:'', categorySuggestions:[],
+    categories:[], catCounts:{all:0},
     knowledgeBase:null, showCreateModal:false, showUploadModal:false,
     showViewModal:false, showEditModal:false, viewingDoc:null, editDoc:{}, creating:false,
     newDoc:{title:'',doc_type:'',category:'',content:''},
@@ -503,17 +498,18 @@
         if(this.typeFilter)p.set('doc_type',this.typeFilter);
         if(this.categoryFilter)p.set('category',this.categoryFilter);
         const r=await fetch('/api/knowledge/documents-list?'+p);
-        if(r.ok){const d=await r.json();this.documents=d.items||[];this.total=d.total||0;this.buildCategorySuggestions(d.items||[])}
+        if(r.ok){const d=await r.json();this.documents=d.items||[];this.total=d.total||0;this.buildCategoryCounts(d.items||[])}
       }catch(e){console.error(e)}finally{this.loading=false}
     },
 
-    buildCategorySuggestions(items){
-      const cats=new Set();
-      items.forEach(d=>{if(d.category)cats.add(d.category)});
-      const existing=this.categoryFilter.trim().toLowerCase();
-      if(!existing){this.categorySuggestions=[];return}
-      this.categorySuggestions=Array.from(cats).filter(c=>c.toLowerCase().includes(existing));
+    buildCategoryCounts(items){
+      const counts={all:items.length};
+      items.forEach(d=>{if(d.category)counts[d.category]=(counts[d.category]||0)+1});
+      this.catCounts=counts;
+      this.categories=Object.entries(counts).filter(([k])=>k!=='all').map(([k,v])=>({key:k,label:k,count:v}));
     },
+
+    selectCategory(cat){this.categoryFilter=cat;this.loadDocuments()},
 
     formatDate(d){return d?new Date(d).toLocaleDateString('zh-CN'):''},
     getStatusText(s){return s==='active'?'正常':s==='archived'?'归档':'草稿'},
