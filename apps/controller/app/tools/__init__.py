@@ -45,6 +45,7 @@ def register_tool_routes(app: FastAPI):
         ("evolution_engine", "/tool/evolution-engine", ["api.events"]),
         ("doc_index", "/tool/doc-index", ["api.doc_index", "api.tool"]),
         ("code_index", "/tool/code-index", ["api.code_index", "api.tool"]),
+        ("importer_tool", "/tool/importer", ["api.tool"]),
     ]
 
     for tool_name, prefix, routes in tools:
