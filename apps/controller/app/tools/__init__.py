@@ -42,6 +42,8 @@ def register_tool_routes(app: FastAPI):
         ("quality_tool", "/tool/quality", ["api.check"]),
         ("context_optimizer", "/tool/context-optimizer", ["api.optimize"]),
         ("evolution_engine", "/tool/evolution-engine", ["api.events"]),
+        ("doc_index", "/tool/doc-index", ["api.doc_index", "api.tool"]),
+        ("code_index", "/tool/code-index", ["api.code_index", "api.tool"]),
     ]
 
     for tool_name, prefix, routes in tools:
@@ -54,3 +56,11 @@ def register_tool_routes(app: FastAPI):
             logger.info(f"Integrated tool: {tool_name} ({len(routes)} routes)")
         except Exception as e:
             logger.warning(f"Tool {tool_name} unavailable: {e}")
+
+    # Mount project_importer (full FastAPI app, not just router)
+    try:
+        from app.tools.project_importer.main import app as pi_app
+        app.mount("/tool/project-importer", pi_app)
+        logger.info("Integrated tool: project-importer")
+    except Exception as e:
+        logger.warning(f"Tool project-importer unavailable: {e}")
