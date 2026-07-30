@@ -391,6 +391,7 @@ async def aidp_context(
 
     # Authenticate to session
     session_id = ctx.session_id or "default"
+    project_id = "0"
 
     try:
         # Execute 5-Stage Pipeline using local implementation

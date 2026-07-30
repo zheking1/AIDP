@@ -300,8 +300,7 @@ async def init_project(
         try:
             from app.modules.agents.models import Agent
             import json as _json
-            from app.services.context_optimizer.services.llm_client import LLMClient
-            import httpx
+            from app.tools.context_optimizer.services.llm_client import LLMClient
 
             llm = LLMClient()
             await llm._ensure_config()
