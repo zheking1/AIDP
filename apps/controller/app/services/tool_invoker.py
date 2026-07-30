@@ -67,6 +67,8 @@ class ToolInvoker:
             elif tool_name == "quality-tool" and capability.startswith("quality."):
                 return await self._quality_check(arguments)
             elif tool_name == "knowledge-tool" and capability.startswith("knowledge."):
+                if capability == "knowledge.create_document":
+                    return await self._knowledge_create_document(arguments)
                 return await self._knowledge_search(arguments)
             elif tool_name == "memory-tool" and capability.startswith("memory."):
                 return await self._memory_op(capability, arguments)
@@ -107,6 +109,28 @@ class ToolInvoker:
             )
             return {"success": True, "output": {"items": results}}
 
+    async def _knowledge_create_document(self, arguments: dict) -> dict:
+        from app.tools.knowledge_tool.services.document_service import create_document
+        from app.tools.knowledge_tool.services.indexing_service import create_index_job
+        from app.tools.knowledge_tool.schemas.document import DocumentCreateRequest
+        from app.db.database import async_session_factory
+        async with async_session_factory() as db:
+            req = DocumentCreateRequest(
+                workspace_id=arguments.get("workspace_id", "default"),
+                title=arguments.get("title", "untitled"),
+                doc_type=arguments.get("doc_type", "markdown"),
+                content=arguments.get("content", ""),
+                project_id=arguments.get("project_id"),
+                source_uri=arguments.get("source_uri", ""),
+            )
+            doc = await create_document(db, req)
+            if doc and doc.id:
+                try:
+                    await create_index_job(db, doc_id=doc.id, workspace_id=doc.workspace_id)
+                except Exception:
+                    pass
+            return {"success": True, "output": {"id": doc.id, "title": doc.title, "status": "created"}}
+
     async def _skill_router_invoke(self, capability: str, arguments: dict) -> dict:
         from app.tools.skill_router.services.vector_service import analyze_intent
         from app.tools.skill_router.services.resolve_service import resolve_task
@@ -136,29 +160,25 @@ class ToolInvoker:
         return {"success": False, "error": f"Unknown skill-router capability: {capability}"}
 
     async def _memory_op(self, capability: str, arguments: dict) -> dict:
-        from app.tools.memory_tool.services.memory_service import MemoryService
-        from app.tools.memory_tool.schemas.memory import MemoryCreate as MemCreate
-        from app.db.database import async_session_factory
+        from app.tools.memory_tool.services.memory_service import create_memory, search_memory
 
-        async with async_session_factory() as db:
-            svc = MemoryService(db)
-            if "search" in capability:
-                results = await svc.search(
-                    project=arguments.get("project", ""),
-                    query=arguments.get("query", ""),
-                    category=arguments.get("category"),
-                    limit=arguments.get("limit", 10),
-                )
-                return {"success": True, "output": {"results": results}}
-            elif "create" in capability:
-                data = MemCreate(
-                    title=arguments.get("title", ""),
-                    content=arguments.get("content", ""),
-                    category=arguments.get("category", "other"),
-                    tags=arguments.get("tags", ""),
-                )
-                entry = await svc.create(data)
-                return {"success": True, "output": entry.to_dict()}
+        if "search" in capability:
+            results = await search_memory(
+                project=arguments.get("project", ""),
+                query=arguments.get("query", ""),
+                category=arguments.get("category"),
+                limit=arguments.get("limit", 10),
+            )
+            return {"success": True, "output": {"results": results}}
+        elif "create" in capability:
+            entry = await create_memory(
+                project=arguments.get("project", ""),
+                title=arguments.get("title", ""),
+                content=arguments.get("content", ""),
+                category=arguments.get("category", "other"),
+                tags=arguments.get("tags", ""),
+            )
+            return {"success": True, "output": entry}
         return {"success": False, "error": f"Unknown memory capability: {capability}"}
     
     async def _get_tool_endpoint(self, tool_name: str) -> Optional[str]:
@@ -183,7 +203,7 @@ class ToolInvoker:
         
         # Fallback to environment/config
         endpoints = {
-            "skill-router": os.getenv("SKILLROUTER_URL", "http://localhost:8788"),
+            "skill-router": os.getenv("SKILLROUTER_URL", "http://localhost:8883"),
             "knowledge-tool": os.getenv("KNOWLEDGE_URL", "http://localhost:18081"),
             "memory-tool": os.getenv("MEMORY_URL", "http://localhost:18085"),
             "asset-tool": os.getenv("ASSET_URL", "http://localhost:18082"),

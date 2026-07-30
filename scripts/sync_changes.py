@@ -15,7 +15,7 @@ import subprocess
 import urllib.request
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONTROLLER_URL = "http://192.168.0.100:8883"
+CONTROLLER_URL = os.environ.get("AIDP_CONTROLLER_URL", "http://192.168.0.100:8883")
 
 CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs",
                    ".c", ".cpp", ".h", ".cs", ".rb", ".php", ".swift", ".kt"}
@@ -24,7 +24,6 @@ SKIP_DIRS = {"node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "bu
 
 
 def load_project_id():
-    """从 .opencode/watcher.json 读取项目配置"""
     config_path = os.path.join(PROJECT_ROOT, ".opencode", "watcher.json")
     if os.path.exists(config_path):
         try:
@@ -37,7 +36,6 @@ def load_project_id():
 
 
 def get_changed_files():
-    """Get files changed in the last commit"""
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
@@ -55,7 +53,19 @@ def should_skip(path):
     return any(p in SKIP_DIRS or p.startswith(".") for p in parts)
 
 
+def get_token():
+    cfg = os.path.join(PROJECT_ROOT, ".opencode", "watcher.json")
+    if os.path.exists(cfg):
+        try:
+            with open(cfg) as f:
+                return json.load(f).get("api_key", "")
+        except Exception:
+            pass
+    return os.environ.get("AIDP_API_KEY", "")
+
+
 def sync_code_files(file_paths, project_id):
+    token = get_token()
     batch = []
     for fp in file_paths:
         abs_path = os.path.join(PROJECT_ROOT, fp)
@@ -81,12 +91,16 @@ def sync_code_files(file_paths, project_id):
     if not batch:
         return
 
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-API-Key"] = token
+
     for i in range(0, len(batch), 10):
         chunk = batch[i:i+10]
         payload = json.dumps({"capability": "code.index_files", "arguments": {"project_id": project_id, "files": chunk}})
         req = urllib.request.Request(
             f"{CONTROLLER_URL}/api/tools/code-index/invoke",
-            data=payload.encode(), headers={"Content-Type": "application/json"}, method="POST"
+            data=payload.encode(), headers=headers, method="POST"
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
@@ -96,6 +110,7 @@ def sync_code_files(file_paths, project_id):
 
 
 def sync_doc_files(file_paths):
+    token = get_token()
     docs = []
     for fp in file_paths:
         abs_path = os.path.join(PROJECT_ROOT, fp)
@@ -116,10 +131,14 @@ def sync_doc_files(file_paths):
     if not docs:
         return
 
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-API-Key"] = token
+
     payload = json.dumps({"auto_classify": True, "auto_create_kb": True, "documents": docs})
     req = urllib.request.Request(
         f"{CONTROLLER_URL}/api/classification/import",
-        data=payload.encode(), headers={"Content-Type": "application/json"}, method="POST"
+        data=payload.encode(), headers=headers, method="POST"
     )
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:

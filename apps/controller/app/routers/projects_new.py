@@ -62,7 +62,7 @@ async def _check_project_access(project_id: int, user_id: str, db: AsyncSession,
 
 
 def _project_filter(user_id: str = None):
-    """Filter projects accessible to the given user: their owned + member + public"""
+    """Filter projects accessible to the given user: their owned + member + public + orphaned"""
     if not user_id:
         return Project.visibility == "public"
     return or_(
@@ -71,6 +71,8 @@ def _project_filter(user_id: str = None):
             select(ProjectMember.project_id).where(ProjectMember.user_id == user_id)
         ),
         Project.visibility == "public",
+        Project.owner_id.is_(None),
+        Project.owner_id == "",
     )
 
 

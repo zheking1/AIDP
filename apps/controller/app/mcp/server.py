@@ -23,7 +23,9 @@ mcp = FastMCP(
 项目管理:
 - list_registered_tools() → 查看所有可用工具
 - check_tool_health() → 检查工具健康状态
-- aidp_init(...) → 导入新项目到 AIDP""",
+- get_index_rules(project_dir) → 获取扫描规则和本地脚本（aidp_init 前调用）
+- aidp_init(...) → 导入新项目到 AIDP
+- install_local_scripts(project_dir, project_id) → 安装本地 git hook + 文件监控""",
 )
 
 
@@ -43,7 +45,7 @@ async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, argumen
                     "memory.search", "memory.create", "knowledge.search"
         arguments: JSON 格式的参数字符串，例如 '{"code": "print(1)", "language": "python"}'
         user_id: 用户 ID (可选，默认 0 表示系统调用)
-        api_key: API Key 用于用户认证 (可选，从 .opencode/opencode.jsonc 获取)
+        api_key: API Key 用于用户认证 (必填，从 MCP 配置 headers 传入)
 
     Returns:
         JSON 格式的工具调用结果。成功时包含 "success": true 和 "output" 字段。
@@ -62,14 +64,25 @@ async def invoke_tool_mcp(ctx: Context, tool_name: str, capability: str, argumen
         # 技能路由
         invoke_tool_mcp("skillrouter", "resolve_task", '{"task": "修复登录bug", "api_key": "sk-xxx"}')
     """
-    # 从 headers 读取 api_key 和 project_id (如果参数未提供)
-    if not api_key:
+    # Resolve api_key: param > headers
+    auth_key = api_key
+    if not auth_key:
         try:
             request = ctx.request
             if hasattr(request, 'headers'):
-                api_key = request.headers.get("x-api-key", "")
+                auth_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
         except Exception:
             pass
+
+    if not auth_key:
+        return json.dumps({
+            "success": False,
+            "error": {
+                "code": "API_KEY_REQUIRED",
+                "message": "api_key 是必填参数，请在 MCP 配置中设置 x-api-key header",
+                "hint": "在 opencode.json 的 mcp 配置中添加 headers: {\"x-api-key\": \"your-api-key\"}",
+            }
+        }, indent=2)
 
     # 强制检查: 是否已调用 aidp_context
     session_id = ctx.session_id or "default"
@@ -267,26 +280,30 @@ async def aidp_init(
     docs: str = "[]",
     key_files: str = "[]",
     architecture_summary: str = "",
+    api_key: str = "",
 ) -> str:
-    """初始化项目到 AIDP — 将新项目导入平台进行管理。
+    """初始化项目到 AIDP — 5阶段：注册→索引→Agent生成→自检→完成。
 
-    当需要将一个尚未在 AIDP 中的项目导入时调用。会自动扫描项目目录、
-    识别技术栈、存储架构信息、建立知识索引。
-    已存在的项目不需要重复初始化。
+    系统会自动推断缺失的 tech_stack、补全 owner_id、验证初始化质量。
+    支持幂等调用：同名项目已存在则跳过创建。
 
     Args:
-        project_name: 项目唯一名称，例如 "my-web-app"
-        description: 项目描述 (可选)
-        tech_stack: 技术栈描述，例如 "Python 3.13 + FastAPI + PostgreSQL"
-        nas_path: 项目在 NAS 上的路径 (可选)
-        docs: 文档列表。可以是 JSON 字符串或直接传数组
-              例如: [{"title": "README", "content": "项目说明..."}]
-        key_files: 关键文件列表。可以是 JSON 字符串或直接传数组
-              例如: [{"path": "main.py", "content": "...", "type": "python"}]
-        architecture_summary: 架构概述 (可选)
+        project_name: 项目唯一名称
+        description: 项目描述
+        tech_stack: 技术栈（可选，系统自动从 key_files 扩展名推断）
+        nas_path: 路径（可选）
+        docs: 文档列表 JSON/Array
+        key_files: 关键文件列表 JSON/Array [{"path":"...","content":"...","type":"java"}]
+        architecture_summary: 架构概述
+        api_key: API Key (必填，用于认证和项目归属，从 MCP 配置 headers 传入)
 
     Returns:
-        JSON 格式的初始化结果，包含 project_id 和索引状态。
+        JSON: {
+          project_id, init_status, tech_stack(推断后),
+          summary: {code_indexed, docs_indexed, agents_created, ...},
+          readiness: {score, checks, missing, next_actions},
+          warnings: [...]
+        }
     """
     parsed_docs = []
     parsed_files = []
@@ -299,57 +316,198 @@ async def aidp_init(
     except json.JSONDecodeError:
         pass
 
-    # Create or update project record in aidp_projects (unified project table)
+    # === Preflight: validate inputs ===
+    if not project_name or not project_name.strip():
+        return json.dumps({"success": False, "status": "preflight_failed",
+                           "error": "project_name is required"}, ensure_ascii=False, indent=2)
+
+    session_id = ctx.session_id or "default"
+    session = session_manager.sessions.get(session_id)
+    owner_id = ""
+
+    # Resolve user: param > headers > session
+    auth_key = api_key
+    if not auth_key:
+        try:
+            request = ctx.request
+            if hasattr(request, 'headers'):
+                auth_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
+        except Exception:
+            pass
+
+    if not auth_key:
+        return json.dumps({
+            "success": False, "status": "preflight_failed",
+            "error": {
+                "code": "API_KEY_REQUIRED",
+                "message": "api_key 是必填参数，请在 MCP 配置中设置 x-api-key header",
+                "hint": "在 opencode.json 的 mcp 配置中添加 headers: {\"x-api-key\": \"your-api-key\"}",
+            }
+        }, ensure_ascii=False, indent=2)
+
+    if auth_key:
+        try:
+            from app.services.auth_service import AuthService
+            user = await AuthService.validate_api_key(auth_key)
+            if user:
+                owner_id = str(user.id)
+                user_name = user.username or ""
+                session_manager.mark_authenticated(session_id, owner_id, user_name)
+        except Exception:
+            pass
+
+    if not owner_id and session and session.user_id:
+        owner_id = session.user_id
+
+    # === Phase 1-5: Full initialization ===
+    from app.services.project_init_service import init_project
+
+    result = await init_project(
+        project_name=project_name, description=description,
+        tech_stack=tech_stack, nas_path=nas_path,
+        docs=parsed_docs, key_files=parsed_files,
+        architecture_summary=architecture_summary,
+        user_id=int(owner_id) if owner_id.isdigit() else 0,
+        owner_id=owner_id,
+    )
+
+    result["success"] = result.get("init_status") != "failed"
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def aidp_reindex(
+    project_id: int,
+    phase: str = "code",
+    key_files: str = "[]",
+    docs: str = "[]",
+) -> str:
+    """单独重做索引阶段 — 某个阶段失败后不用重新初始化整个项目。
+
+    Args:
+        project_id: AIDP 项目 ID
+        phase: 重做哪个阶段: "code" | "docs" | "memories" | "assets" | "all"
+        key_files: 关键文件列表（code/assets 需要）
+        docs: 文档列表（docs 需要）
+
+    Returns:
+        JSON: {phase, status, count}
+    """
+    from app.services.project_init_service import phase_index
+    from app.db.database import async_session_factory
+    from app.models.project_new import Project as AidpProject
+    from sqlalchemy import select
+
+    parsed_files = []
+    parsed_docs = []
+    try:
+        parsed_files = json.loads(key_files) if isinstance(key_files, str) else key_files
+    except json.JSONDecodeError:
+        pass
+    try:
+        parsed_docs = json.loads(docs) if isinstance(docs, str) else docs
+    except json.JSONDecodeError:
+        pass
+
+    async with async_session_factory() as db:
+        proj = (await db.execute(select(AidpProject).where(AidpProject.id == project_id))).scalar_one_or_none()
+        if not proj:
+            return json.dumps({"success": False, "error": "project not found"}, ensure_ascii=False, indent=2)
+
+        if phase in ("all", "code", "assets"):
+            if not parsed_files:
+                return json.dumps({"success": False, "error": "key_files required for code/assets reindex"}, ensure_ascii=False, indent=2)
+        if phase in ("all", "docs"):
+            if not parsed_docs:
+                return json.dumps({"success": False, "error": "docs required for doc reindex"}, ensure_ascii=False, indent=2)
+
+        if phase in ("all",):
+            result = await phase_index(
+                project_id=project_id, project_name=proj.name,
+                key_files=parsed_files, docs=parsed_docs,
+                tech_stack=proj.tech_stack or "",
+                description=proj.description or "",
+            )
+        elif phase == "code":
+            result = await phase_index(
+                project_id=project_id, project_name=proj.name,
+                key_files=parsed_files, tech_stack=proj.tech_stack or "",
+                description=proj.description or "",
+            )
+        elif phase == "docs":
+            result = await phase_index(
+                project_id=project_id, project_name=proj.name,
+                docs=parsed_docs, description=proj.description or "",
+            )
+        elif phase == "memories":
+            result = await phase_index(
+                project_id=project_id, project_name=proj.name,
+                tech_stack=proj.tech_stack or "",
+                description=proj.description or "",
+            )
+        elif phase == "assets":
+            result = await phase_index(
+                project_id=project_id, project_name=proj.name,
+                key_files=parsed_files, description=proj.description or "",
+            )
+        else:
+            return json.dumps({"success": False, "error": f"unknown phase: {phase}"}, ensure_ascii=False, indent=2)
+
+        result["success"] = True
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def aidp_generate_agents(
+    project_id: int,
+    tech_stack: str = "",
+) -> str:
+    """单独重做 Agent 生成 — 使用模板或 LLM 为项目创建领域 Agent。
+
+    Args:
+        project_id: AIDP 项目 ID
+        tech_stack: 技术栈（可选，不传则从项目记录读取）
+
+    Returns:
+        JSON: {agents_created, method}
+    """
+    from app.services.project_init_service import phase_generate_agents
     from app.db.database import async_session_factory
     from app.models.project_new import Project as AidpProject
     from sqlalchemy import select
 
     async with async_session_factory() as db:
-        result_proj = await db.execute(
-            select(AidpProject).where(AidpProject.name == project_name)
-        )
-        project = result_proj.scalar_one_or_none()
+        proj = (await db.execute(select(AidpProject).where(AidpProject.id == project_id))).scalar_one_or_none()
+        if not proj:
+            return json.dumps({"success": False, "error": "project not found"}, ensure_ascii=False, indent=2)
 
-        # Resolve authenticated user
-        owner_id = ""
-        try:
-            request = ctx.request
-            if hasattr(request, 'headers'):
-                api_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
-                if api_key:
-                    from app.services.auth_service import AuthService
-                    user = await AuthService.validate_api_key(api_key)
-                    if user:
-                        owner_id = str(user.id)
-        except Exception:
-            pass
-
-        if not project:
-            project = AidpProject(
-                name=project_name,
-                description=description,
-                status="active",
-                owner_id=owner_id or None,
-            )
-            db.add(project)
-            await db.commit()
-            await db.refresh(project)
-        else:
-            project.description = description or project.description
-            await db.commit()
-
-    result = await init_project(
-        project_name=project_name,
-        description=description,
-        tech_stack=tech_stack,
-        nas_path=nas_path,
-        docs=parsed_docs,
-        key_files=parsed_files,
-        architecture_summary=architecture_summary,
-        user_id=int(owner_id) if owner_id.isdigit() else 0,
+    result = await phase_generate_agents(
+        project_id=project_id, project_name=proj.name,
+        tech_stack=tech_stack or proj.tech_stack or "",
+        description=proj.description or "",
     )
-    result["project_id"] = project.id
-    return json.dumps(result, indent=2)
+    result["success"] = result.get("agents_created", 0) > 0
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def aidp_verify(
+    project_id: int,
+) -> str:
+    """验证项目初始化完整性 — 返回 readiness 评分 (0-100) 和缺失项。
+
+    检查: project存在 / tech_stack / owner / agents / docs / memories
+
+    Args:
+        project_id: AIDP 项目 ID
+
+    Returns:
+        JSON: {readiness_score, checks, missing, next_actions}
+    """
+    from app.services.project_init_service import phase_verify
+    result = await phase_verify(project_id)
+    result["success"] = True
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -358,6 +516,7 @@ async def aidp_context(
     project_name: str,
     task: str = "",
     agent_type: str = "main",
+    api_key: str = "",
 ) -> str:
     """【必须第一步调用】AIDP 指令优先分级上下文引擎。
 
@@ -372,6 +531,7 @@ async def aidp_context(
         project_name: 项目名称，例如 "aidp"
         task: 当前任务的自然语言描述，例如 "修复登录页面的 cookie 问题"
         agent_type: Agent 类型，可选 "main" (默认) 或 "subagent:sandbox-tool" 等
+        api_key: API Key (必填，用于认证，从 MCP 配置 headers 传入)
 
     Returns:
         JSON 包含各阶段结果和最终组装的上下文。后续步骤使用 invoke_tool_mcp 执行具体操作。
@@ -391,18 +551,34 @@ async def aidp_context(
     user_id = ""
     user_name = ""
 
-    # Resolve user from api_key header
-    try:
-        request = ctx.request
-        if hasattr(request, 'headers'):
-            api_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
-            if api_key:
-                user = await AuthService.validate_api_key(api_key)
-                if user:
-                    user_id = str(user.id)
-                    user_name = user.username or ""
-    except Exception:
-        pass
+    # Resolve user: param > headers
+    auth_key = api_key
+    if not auth_key:
+        try:
+            request = ctx.request
+            if hasattr(request, 'headers'):
+                auth_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
+        except Exception:
+            pass
+
+    if not auth_key:
+        return json.dumps({
+            "success": False,
+            "error": {
+                "code": "API_KEY_REQUIRED",
+                "message": "api_key 是必填参数，请在 MCP 配置中设置 x-api-key header",
+                "hint": "在 opencode.json 的 mcp 配置中添加 headers: {\"x-api-key\": \"your-api-key\"}",
+            }
+        }, ensure_ascii=False, indent=2)
+
+    if auth_key:
+        try:
+            user = await AuthService.validate_api_key(auth_key)
+            if user:
+                user_id = str(user.id)
+                user_name = user.username or ""
+        except Exception:
+            pass
 
     # Authenticate to session
     session_id = ctx.session_id or "default"
@@ -922,21 +1098,398 @@ async def index_changes(
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+def _load_script_content(filename: str) -> str:
+    """Load script content from disk (dev) or embedded fallback (prod)."""
+    import os as _os
+    base = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+    path = _os.path.join(base, "scripts", filename)
+    if _os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+
+    if filename == "sync_changes.py":
+        return '''"""
+Git post-commit hook helper: 自动同步本地变更到系统索引
+每次 git commit 后调用，只同步变动的文件（差量更新）
+
+安装: aidp_init.py 自动写入 .git/hooks/post-commit
+手动: python scripts/sync_changes.py --project-id 42
+"""
+
+import os, re, sys, json, argparse, subprocess, urllib.request
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONTROLLER_URL = os.environ.get("AIDP_CONTROLLER_URL", "http://192.168.0.100:8883")
+
+CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".c", ".cpp", ".h", ".cs", ".rb", ".php", ".swift", ".kt"}
+DOC_EXTENSIONS = {".md", ".txt", ".rst", ".adoc"}
+SKIP_DIRS = {"node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "build", ".idea", "target", "vendor", "bin", "obj"}
+
+def load_project_id():
+    config_path = os.path.join(PROJECT_ROOT, ".opencode", "watcher.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                return json.load(f).get("project_id", 0)
+        except Exception:
+            pass
+    return 0
+
+def get_token():
+    cfg = os.path.join(PROJECT_ROOT, ".opencode", "watcher.json")
+    if os.path.exists(cfg):
+        try:
+            with open(cfg) as f:
+                return json.load(f).get("api_key", "")
+        except Exception:
+            pass
+    return os.environ.get("AIDP_API_KEY", "")
+
+def get_changed_files():
+    try:
+        result = subprocess.run(["git", "diff", "--name-only", "HEAD~1", "HEAD"], capture_output=True, text=True, cwd=PROJECT_ROOT)
+        if result.returncode != 0:
+            return []
+        return [f for f in result.stdout.strip().split("\\n") if f]
+    except Exception:
+        return []
+
+def should_skip(path):
+    parts = path.replace("\\\\", "/").split("/")
+    return any(p in SKIP_DIRS or p.startswith(".") for p in parts)
+
+def sync_code_files(file_paths, project_id):
+    token = get_token()
+    batch = []
+    for fp in file_paths:
+        abs_path = os.path.join(PROJECT_ROOT, fp)
+        if not os.path.exists(abs_path):
+            continue
+        ext = os.path.splitext(fp)[1].lower()
+        lang_map = {".py":"python",".js":"javascript",".ts":"typescript",".jsx":"javascript",".tsx":"typescript",".java":"java",".go":"go",".rs":"rust",".rb":"ruby",".php":"php",".c":"c",".cpp":"cpp",".cs":"csharp"}
+        lang = lang_map.get(ext, "unknown")
+        if lang == "unknown":
+            continue
+        try:
+            with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if content.strip():
+                batch.append({"path": fp.replace("\\\\", "/"), "content": content, "language": lang})
+        except Exception:
+            pass
+    if not batch:
+        return
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-API-Key"] = token
+    for i in range(0, len(batch), 10):
+        chunk = batch[i:i+10]
+        payload = json.dumps({"capability": "code.index_files", "arguments": {"project_id": project_id, "files": chunk}})
+        req = urllib.request.Request(f"{CONTROLLER_URL}/api/tools/code-index/invoke", data=payload.encode(), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                print(f"  [code] synced {len(chunk)} files -> project {project_id}")
+        except Exception as e:
+            print(f"  [code] sync error: {e}")
+
+def sync_doc_files(file_paths):
+    token = get_token()
+    docs = []
+    for fp in file_paths:
+        abs_path = os.path.join(PROJECT_ROOT, fp)
+        if not os.path.exists(abs_path):
+            continue
+        try:
+            with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if content.strip():
+                title = os.path.splitext(os.path.basename(fp))[0]
+                docs.append({"title":title,"content":content,"filename":fp.replace("\\\\","/"),"source_uri":fp.replace("\\\\","/")})
+        except Exception:
+            pass
+    if not docs:
+        return
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-API-Key"] = token
+    payload = json.dumps({"auto_classify": True, "auto_create_kb": True, "documents": docs})
+    req = urllib.request.Request(f"{CONTROLLER_URL}/api/classification/import", data=payload.encode(), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            print(f"  [doc] synced {len(docs)} files")
+    except Exception as e:
+        print(f"  [doc] sync error: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Sync changed files from git commit to AIDP index")
+    parser.add_argument("--project-id", "-p", type=int, default=0, help="AIDP project ID")
+    args = parser.parse_args()
+    project_id = args.project_id or load_project_id()
+    if not project_id:
+        print("[sync] ERROR: No project_id")
+        sys.exit(1)
+    files = get_changed_files()
+    if not files:
+        print("[sync] No changed files")
+        return
+    code_files, doc_files = [], []
+    for fp in files:
+        if should_skip(fp):
+            continue
+        ext = os.path.splitext(fp)[1].lower()
+        if ext in CODE_EXTENSIONS:
+            code_files.append(fp)
+        elif ext in DOC_EXTENSIONS:
+            doc_files.append(fp)
+    if code_files:
+        print(f"[sync] Syncing {len(code_files)} code files...")
+        sync_code_files(code_files, project_id)
+    if doc_files:
+        print(f"[sync] Syncing {len(doc_files)} doc files...")
+        sync_doc_files(doc_files)
+
+if __name__ == "__main__":
+    main()'''
+
+    # Default: empty
+    return ""
+
+
+_SYNC_CHANGES_SCRIPT = None
+_FILE_WATCHER_SCRIPT = None
+
+
+def _get_sync_changes_script() -> str:
+    global _SYNC_CHANGES_SCRIPT
+    if _SYNC_CHANGES_SCRIPT is None:
+        _SYNC_CHANGES_SCRIPT = _load_script_content("sync_changes.py")
+    return _SYNC_CHANGES_SCRIPT
+
+
+@mcp.tool()
+async def get_index_rules(
+    ctx: Context,
+    project_dir: str = "",
+    project_type: str = "auto",
+) -> str:
+    """获取代码索引的扫描规则和本地安装脚本 — 在 aidp_init 之前调用。
+
+    返回完整的扫描配置 + 两个本地脚本（git hook + 文件监控），
+    Agent 按规则扫描本地项目后，写入脚本并启动后台监控。
+
+    Args:
+        project_dir: 项目根目录绝对路径, 如 "D:\\\\Project\\\\web\\\\RuoYi-Cloud-Plus"
+                     留空则只返回扫描规则，不含项目特定的脚本
+        project_type: 项目类型提示: "java" | "python" | "frontend" | "auto"
+                      影响 include_extensions 和 priority_patterns 的权重
+
+    Returns:
+        JSON 包含:
+        - scan_config: 扫描配置（排除规则、文件类型、优先级等）
+        - agent_checklist: Agent 自主分析的步骤和质询清单
+        - setup_scripts: 本地脚本内容（git hook + file watcher + sync_changes）
+    """
+    import platform as _platform
+
+    os_name = _platform.system().lower()
+    controller_url = "http://192.168.0.100:8883"
+    dir_clean = project_dir.rstrip("/").rstrip("\\\\") if project_dir else ""
+
+    scan_config = {
+        "max_file_size_kb": 100,
+        "max_total_files": 50,
+        "include_extensions": {
+            "java": [".java"],
+            "python": [".py"],
+            "javascript": [".js", ".jsx"],
+            "typescript": [".ts", ".tsx"],
+            "go": [".go"],
+            "rust": [".rs"],
+            "yaml": [".yml", ".yaml"],
+            "json": [".json"],
+            "xml": [".xml"],
+            "sql": [".sql"],
+            "markdown": [".md"],
+            "html": [".html"],
+            "css": [".css", ".scss"],
+            "vue": [".vue"],
+            "kotlin": [".kt"],
+            "csharp": [".cs"],
+        },
+        "priority_patterns": [
+            "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle",
+            "package.json", "tsconfig.json", "requirements.txt", "pyproject.toml",
+            "Cargo.toml", "go.mod", "CMakeLists.txt", "Makefile",
+            "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+            "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
+            "**/Application.java", "**/*Application.java",
+            "**/*Controller.java", "**/*Service.java", "**/*ServiceImpl.java",
+            "**/*Config.java", "**/*Configuration.java", "**/*Mapper.java",
+            "**/main.py", "**/app.py", "**/settings.py", "**/config.py",
+            "**/index.ts", "**/main.ts", "**/App.tsx", "**/App.vue",
+            "**/*.module.ts", "src/main/**", "src/**/__init__.py",
+        ],
+        "path_exclude": [
+            "**/node_modules/**", "**/target/**", "**/build/**", "**/dist/**",
+            "**/.git/**", "**/__pycache__/**", "**/.venv/**", "**/venv/**",
+            "**/logs/**", "**/coverage/**", "**/.idea/**", "**/.vscode/**",
+            "**/vendor/**", "**/bin/**", "**/obj/**", "**/.mypy_cache/**",
+            "**/.pytest_cache/**", "**/egg-info/**", "**/.tox/**",
+            "**/.next/**", "**/.nuxt/**", "**/doc/**", "**/docs/**",
+            "**/docker/**", "**/data/**", "**/assets/**", "**/public/**",
+        ],
+        "file_exclude": [
+            "*.min.js", "*.min.css", "*.map", "*.pyc", "*.class",
+            "*.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+            "*.flattened-pom.xml", "*.iml", ".DS_Store",
+        ],
+    }
+
+    agent_checklist = {
+        "step_1": "使用 glob 工具递归扫描项目文件。例如: glob '**/*.java' '**/*.xml' '**/pom.xml'。覆盖所有 include_extensions 中的扩展名",
+        "step_2": "路径过滤: 剔除所有匹配 path_exclude 模式的文件。注意 **/target/** 等模式匹配任意深度",
+        "step_3": "文件过滤: 剔除匹配 file_exclude 的文件，剔除大小 > max_file_size_kb 或 0 字节的文件",
+        "step_4": "自主分析 — 对剩余候选文件，逐一回答:",
+        "step_4a": "  这个文件是手写的业务/框架代码？还是自动生成的？(mybatis-generator/swagger/proto 生成的代码排除)",
+        "step_4b": "  这个文件是核心源码？还是测试数据/配置文件示例？(test fixtures, *.sql 只留 schema DDL)",
+        "step_4c": "  根级构建配置文件 (pom.xml, package.json 等) 是否已纳入？",
+        "step_5": "排序: 匹配 priority_patterns 的文件优先。其次按模块重要性排列 (入口类 > Controller > Service > Config > Model > Util)",
+        "step_6": "截断: 总数不超过 max_total_files 个",
+        "qa_checklist": [
+            "是否混入了自动生成的代码 (generated, auto-generated, swagger, proto)？",
+            "根级构建配置文件和 README 都纳入了吗？",
+            "各模块/包的主入口类是否遗漏？",
+            "有没有大数据文件 (>100KB) 混入？",
+            "项目中是否有其他非标准构建目录需要额外排除？(如 .gradle/, out/, classes/)",
+        ],
+    }
+
+    result = {
+        "success": True,
+        "scan_config": scan_config,
+        "agent_checklist": agent_checklist,
+        "setup_scripts": {},
+        "controller_url": controller_url,
+    }
+
+    if dir_clean:
+        sync_script = _get_sync_changes_script()
+
+        git_hook_path = dir_clean + "/.git/hooks/post-commit"
+        if os_name == "windows":
+            git_hook_content = (
+                f'@echo off\r\n'
+                f'python "%~dp0\\..\\..\\scripts\\sync_changes.py" -p {{PROJECT_ID}}\r\n'
+            )
+        else:
+            git_hook_content = (
+                f'#!/bin/sh\n'
+                f'python "$(dirname "$0")/../../scripts/sync_changes.py" -p {{PROJECT_ID}}\n'
+            )
+
+        result["setup_scripts"] = {
+            "sync_changes_py": {
+                "description": "增量同步脚本，git hook 调用",
+                "path": dir_clean + "/scripts/sync_changes.py",
+                "content": sync_script,
+                "note": "Agent 需创建 scripts/ 目录并写入此文件",
+            },
+            "git_hook": {
+                "description": "post-commit 钩子",
+                "path": git_hook_path,
+                "content": git_hook_content,
+                "os": os_name,
+                "note": "Agent 需写入此文件。{{PROJECT_ID}} 在 aidp_init 后由 install_local_scripts 替换为实际 ID。Linux/Mac 需 chmod +x",
+            },
+            "watcher_config": {
+                "description": "项目配置，供脚本读取 project_id 和 api_key",
+                "path": dir_clean + "/.opencode/watcher.json",
+                "content_template": {
+                    "project_id": "{{PROJECT_ID}}",
+                    "project_root": dir_clean,
+                    "controller_url": controller_url,
+                    "api_key": "{{API_KEY}}",
+                    "layers": {"git_hook": True, "file_watcher": True, "agent": True},
+                },
+                "note": "Agent 在 aidp_init 后调用 install_local_scripts 获取带 ID 的完整配置",
+            },
+            "file_watcher_cmd": {
+                "description": "文件监控启动命令",
+                "install_deps": "pip install watchdog",
+                "command": f"python {dir_clean}/scripts/sync_changes.py --project-id {{PROJECT_ID}}",
+                "alt_full_watcher": f"python {dir_clean}/scripts/file_watcher.py -d {dir_clean} -p {{PROJECT_ID}}",
+                "os": os_name,
+                "note": "Agent 需以后台进程启动。Windows: Start-Process -NoNewWindow, Linux/Mac: nohup ... &",
+            },
+        }
+
+    result["operations"] = [
+        {
+            "id": 1, "action": "scan_project",
+            "instruction": "用 glob 扫描项目代码文件。示例: glob '**/*.java' '**/*.xml' '**/pom.xml' '**/*.yml' '**/*.md'。覆盖 include_extensions 中所有扩展名",
+            "verify": "列出文件名列表，确认 ≥20 个代码文件 + 构建配置文件",
+            "failure_action": "扩大扫描范围，检查是否排除了 src/main 目录。Glob 可能不返回隐藏目录——显式指定每个文件类型"
+        },
+        {
+            "id": 2, "action": "infer_tech_stack",
+            "instruction": "统计 key_files 扩展名分布。读取 pom.xml / build.gradle / package.json 提取框架名和版本号。格式: 'Java 17 + Spring Boot 3.x + Maven'",
+            "verify": "tech_stack 不为空，包含编程语言名 + 框架名",
+            "failure_action": "读取项目根级 README.md 手动提取技术栈描述"
+        },
+        {
+            "id": 3, "action": "build_key_files",
+            "instruction": "读取 ≤50 个优先级文件（构建配置 + 各模块入口类 + Controller + Service + Config），每个 ≤100KB",
+            "verify": "key_files 列表 ≥10 个，包含构建文件和至少3个模块的入口类",
+            "failure_action": "减少文件数到核心5-10个，确保未超过大小限制100KB"
+        },
+        {
+            "id": 4, "action": "call_aidp_init",
+            "instruction": "aidp_init(project_name=..., description=..., tech_stack=..., key_files=[...])。系统会自动推断缺失参数",
+            "verify": "返回 project_id 且 readiness.score ≥ 40。如果 < 100，检查 readiness.missing 列表",
+            "failure_action": "根据 readiness.next_actions 补全参数。tech_stack未推断→传入显式值。agents未生成→用 aidp_generate_agents 单独重做"
+        },
+        {
+            "id": 5, "action": "verify_init",
+            "instruction": "aidp_verify(project_id)。确认 readiness score",
+            "verify": "score ≥ 60，agents > 0，documents > 0",
+            "failure_action": "aidp_reindex(project_id, phase='docs') 或 aidp_generate_agents(project_id, tech_stack='...')"
+        },
+        {
+            "id": 6, "action": "install_local_tools",
+            "instruction": "install_local_scripts(project_dir, project_id)。获取 watcher.json, git hook, sync_changes.py",
+            "verify": ".git/hooks/post-commit 文件存在，.opencode/watcher.json 含正确 project_id",
+            "failure_action": "手动创建目录 scripts/ 和 .opencode/，分别写入各文件"
+        },
+        {
+            "id": 7, "action": "start_watcher",
+            "instruction": "pip install watchdog && 后台启动文件监控。Windows: Start-Process -NoNewWindow。继续执行其他任务，监控在后台运行",
+            "verify": "进程列表中有 python 进程运行 sync_changes.py 或 file_watcher.py",
+            "failure_action": "确认 watchdog 已安装，Python 版本 ≥3.8"
+        },
+    ]
+
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
 @mcp.tool()
 async def install_local_scripts(
     ctx: Context,
     project_dir: str,
     project_id: int,
+    api_key: str = "",
     layers: str = "all",
 ) -> str:
     """安装本地索引脚本 — 返回 Agent 写入本地文件系统的配置和脚本。
 
-    调用此工具后，Agent 需要将返回的内容写入开发机的对应路径，
-    实现零手动操作的项目初始化。
+    在 aidp_init 成功后调用，获取带实际 project_id 的脚本和配置。
 
     Args:
-        project_dir: 项目根目录绝对路径, 如 "/home/dev/projects/my-app"
-        project_id: AIDP 项目 ID
+        project_dir: 项目根目录绝对路径, 如 "D:\\Project\\web\\RuoYi-Cloud-Plus"
+        project_id: AIDP 项目 ID (aidp_init 返回)
+        api_key: API Key (必填，用于脚本鉴权，从 MCP 配置 headers 传入)
         layers: 安装哪些层 (默认 all):
                 "all" — 全部安装
                 "git_hook" — 仅 git hook
@@ -945,27 +1498,54 @@ async def install_local_scripts(
 
     Returns:
         JSON 包含:
-        - watcher_config: .opencode/watcher.json 内容 (Agent 需写入文件)
-        - git_hook_script: .git/hooks/post-commit 脚本 (Agent 需写入并 chmod)
-        - file_watcher_cmd: 启动 file_watcher 的命令行 (Agent 需后台执行)
+        - watcher_config: .opencode/watcher.json 完整内容
+        - sync_changes_script: scripts/sync_changes.py 完整脚本内容
+        - git_hook_script: .git/hooks/post-commit 脚本
+        - file_watcher_cmd: 启动命令
 
     Agent 执行指令:
-        1. write_file(response.files.watcher_config.path, response.files.watcher_config.content)
-        2. write_file(response.files.git_hook_script.path, response.files.git_hook_script.content)
-        3. execute(response.files.file_watcher_cmd.command, background=true)
+        1. write_file(files.sync_changes_script.path, files.sync_changes_script.content)
+        2. write_file(files.watcher_config.path, files.watcher_config.content)
+        3. write_file(files.git_hook_script.path, files.git_hook_script.content)
+        4. execute(files.install_cmd, ...) 安装 watchdog
+        5. execute(files.file_watcher_cmd.command, background=true)
     """
     import platform as _platform
+    from datetime import datetime
 
     os_name = _platform.system().lower()
-    controller_url = f"http://192.168.0.100:8883"
+    controller_url = "http://192.168.0.100:8883"
     dir_clean = project_dir.rstrip("/").rstrip("\\")
+
+    # Resolve api_key: param > headers
+    auth_key = api_key
+    if not auth_key:
+        try:
+            request = ctx.request
+            if hasattr(request, 'headers'):
+                auth_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
+        except Exception:
+            pass
+
+    if not auth_key:
+        return json.dumps({
+            "success": False,
+            "error": {
+                "code": "API_KEY_REQUIRED",
+                "message": "api_key 是必填参数，请在 MCP 配置中设置 x-api-key header",
+                "hint": "在 opencode.json 的 mcp 配置中添加 headers: {\"x-api-key\": \"your-api-key\"}",
+            }
+        }, ensure_ascii=False, indent=2)
+
+    api_key = auth_key
 
     watcher_config = {
         "project_id": project_id,
         "project_name": "",
         "project_root": dir_clean,
         "controller_url": controller_url,
-        "created_at": "",
+        "api_key": api_key,
+        "created_at": datetime.now().isoformat(),
         "layers": {
             "git_hook": layers in ("all", "git_hook"),
             "file_watcher": layers in ("all", "file_watcher"),
@@ -973,50 +1553,73 @@ async def install_local_scripts(
         },
     }
 
-    # Git hook script (platform-aware)
+    sync_script = _get_sync_changes_script()
+
+    git_hook_content = ""
     if os_name == "windows":
-        git_hook = (
-            f'@echo off\n'
-            f'python "%~dp0\\..\\..\\scripts\\sync_changes.py" -p {project_id}\n'
+        git_hook_content = (
+            f'@echo off\r\n'
+            f'python "%~dp0\\..\\..\\scripts\\sync_changes.py" -p {project_id}\r\n'
         )
     else:
-        git_hook = (
+        git_hook_content = (
             f'#!/bin/sh\n'
             f'python "$(dirname "$0")/../../scripts/sync_changes.py" -p {project_id}\n'
         )
 
-    files = {}
+    sync_script_path = dir_clean + "/scripts/sync_changes.py"
+    hook_path = dir_clean + "/.git/hooks/post-commit"
+    watcher_path = dir_clean + "/.opencode/watcher.json"
 
-    if layers in ("all", "watcher_config"):
-        files["watcher_config"] = {
-            "path": dir_clean + "/.opencode/watcher.json",
+    files = {
+        "sync_changes_script": {
+            "description": "增量同步脚本 (git hook 调用，含 code + doc 同步逻辑)",
+            "path": sync_script_path,
+            "content": sync_script,
+            "note": "Agent 需创建 scripts/ 目录并写入此文件",
+        },
+        "watcher_config": {
+            "description": "项目配置文件",
+            "path": watcher_path,
             "content": watcher_config,
-            "note": "Agent 需创建文件，若目录不存在则 mkdir -p .opencode/",
-        }
-
-    if layers in ("all", "git_hook"):
-        files["git_hook_script"] = {
-            "path": dir_clean + "/.git/hooks/post-commit",
-            "content": git_hook,
+            "note": "Agent 需创建 .opencode/ 目录并写入此 JSON",
+        },
+        "git_hook_script": {
+            "description": "Git post-commit 钩子",
+            "path": hook_path,
+            "content": git_hook_content,
             "os": os_name,
-            "note": "Agent 需创建文件，Linux/Mac 需 chmod +x",
-        }
+            "note": "Agent 需写入此文件。Linux/Mac 需 chmod +x",
+        },
+    }
 
     if layers in ("all", "file_watcher"):
-        files["file_watcher_cmd"] = {
-            "command": f"python scripts/file_watcher.py -d {dir_clean} -p {project_id}",
+        files["install_cmd"] = {
+            "command": "pip install watchdog",
             "os": "cross-platform",
-            "note": "Agent 需以后台进程启动。Windows: Start-Process, Linux/Mac: nohup &",
+            "note": "Agent 需先执行此命令安装依赖",
+        }
+        files["file_watcher_cmd"] = {
+            "description": "文件监控 (基于 watchdog 或 git diff 轮询)",
+            "command": f"python {sync_script_path} --project-id {project_id}",
+            "alt_git_poll": f"powershell -Command \"while($true){{python {sync_script_path} -p {project_id}; Start-Sleep 5}}\"" if os_name == "windows" else f"watch -n 5 'python {sync_script_path} -p {project_id}'",
+            "os": os_name,
+            "note": "Agent 需后台启动。Windows: Start-Process -NoNewWindow, Linux/Mac: nohup ... &",
         }
 
     return json.dumps({
         "success": True,
         "project_id": project_id,
         "project_dir": project_dir,
+        "controller_url": controller_url,
         "files": files,
         "agent_actions": [
-            f"创建 {dir_clean}/.opencode/watcher.json",
-            f"创建 {dir_clean}/.git/hooks/post-commit",
-            f"后台启动: {files.get('file_watcher_cmd', {}).get('command', 'N/A')}",
+            f"mkdir -p {dir_clean}/scripts/",
+            f"mkdir -p {dir_clean}/.opencode/",
+            f"写入 {sync_script_path}",
+            f"写入 {watcher_path}",
+            f"写入 {hook_path}",
+            "pip install watchdog (如需要完整文件监控)",
+            f"后台启动文件监控",
         ],
     }, ensure_ascii=False, indent=2)

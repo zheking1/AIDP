@@ -38,7 +38,11 @@ class Project(Base):
     visibility = Column(String(20), default="private")
     owner_id = Column(String(100), nullable=True, index=True)
     status = Column(String(20), default="active", index=True)
-    tech_stack = Column(Text, nullable=True)  # JSON array stored as string
+    tech_stack = Column(Text, nullable=True)
+
+    init_status = Column(String(20), nullable=True, index=True)
+    init_result = Column(Text, nullable=True)
+    init_warnings = Column(Text, nullable=True)
 
     settings = relationship("app.models.project_new.ProjectSettings", uselist=False, back_populates="project", cascade="all, delete-orphan")
     members = relationship("app.models.project_new.ProjectMember", back_populates="project", cascade="all, delete-orphan")
@@ -57,6 +61,9 @@ class Project(Base):
             "owner_id": self.owner_id,
             "status": self.status,
             "tech_stack": json.loads(self.tech_stack) if self.tech_stack else [],
+            "init_status": self.init_status,
+            "init_result": json.loads(self.init_result) if self.init_result else {},
+            "init_warnings": json.loads(self.init_warnings) if self.init_warnings else [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,

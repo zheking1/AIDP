@@ -19,12 +19,12 @@ class Settings(BaseSettings):
     
     # LLM配置
     llm_endpoint: str = Field(default="http://localhost:8000/v1", description="LLM API endpoint")
-    llm_api_key: str = Field(default="sk-xxx", description="LLM API key")
+    llm_api_key: str = Field(default="", description="LLM API key")
     llm_model: str = Field(default="deepseek-v4-flash-free", description="LLM model name")
     
     # Embedding配置
     embedding_endpoint: str = Field(default="http://localhost:8000/v1", description="Embedding API endpoint")
-    embedding_api_key: str = Field(default="sk-xxx", description="Embedding API key")
+    embedding_api_key: str = Field(default="", description="Embedding API key")
     embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model name")
     embedding_dim: int = Field(default=1024, gt=0, le=1536, description="Embedding dimension")
     
@@ -84,11 +84,11 @@ class Settings(BaseSettings):
         if self.admin_password == "admin123":
             warnings.append("Admin password is default ('admin123')")
         
-        if self.llm_api_key == "sk-xxx":
-            warnings.append("LLM API key is placeholder ('sk-xxx')")
+        if not self.llm_api_key:
+            warnings.append("LLM API key not configured")
         
-        if self.embedding_api_key == "sk-xxx":
-            warnings.append("Embedding API key is placeholder ('sk-xxx')")
+        if not self.embedding_api_key:
+            warnings.append("Embedding API key not configured")
         
         return warnings
 

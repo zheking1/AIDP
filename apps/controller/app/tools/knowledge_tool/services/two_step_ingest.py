@@ -8,11 +8,26 @@ from datetime import datetime
 
 class LLMClient:
     def __init__(self, base_url: str = None, api_key: str = None, model: str = None):
-        self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434/v1")
-        self.api_key = api_key or os.getenv("LLM_API_KEY", "sk-xxx")
-        self.model = model or os.getenv("LLM_MODEL", "qwen2.5:7b")
+        self.base_url = base_url
+        self.api_key = api_key
+        self.model = model
+        self._initialized = bool(base_url and base_url != "none")
+
+    async def _ensure_config(self):
+        if self._initialized and self.base_url:
+            return
+        from app.services.model_service import get_model_for_task
+        chat_cfg = await get_model_for_task("chat")
+        if chat_cfg:
+            self.base_url = chat_cfg.get("api_base")
+            self.api_key = chat_cfg.get("api_key", "")
+            self.model = chat_cfg.get("model_name")
+            self._initialized = True
+            return
+        raise RuntimeError("No chat model configured in Controller")
 
     async def call(self, prompt: str, max_tokens: int = 2048) -> Optional[str]:
+        await self._ensure_config()
         async with httpx.AsyncClient(timeout=60) as client:
             try:
                 resp = await client.post(

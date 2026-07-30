@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     PORT: int = 18089
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/evolution_engine.db"
-    LLM_BASE_URL: str = "http://127.0.0.1:11434/v1"
-    LLM_API_KEY: str = "sk-xxx"
+    LLM_BASE_URL: str = ""
+    LLM_API_KEY: str = ""
     LLM_MODEL: str = "qwen2.5:7b"
     BATCH_SIZE: int = 10
     ANALYSIS_TIMEOUT: int = 30

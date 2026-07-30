@@ -8,8 +8,6 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CONTROLLER_URL = os.getenv("CONTROLLER_URL", "http://localhost:8883")
-
 
 class EmbeddingService:
     _model = None
@@ -22,20 +20,30 @@ class EmbeddingService:
     def _load_controller(self):
         if EmbeddingService._controller_model is None:
             try:
-                resp = httpx.get(f"{CONTROLLER_URL}/api/models/for-task/embedding", timeout=5.0)
-                if resp.status_code == 200:
-                    model = resp.json().get("model")
-                    if model and model.get("api_base") and model["api_base"] != "none":
-                        EmbeddingService._controller_model = model
-                        self.model_name = model.get("model_name", self.model_name)
-                        logger.info("Using controller embedding model: %s", self.model_name)
-                    else:
-                        EmbeddingService._controller_model = "unavailable"
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        cfg = pool.submit(asyncio.run, self._fetch_embedding_config()).result()
+                else:
+                    cfg = loop.run_until_complete(self._fetch_embedding_config())
+                if cfg:
+                    EmbeddingService._controller_model = cfg
+                    self.model_name = cfg.get("model_name", self.model_name)
+                    logger.info("Using controller embedding model: %s", self.model_name)
                 else:
                     EmbeddingService._controller_model = "unavailable"
             except Exception as e:
                 logger.warning("Failed to fetch embedding model from controller: %s", e)
                 EmbeddingService._controller_model = "unavailable"
+
+    async def _fetch_embedding_config(self):
+        from app.services.model_service import get_model_for_task
+        cfg = await get_model_for_task("embedding")
+        if cfg and cfg.get("api_base") and cfg["api_base"] != "none":
+            return cfg
+        return None
 
     def _load_local_model(self):
         if EmbeddingService._model is None:

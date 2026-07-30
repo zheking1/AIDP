@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.tools.skill_router.config import settings
 from app.tools.skill_router.db.database import engine, async_session_factory
-from app.tools.skill_router.db.models import Base, User, ApiKey, Project
+from app.tools.skill_router.db.models import Base, User, Project
 
 
 @asynccontextmanager
@@ -283,13 +283,7 @@ async def init_database():
                 role="admin",
             ))
 
-            if settings.skill_manager_api_key:
-                key_hash = hashlib.sha256(settings.skill_manager_api_key.encode()).hexdigest()
-                session.add(ApiKey(
-                    user_id=admin_id,
-                    key_hash=key_hash,
-                    label="default-admin-key",
-                ))
+            # API keys now managed by Controller only
 
         # backfill projects.user_id for orphaned rows
         await session.execute(

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.tools.skill_router.config import settings
 from app.tools.skill_router.db.database import async_session_factory
-from app.tools.skill_router.db.models import User, ApiKey
+from app.tools.skill_router.db.models import User
 from app.tools.skill_router.services import skill_service, rule_service
 from app.tools.skill_router.services import evolution_service, review_service, model_service
 from app.tools.skill_router.services.cache_service import delete_cache
@@ -28,18 +28,6 @@ def fail(code: str, msg: str, trace_id: str = ""):
 
 
 async def _resolve_user(api_key: str = None) -> Optional[User]:
-    if not api_key:
-        api_key = settings.skill_manager_api_key
-    if not api_key:
-        return None
-    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
-        )
-        ak = result.scalar_one_or_none()
-        if ak:
-            return await session.get(User, ak.user_id)
     return None
 
 

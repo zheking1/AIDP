@@ -56,7 +56,6 @@ class User(Base):
         CheckConstraint("role IN ('super_admin', 'admin', 'developer', 'user', 'readonly')", name="check_user_role"),
     )
 
-    api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     skill_groups = relationship("SkillGroup", back_populates="user", cascade="all, delete-orphan")
     rule_groups = relationship("RuleGroup", back_populates="user", cascade="all, delete-orphan")
@@ -84,20 +83,6 @@ class Project(Base):
     skills = relationship("Skill", back_populates="project")
     rules = relationship("Rule", back_populates="project")
     llm_configs = relationship("LLMConfig", back_populates="project")
-
-
-class ApiKey(Base):
-    __tablename__ = "api_keys"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    key_hash = Column(VARCHAR(64), unique=True, nullable=False)
-    label = Column(VARCHAR(100))
-    last_used = Column(DateTime)
-    is_active = Column(BOOLEAN, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="api_keys")
 
 
 class SkillGroup(Base):

@@ -82,12 +82,6 @@ async def api_cli_srcli_py():
 def _check_auth(request: Request):
     user = request.session.get("user")
     if not user:
-        api_key = request.headers.get("X-API-Key", "")
-        if api_key:
-            from app.tools.skill_router.db.models import ApiKey as ApiKeyModel
-            import hashlib
-            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-            return {"id": "api", "username": "apiuser"}
         return None
     return user
 

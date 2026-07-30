@@ -1,8 +1,7 @@
-import os
-import httpx
-import json
 import logging
-from typing import Dict, Optional
+from typing import Optional
+
+from app.services.model_service import get_model_for_task
 
 logger = logging.getLogger(__name__)
 
@@ -17,21 +16,19 @@ class LLMClient:
     async def _ensure_config(self):
         if self._initialized and self.base_url:
             return
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get("http://localhost:8883/api/models/for-task/chat")
-            if resp.status_code == 200:
-                cfg = resp.json().get("model", {})
-                if cfg:
-                    self.base_url = cfg.get("api_base")
-                    self.api_key = cfg.get("api_key")
-                    self.model = cfg.get("model_name")
-                    self._initialized = True
-                    logger.info("LLM config from Controller: %s @ %s", self.model, self.base_url)
-                    return
-        raise RuntimeError("Failed to load model config from Controller")
+        cfg = await get_model_for_task("chat")
+        if cfg:
+            self.base_url = cfg.get("api_base")
+            self.api_key = cfg.get("api_key", "")
+            self.model = cfg.get("model_name")
+            self._initialized = True
+            logger.info("LLM config from ModelService: %s @ %s", self.model, self.base_url)
+            return
+        raise RuntimeError("No chat model configured in Controller")
 
     async def call(self, prompt: str, max_tokens: int = 1024) -> Optional[str]:
         await self._ensure_config()
+        import httpx
         async with httpx.AsyncClient(timeout=30) as client:
             try:
                 resp = await client.post(
@@ -47,7 +44,7 @@ class LLMClient:
                 resp.raise_for_status()
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
-            except Exception as e:
+            except Exception:
                 return None
 
     async def summarize(self, content: str, max_tokens: int = 256) -> Optional[str]:

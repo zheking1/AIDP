@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     PORT: int = 18088
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/context_optimizer.db"
     _echo: bool = False
-    LLM_BASE_URL: str = "http://127.0.0.1:11434/v1"
-    LLM_API_KEY: str = "sk-xxx"
+    LLM_BASE_URL: str = ""
+    LLM_API_KEY: str = ""
     LLM_MODEL: str = "qwen2.5:7b"
     DEFAULT_BUDGET: int = 8000
     MIN_BUDGET: int = 1000

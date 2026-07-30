@@ -772,63 +772,18 @@ async def user_toggle_active(request: Request, user_id: str):
 
 
 # ------ API Key Management ------
-@router.get("/api-keys")
-async def api_keys_page(request: Request):
-    user = request.session.get("user")
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    async with get_session() as db:
-        from app.tools.skill_router.db.models import ApiKey
-        result = await db.execute(select(ApiKey).where(ApiKey.user_id == uuid.UUID(user["id"]), ApiKey.is_active == True))
-        keys = result.scalars().all()
-    return render_template("api_keys/list.html", request, keys=[{"id": str(k.id), "label": k.label, "created_at": str(k.created_at.date()) if k.created_at else "", "last_used": str(k.last_used.date()) if k.last_used else "-"} for k in keys], new_key=request.query_params.get("new_key", ""))
-
-
-@router.post("/api-keys/create")
-async def api_key_create(request: Request):
-    user = request.session.get("user")
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    import hashlib, secrets
-    form = await request.form()
-    label = form.get("label", "").strip() or "default"
-    raw_key = "sk-" + secrets.token_hex(24)
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    async with get_session() as db:
-        from app.tools.skill_router.db.models import ApiKey
-        ak = ApiKey(user_id=uuid.UUID(user["id"]), key_hash=key_hash, label=label)
-        db.add(ak)
-        await db.commit()
-    return RedirectResponse(url=f"/api-keys?new_key={raw_key}", status_code=302)
-
-
-@router.post("/api-keys/{key_id}/revoke")
-async def api_key_revoke(request: Request, key_id: str):
-    user = request.session.get("user")
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    async with get_session() as db:
-        from app.tools.skill_router.db.models import ApiKey
-        ak = await db.get(ApiKey, uuid.UUID(key_id))
-        if ak and str(ak.user_id) == user["id"]:
-            ak.is_active = False
-            await db.commit()
-    return RedirectResponse(url="/api-keys", status_code=302)
-
-
 @router.get("/profile")
 async def profile_page(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/login", status_code=302)
     async with get_session() as db:
-        from app.tools.skill_router.db.models import User, ApiKey
+        from app.tools.skill_router.db.models import User
         u = await db.get(User, uuid.UUID(user["id"]))
         if not u:
             return HTMLResponse("Not found", status_code=404)
-        key_count = (await db.execute(select(func.count()).select_from(ApiKey).where(ApiKey.user_id == u.id, ApiKey.is_active == True))).scalar() or 0
         skill_count = (await db.execute(select(func.count()).select_from(Skill).where(Skill.user_id == u.id))).scalar() or 0
-    return render_template("profile.html", request, u=u.to_dict(), key_count=key_count, skill_count=skill_count)
+    return render_template("profile.html", request, u=u.to_dict(), key_count=0, skill_count=skill_count)
 
 
 # ------ Project Management ------
