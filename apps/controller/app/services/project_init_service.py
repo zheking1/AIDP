@@ -105,31 +105,21 @@ async def init_project(
             errors.append(str(err))
         steps.append(entry)
 
-    # Step 1: Create or reuse project record
+    # Step 1: Create project record in Controller DB
     project_id = None
     try:
         from app.db.database import async_session_factory
         from app.models.project_new import Project as AidpProject
         async with async_session_factory() as session:
-            existing = await session.execute(
-                select(AidpProject).where(AidpProject.name == project_name)
+            project = AidpProject(
+                name=project_name,
+                description=description or f"{project_name} - initialized via aidp init",
+                status="active",
             )
-            project = existing.scalar_one_or_none()
-            if project:
-                project.description = description or project.description
-                project.status = "active"
-                project_id = project.id
-                await session.commit()
-            else:
-                project = AidpProject(
-                    name=project_name,
-                    description=description or f"{project_name} - initialized via aidp init",
-                    status="active",
-                )
-                session.add(project)
-                await session.commit()
-                await session.refresh(project)
-                project_id = project.id
+            session.add(project)
+            await session.commit()
+            await session.refresh(project)
+            project_id = project.id
         step("create_project", {"project_id": project_id})
     except Exception as e:
         step("create_project", err=e)

@@ -259,6 +259,7 @@ async def manage_models(
 
 @mcp.tool()
 async def aidp_init(
+    ctx: Context,
     project_name: str,
     description: str = "",
     tech_stack: str = "",
@@ -309,11 +310,26 @@ async def aidp_init(
         )
         project = result_proj.scalar_one_or_none()
 
+        # Resolve authenticated user
+        owner_id = ""
+        try:
+            request = ctx.request
+            if hasattr(request, 'headers'):
+                api_key = request.headers.get("x-api-key", "") or request.headers.get("authorization", "").replace("Bearer ", "")
+                if api_key:
+                    from app.services.auth_service import AuthService
+                    user = await AuthService.validate_api_key(api_key)
+                    if user:
+                        owner_id = str(user.id)
+        except Exception:
+            pass
+
         if not project:
             project = AidpProject(
                 name=project_name,
                 description=description,
                 status="active",
+                owner_id=owner_id or None,
             )
             db.add(project)
             await db.commit()
@@ -330,6 +346,7 @@ async def aidp_init(
         docs=parsed_docs,
         key_files=parsed_files,
         architecture_summary=architecture_summary,
+        user_id=int(owner_id) if owner_id.isdigit() else 0,
     )
     result["project_id"] = project.id
     return json.dumps(result, indent=2)
