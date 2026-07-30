@@ -87,7 +87,34 @@
     </div>
 
     <!-- ===== KB 列表（按层级分组） ===== -->
-    <div class="pb-6 flex-1 space-y-6">
+    <div class="pb-6 flex-1 flex gap-4">
+        <!-- Left: Level Sidebar -->
+        <div class="w-44 flex-shrink-0">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden sticky top-0">
+                <div class="px-3 py-2 border-b border-gray-700 text-xs font-medium text-gray-400 uppercase">层级</div>
+                <div class="p-1.5 space-y-0.5">
+                    <button @click="selectLevel('')" :class="levelFilter===''?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span>全部</span><span class="text-xs text-gray-500" x-text="levels.all||0"></span>
+                    </button>
+                    <button @click="selectLevel('framework')" :class="levelFilter==='framework'?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span>📦 框架</span><span class="text-xs text-gray-500" x-text="levels.framework||0"></span>
+                    </button>
+                    <button @click="selectLevel('template')" :class="levelFilter==='template'?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span>📋 模板</span><span class="text-xs text-gray-500" x-text="levels.template||0"></span>
+                    </button>
+                    <button @click="selectLevel('project')" :class="levelFilter==='project'?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span>📁 项目</span><span class="text-xs text-gray-500" x-text="levels.project||0"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: KB list -->
+        <div class="flex-1 min-w-0 space-y-6">
         <template x-for="group in groupedKnowledgeBases" :key="group.level">
             <div>
                 <div class="flex items-center gap-2 mb-3">
@@ -300,6 +327,7 @@
   return {
     knowledgeBases:[],searchQuery:'',levelFilter:'',showCreateModal:false,showEditModal:false,
     showWebImport:false,loading:false,importing:false,analyzing:false,stats:{},
+    levels:{all:0,framework:0,template:0,project:0},
     importUrl:'',importAnalysis:null,
     newKB:{name:'',description:'',chunking_strategy:'fixed',chunk_size:500},
     formKB:{id:null,name:'',description:'',kb_level:'framework',parent_id:'',visibility:'private',
@@ -331,9 +359,15 @@
         if(this.searchQuery)p.set('search',this.searchQuery);
         if(this.levelFilter)p.set('kb_level',this.levelFilter);
         var r=await fetch('/api/knowledge/bases?'+p);
-        if(r.ok){var d=await r.json();this.knowledgeBases=d.items||[]}
+        if(r.ok){var d=await r.json();this.knowledgeBases=d.items||[];
+          var lv={all:0,framework:0,template:0,project:0};
+          (d.items||[]).forEach(function(kb){lv.all++; var l=kb.kb_level||'project';lv[l]=(lv[l]||0)+1});
+          this.levels=lv;
+        }
       }finally{this.loading=false}
     },
+
+    selectLevel(l){this.levelFilter=l;this.loadKnowledgeBases()},
 
     async loadStats(){try{var r=await fetch('/api/knowledge/stats');if(r.ok)this.stats=await r.json()}catch(e){}},
 

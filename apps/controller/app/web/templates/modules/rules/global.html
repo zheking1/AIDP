@@ -1,112 +1,131 @@
 <div x-data="globalRulesPage()" x-init="init()">
 <div class="flex items-center justify-between">
-      <div>
+    <div>
         <h1 class="text-2xl font-bold text-white">全局规则</h1>
-        <p class="text-gray-400 text-sm mt-1">系统级约束规则 · 由管理员维护 · 只读</p>
-      </div>
-      <div class="flex gap-2">
-        <select x-model="filterCategory" @change="loadRules()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
-          <option value="">全部分类</option>
-          <option value="security">安全</option>
-          <option value="code_style">代码风格</option>
-          <option value="architecture">架构</option>
-          <option value="testing">测试</option>
-          <option value="deployment">部署</option>
-          <option value="business">业务</option>
-        </select>
-        <select x-model="filterSeverity" @change="loadRules()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300">
-          <option value="">全部级别</option>
-          <option value="critical">严重</option>
-          <option value="high">高危</option>
-          <option value="medium">中等</option>
-          <option value="low">低</option>
-        </select>
-        {% if is_admin %}<button @click="showCreateModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-1"><i class="fas fa-plus"></i>创建</button>{% endif %}
+        <p class="text-gray-400 text-sm mt-1">系统级约束规则 · 由管理员维护</p>
+    </div>
+    <div class="flex gap-2">
+        {% if is_admin %}<button @click="openCreate()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-1"><i class="fas fa-plus"></i>创建</button>{% endif %}
     </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-      <template x-for="rule in rules" :key="rule.id">
-        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewRule(rule)">
-          <div class="flex items-start gap-3 mb-2">
-            <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
-                  :class="{'bg-red-900/30 text-red-400': rule.category==='security','bg-yellow-900/30 text-yellow-400': rule.category==='code_style','bg-blue-900/30 text-blue-400': rule.category==='architecture','bg-green-900/30 text-green-400': rule.category==='testing','bg-purple-900/30 text-purple-400': rule.category==='deployment','bg-gray-800 text-gray-400': true}">
-              <i :class="{'fas fa-shield-alt': rule.category==='security','fas fa-code': rule.category==='code_style','fas fa-sitemap': rule.category==='architecture','fas fa-vial': rule.category==='testing','fas fa-rocket': rule.category==='deployment','fas fa-briefcase': rule.category==='business','fas fa-shield-alt': true}"></i>
-            </span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <h3 class="font-medium text-white truncate" x-text="rule.name"></h3>
-                <span class="px-1.5 py-0.5 text-xs rounded flex-shrink-0"
-                      :class="{'bg-red-900/50 text-red-300': rule.severity==='critical','bg-orange-900/50 text-orange-300': rule.severity==='high','bg-yellow-900/50 text-yellow-300': rule.severity==='medium','bg-gray-700 text-gray-300': true}"
-                      x-text="rule.severity"></span>
-                <span class="text-xs text-gray-500" x-text="'P'+ (rule.priority || 0)"></span>
-              </div>
-              <p class="text-sm text-gray-400 line-clamp-2 mt-1" x-text="rule.description || rule.content"></p>
+<!-- Category Sidebar + List -->
+<div class="flex gap-4 mt-4">
+    <!-- Left: Category Sidebar -->
+    <div class="w-48 flex-shrink-0">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <div class="px-3 py-2 border-b border-gray-700 text-sm font-medium text-white">分类筛选</div>
+            <div class="p-1.5 space-y-0.5">
+                <button @click="selectCategory('')" :class="selectedCategory===''?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                        class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                    <span>全部</span><span class="text-xs text-gray-500" x-text="stats.total||0"></span>
+                </button>
+                <template x-for="c in categories" :key="c.key">
+                    <button @click="selectCategory(c.key)" :class="selectedCategory===c.key?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                            class="w-full text-left px-3 py-1.5 rounded text-sm transition flex justify-between">
+                        <span x-text="c.label"></span><span class="text-xs text-gray-500" x-text="c.count||0"></span>
+                    </button>
+                </template>
             </div>
-          </div>
-          <div class="flex gap-1 flex-wrap mt-2">
-            <template x-for="tag in (rule.tags||[]).slice(0,3)" :key="tag">
-              <span class="px-1.5 py-0.5 text-xs bg-gray-700 text-gray-300 rounded" x-text="tag"></span>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden mt-3">
+            <div class="px-3 py-2 border-b border-gray-700 text-sm font-medium text-white">严重级别</div>
+            <div class="p-1.5 space-y-0.5">
+                <button @click="selectSeverity('')" :class="selectedSeverity===''?'bg-indigo-600/20 text-indigo-400':'text-gray-400 hover:bg-gray-700'"
+                        class="w-full text-left px-3 py-1.5 rounded text-sm transition">全部</button>
+                <button @click="selectSeverity('critical')" :class="selectedSeverity==='critical'?'bg-red-600/20 text-red-400':'text-gray-400 hover:bg-gray-700'" class="w-full text-left px-3 py-1.5 rounded text-sm transition">严重 critical</button>
+                <button @click="selectSeverity('high')" :class="selectedSeverity==='high'?'bg-orange-600/20 text-orange-400':'text-gray-400 hover:bg-gray-700'" class="w-full text-left px-3 py-1.5 rounded text-sm transition">高危 high</button>
+                <button @click="selectSeverity('medium')" :class="selectedSeverity==='medium'?'bg-yellow-600/20 text-yellow-400':'text-gray-400 hover:bg-gray-700'" class="w-full text-left px-3 py-1.5 rounded text-sm transition">中等 medium</button>
+                <button @click="selectSeverity('low')" :class="selectedSeverity==='low'?'bg-gray-600/20 text-gray-400':'text-gray-400 hover:bg-gray-700'" class="w-full text-left px-3 py-1.5 rounded text-sm transition">低 low</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Rules Grid -->
+    <div class="flex-1 min-w-0">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <template x-for="rule in rules" :key="rule.id">
+                <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-indigo-500/50 transition cursor-pointer" @click="viewRule(rule)">
+                    <div class="flex items-start gap-3 mb-2">
+                        <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
+                              :class="rule.category==='security'?'bg-red-900/30 text-red-400':rule.category==='code_style'?'bg-yellow-900/30 text-yellow-400':rule.category==='architecture'?'bg-blue-900/30 text-blue-400':rule.category==='testing'?'bg-green-900/30 text-green-400':rule.category==='deployment'?'bg-purple-900/30 text-purple-400':'bg-gray-800 text-gray-400'">
+                            <i :class="rule.category==='security'?'fas fa-shield-alt':rule.category==='code_style'?'fas fa-code':rule.category==='architecture'?'fas fa-sitemap':rule.category==='testing'?'fas fa-vial':rule.category==='deployment'?'fas fa-rocket':'fas fa-shield-alt'"></i>
+                        </span>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-medium text-white truncate" x-text="rule.name"></h3>
+                                <span class="px-1.5 py-0.5 text-xs rounded flex-shrink-0"
+                                      :class="rule.severity==='critical'?'bg-red-900/50 text-red-300':rule.severity==='high'?'bg-orange-900/50 text-orange-300':rule.severity==='medium'?'bg-yellow-900/50 text-yellow-300':'bg-gray-700 text-gray-300'"
+                                      x-text="rule.severity"></span>
+                            </div>
+                            <p class="text-sm text-gray-400 line-clamp-2 mt-1" x-text="rule.description||rule.content"></p>
+                        </div>
+                    </div>
+                </div>
             </template>
-            {% if is_admin %}<button @click.stop="deleteRule(rule)" class="ml-auto text-gray-600 hover:text-red-400 text-xs"><i class="fas fa-trash"></i></button>{% endif %}
-          </div>
         </div>
-      </template>
+        <div x-show="!rules.length&&!loading" class="text-center py-16 text-gray-500">
+            <i class="fas fa-shield-alt text-5xl text-gray-700 mb-4"></i><p>暂无全局规则</p>
+        </div>
     </div>
-    <div x-show="rules.length===0&&!loading" class="text-center py-16 text-gray-500"><i class="fas fa-shield-alt text-5xl text-gray-700 mb-4"></i><p>暂无全局规则</p></div>
+</div>
 
-  <!-- Create Modal -->
-  <div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-cloak>
+<!-- Create/Edit Modal -->
+<div x-show="showCreateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
     <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg mx-4 p-6">
-        <h2 class="text-xl font-bold text-white mb-4" x-text="editingRule ? '编辑全局规则' : '创建全局规则'"></h2>
-      <div class="space-y-4">
-        <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
-        <div><label class="block text-sm text-gray-400 mb-1">规则内容 <span class="text-red-400">*</span></label><textarea x-model="form.content" rows="5" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
-        <div><label class="block text-sm text-gray-400 mb-1">描述</label><textarea x-model="form.description" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></textarea></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-sm text-gray-400 mb-1">分类</label><select x-model="form.category" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="security">安全</option><option value="code_style">代码风格</option><option value="architecture">架构</option><option value="testing">测试</option><option value="deployment">部署</option><option value="business">业务</option></select></div>
-          <div><label class="block text-sm text-gray-400 mb-1">严重级别</label><select x-model="form.severity" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="critical">严重</option><option value="high">高危</option><option value="medium">中等</option><option value="low">低</option></select></div>
+        <h2 class="text-xl font-bold text-white mb-4" x-text="editingRule?'编辑':'创建'"></h2>
+        <div class="space-y-4">
+            <div><label class="block text-sm text-gray-400 mb-1">名称 <span class="text-red-400">*</span></label><input type="text" x-model="form.name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"></div>
+            <div><label class="block text-sm text-gray-400 mb-1">内容 <span class="text-red-400">*</span></label><textarea x-model="form.content" rows="5" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono"></textarea></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-sm text-gray-400 mb-1">分类</label><select x-model="form.category" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="security">安全</option><option value="code_style">代码风格</option><option value="architecture">架构</option><option value="testing">测试</option><option value="deployment">部署</option><option value="business">业务</option></select></div>
+                <div><label class="block text-sm text-gray-400 mb-1">级别</label><select x-model="form.severity" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"><option value="critical">严重</option><option value="high">高危</option><option value="medium">中等</option><option value="low">低</option></select></div>
+            </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-sm text-gray-400 mb-1">优先级</label><input type="number" x-model.number="form.priority" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="0"></div>
-          <div><label class="block text-sm text-gray-400 mb-1">标签（逗号分隔）</label><input type="text" x-model="form.tagsInput" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" placeholder="python, security"></div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button @click="showCreateModal=false;editingRule=null;form={name:'',content:'',category:'security',severity:'medium'}" class="px-4 py-2 text-gray-400 text-sm">取消</button>
+            <button @click="createRule()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition" x-text="editingRule?'保存':'创建'"></button>
         </div>
-      </div>
-      <div class="flex justify-end gap-3 mt-6">
-        <button @click="showCreateModal=false; editingRule=null; form={name:'',description:'',content:'',category:'security',severity:'medium',priority:0,pattern:'',tagsInput:''}" class="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
-        <button @click="createRule()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition" x-text="editingRule ? '保存' : '创建'"></button>
-      </div>
     </div>
-  </div>
-
-  <div x-show="showDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" x-transition>
-    <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-        <div class="flex items-center gap-3"><i class="fas fa-shield-alt text-indigo-400"></i><h2 class="text-xl font-semibold text-white" x-text="detail?.name"></h2><span class="px-2 py-0.5 text-xs rounded" :class="{'bg-red-900/50 text-red-300': detail?.severity==='critical','bg-orange-900/50 text-orange-300': detail?.severity==='high','bg-yellow-900/50 text-yellow-300': detail?.severity==='medium','bg-gray-700 text-gray-300': true}" x-text="detail?.severity"></span></div>
-        <button @click="showDetailModal=false" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="flex-1 overflow-y-auto p-6 space-y-4">
-        <div><h3 class="text-sm font-medium text-gray-400 mb-1">规则内容</h3><div class="bg-gray-900 rounded-lg p-4 text-sm text-gray-200 whitespace-pre-wrap" x-text="detail?.content"></div></div>
-        <div class="grid grid-cols-2 gap-4">
-          <div><h3 class="text-sm text-gray-400 mb-1">分类</h3><p class="text-white text-sm capitalize" x-text="detail?.category"></p></div>
-          <div><h3 class="text-sm text-gray-400 mb-1">严重级别</h3><p class="text-white text-sm" x-text="detail?.severity"></p></div>
-          <div><h3 class="text-sm text-gray-400 mb-1">优先级</h3><p class="text-white text-sm" x-text="'P' + (detail?.priority || 0)"></p></div>
-          <div x-show="detail?.pattern"><h3 class="text-sm text-gray-400 mb-1">检测规则</h3><code class="text-sm text-green-400" x-text="detail?.pattern"></code></div>
-          <div x-show="detail?.auto_fix"><h3 class="text-sm text-gray-400 mb-1">自动修复</h3><p class="text-sm text-green-400" x-text="detail?.auto_fix"></p></div>
-        </div>
-      </div>
-      <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-2">{% if is_admin %}<button @click="editRule(detail)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-edit mr-1"></i>编辑</button>{% endif %}<button @click="showDetailModal=false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">关闭</button></div>
+</div>
 </div>
 
-</div>
-<script>window.globalRulesPage=function globalRulesPage() {
-  return { rules:[], filterCategory:'', filterSeverity:'', loading:false, showDetailModal:false, showCreateModal:false, detail:null,
-    editingRule:null,form:{name:'',description:'',content:'',category:'security',severity:'medium',priority:0,pattern:'',tagsInput:''},
-    async init(){this.loadRules()},
-    async loadRules(){this.loading=true;try{const p=new URLSearchParams({scope:'global',limit:'100'});if(this.filterCategory)p.set('category',this.filterCategory);if(this.filterSeverity)p.set('severity',this.filterSeverity);const r=await fetch(`/api/rules/list?${p}`);if(r.ok)this.rules=(await r.json()).items||[]}finally{this.loading=false}},
-    async viewRule(r){try{const res=await fetch(`/api/rules/${r.id}`);if(res.ok){this.detail=await res.json();this.showDetailModal=true}}catch(e){}},
-    async deleteRule(r){if(!r||!confirm('删除规则「'+r.name+'」？'))return;try{await fetch(`/api/rules/${r.id}`,{method:'DELETE'});await this.loadRules()}catch(e){}},
-    editRule(r){this.showDetailModal=false;this.form={name:r.name,description:r.description||'',content:r.content||'',category:r.category||'security',severity:r.severity||'medium',priority:r.priority||0,pattern:r.pattern||'',tagsInput:(r.tags||[]).join(', ')};this.editingRule=r.id;this.showCreateModal=true},
-    async createRule(){const tags=this.form.tagsInput.split(',').map(t=>t.trim()).filter(Boolean);try{const isEdit=this.editingRule;var body={name:this.form.name,description:this.form.description,content:this.form.content,category:this.form.category,severity:this.form.severity,pattern:this.form.pattern,tags:tags,priority:this.form.priority};let url,method;if(isEdit){url='/api/rules/'+isEdit;method='PUT'}else{body.scope='global';url='/api/rules/create';method='POST'}const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){this.showCreateModal=false;this.editingRule=null;this.form={name:'',description:'',content:'',category:'security',severity:'medium',priority:0,pattern:'',tagsInput:''};if(isEdit){var dr=await fetch('/api/rules/'+isEdit);if(dr.ok)this.detail=await dr.json()}await this.loadRules()}}catch(e){}}
-  };
+<script>window.globalRulesPage=function(){
+    return {
+        rules:[],categories:[],selectedCategory:'',selectedSeverity:'',loading:false,showCreateModal:false,stats:{total:0},
+        editingRule:null,form:{name:'',content:'',category:'security',severity:'medium'},
+        async init(){await this.loadRules();await this.loadStats()},
+        async loadRules(){
+            this.loading=true;
+            try{
+                const p=new URLSearchParams({scope:'global',limit:'100'});
+                if(this.selectedCategory)p.set('category',this.selectedCategory);
+                if(this.selectedSeverity)p.set('severity',this.selectedSeverity);
+                const r=await fetch('/api/rules/list?'+p);
+                if(r.ok)this.rules=(await r.json()).items||[]
+            }finally{this.loading=false}
+        },
+        async loadStats(){
+            try{const r=await fetch('/api/rules/list?scope=global&limit=500');if(r.ok){
+                const items=(await r.json()).items||[];
+                this.stats.total=items.length;
+                const cats={};items.forEach(i=>{if(i.category){cats[i.category]=(cats[i.category]||0)+1}});
+                const labels={security:'安全',code_style:'代码风格',architecture:'架构',testing:'测试',deployment:'部署',business:'业务'};
+                this.categories=Object.entries(cats).map(([k,v])=>({key:k,label:labels[k]||k,count:v}));
+            }}catch(e){}
+        },
+        selectCategory(c){this.selectedCategory=c;this.loadRules()},
+        selectSeverity(s){this.selectedSeverity=s;this.loadRules()},
+        openCreate(){this.editingRule=null;this.form={name:'',content:'',category:'security',severity:'medium'};this.showCreateModal=true},
+        async viewRule(r){try{const res=await fetch('/api/rules/'+r.id);if(res.ok){const d=await res.json();alert(d.name+'\n分类:'+d.category+' | 级别:'+d.severity+'\n\n'+(d.content||'').substring(0,500))}}catch(e){}},
+        async createRule(){
+            try{
+                const body={...this.form,scope:'global'};
+                const method=this.editingRule?'PUT':'POST';
+                const url=this.editingRule?'/api/rules/'+this.editingRule:'/api/rules/create';
+                const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+                if(r.ok){this.showCreateModal=false;this.editingRule=null;await this.loadRules();await this.loadStats()}
+            }catch(e){}
+        }
+    }
 }</script>
