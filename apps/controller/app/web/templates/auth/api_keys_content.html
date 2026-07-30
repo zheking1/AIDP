@@ -162,24 +162,42 @@ window.apiKeysPage = function() {
 
         async copyApiKey(key) {
             try {
-                const r = await fetch(`/api/auth/api-keys/${key.id}/reveal`);
+                const r = await fetch('/api/auth/api-keys/' + key.id + '/reveal');
                 if (r.ok) {
                     const d = await r.json();
-                    await navigator.clipboard.writeText(d.key);
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(d.key);
+                    } else {
+                        var ta = document.createElement('textarea');
+                        ta.value = d.key;
+                        ta.style.position = 'fixed'; ta.style.opacity = '0';
+                        document.body.appendChild(ta); ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }
                     this.error = '已复制到剪贴板';
-                    setTimeout(() => this.error = '', 2000);
+                    setTimeout(function() { this.error = ''; }.bind(this), 2000);
                 } else {
                     this.error = '获取密钥失败';
                 }
             } catch (e) {
-                this.error = '复制失败';
+                this.error = '复制失败: ' + e.message;
             }
         },
 
         copyKey() {
-            navigator.clipboard.writeText(this.newKey);
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(this.newKey);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = this.newKey;
+                ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
             this.error = '已复制到剪贴板';
-            setTimeout(() => this.error = '', 2000);
+            setTimeout(function() { this.error = ''; }.bind(this), 2000);
         },
     }
 }
