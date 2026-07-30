@@ -149,7 +149,7 @@ async def init_project(
         r = await invoke_tool(
             "code-index",
             "code.create_project",
-            {"name": project_name, "path": effective_path},
+            {"name": project_name, "path": effective_path, "controller_project_id": project_id},
             user_id=user_id,
         )
         if r.get("success"):

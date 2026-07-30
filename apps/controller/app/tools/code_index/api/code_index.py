@@ -19,10 +19,11 @@ async def create_project(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
     name = body.get("name", "")
     path = body.get("path", "")
-    if not name or not path:
-        raise HTTPException(status_code=400, detail="name and path are required")
+    controller_project_id = body.get("controller_project_id", 0)
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
     indexer = Indexer(db)
-    project = await indexer.create_project(name, path)
+    project = await indexer.create_project(name, path or name, controller_project_id)
     return JSONResponse(content={"id": project.id, "name": project.name, "path": project.path})
 
 

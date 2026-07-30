@@ -15,14 +15,17 @@ class Indexer:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_project(self, name: str, path: str) -> Project:
+    async def create_project(self, name: str, path: str, controller_project_id: int = 0) -> Project:
         result = await self.db.execute(
             select(Project).where(Project.path == path)
         )
         project = result.scalar_one_or_none()
         if project:
+            if controller_project_id and not project.controller_project_id:
+                project.controller_project_id = controller_project_id
+                await self.db.commit()
             return project
-        project = Project(name=name, path=path)
+        project = Project(name=name, path=path, controller_project_id=controller_project_id)
         self.db.add(project)
         await self.db.commit()
         await self.db.refresh(project)

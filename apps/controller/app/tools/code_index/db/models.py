@@ -9,6 +9,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(256), nullable=False)
     path = Column(String(1024), nullable=False, unique=True)
+    controller_project_id = Column(Integer, default=0, index=True)
     language = Column(String(32))
     framework = Column(String(64))
     status = Column(String(32), default="scanning")
